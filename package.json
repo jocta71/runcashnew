@@ -1,0 +1,21 @@
+{
+  "name": "runcash-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend/api"
+  ],
+  "scripts": {
+    "frontend:dev": "cd frontend && npm run dev",
+    "frontend:build": "cd frontend && npm run build",
+    "api:dev": "cd backend/api && npm run dev",
+    "api:start": "cd backend/api && npm start",
+    "scraper:start": "cd backend/scraper && python app.py",
+    "dev": "concurrently \"npm run api:dev\" \"npm run frontend:dev\"",
+    "start": "concurrently \"npm run api:start\" \"npm run scraper:start\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
