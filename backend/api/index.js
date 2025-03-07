@@ -8,7 +8,8 @@ const PORT = process.env.PORT || 3002;
 // Simplificando: usando '*' para permitir todas as origens
 // Podemos adicionar restrições mais tarde quando o app for público
 const CORS_ORIGIN = '*';
-const API_KEY = process.env.API_KEY || 'runcash-default-key'; // Defina uma chave segura nas variáveis de ambiente
+// Mantendo a constante API_KEY para uso futuro
+const API_KEY = process.env.API_KEY || 'runcash-default-key';
 
 // Configuração de CORS simplificada
 app.use(cors({
@@ -20,7 +21,9 @@ app.use(cors({
 // Middleware
 app.use(express.json());
 
-// Middleware para verificar API key
+/* 
+// Middleware para verificar API key - DESATIVADO TEMPORARIAMENTE
+// Adicionaremos novamente quando o aplicativo for público
 const apiKeyMiddleware = (req, res, next) => {
   const apiKey = req.headers['x-api-key'];
   
@@ -39,6 +42,7 @@ const apiKeyMiddleware = (req, res, next) => {
 
 // Aplicar middleware de API key a todas as rotas
 app.use(apiKeyMiddleware);
+*/
 
 // Supabase client
 const supabaseUrl = process.env.SUPABASE_URL || "https://evzqzghxuttctbxgohpx.supabase.co";
