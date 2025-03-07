@@ -5,20 +5,47 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3002;
+const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+const API_KEY = process.env.API_KEY || 'runcash-default-key'; // Defina uma chave segura nas variáveis de ambiente
 
-// Habilitar CORS para todas as origens
+// Configuração de CORS
 app.use(cors({
-  origin: '*', // Permite todas as origens
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Métodos permitidos
-  allowedHeaders: ['Content-Type', 'Authorization'] // Headers permitidos
+  origin: CORS_ORIGIN, // Usa a variável de ambiente ou permite todas as origens como fallback
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key']
 }));
 
 // Middleware
 app.use(express.json());
 
+// Middleware para verificar API key
+const apiKeyMiddleware = (req, res, next) => {
+  const apiKey = req.headers['x-api-key'];
+  
+  // Pular verificação de API key para o endpoint de health check
+  if (req.path === '/api/health') {
+    return next();
+  }
+  
+  // Verificar se a API key foi fornecida e é válida
+  if (!apiKey || apiKey !== API_KEY) {
+    return res.status(401).json({ error: 'API key inválida ou não fornecida' });
+  }
+  
+  next();
+};
+
+// Aplicar middleware de API key a todas as rotas
+app.use(apiKeyMiddleware);
+
 // Supabase client
 const supabaseUrl = process.env.SUPABASE_URL || "https://evzqzghxuttctbxgohpx.supabase.co";
 const supabaseKey = process.env.SUPABASE_KEY;
+
+// Verificar se as variáveis de ambiente obrigatórias estão definidas
+if (!supabaseKey) {
+  console.error('ERRO: SUPABASE_KEY não está definida!');
+}
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
