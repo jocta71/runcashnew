@@ -1,11 +1,15 @@
 {
-  "name": "runcash-api",
+  "name": "runcash-backend-api",
   "version": "1.0.0",
-  "description": "API para integrar o scraper com o frontend",
+  "description": "API para o projeto RunCash",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.38.4",
