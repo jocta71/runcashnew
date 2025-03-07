@@ -5,12 +5,14 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3002;
-const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+// Simplificando: usando '*' para permitir todas as origens
+// Podemos adicionar restrições mais tarde quando o app for público
+const CORS_ORIGIN = '*';
 const API_KEY = process.env.API_KEY || 'runcash-default-key'; // Defina uma chave segura nas variáveis de ambiente
 
-// Configuração de CORS
+// Configuração de CORS simplificada
 app.use(cors({
-  origin: CORS_ORIGIN, // Usa a variável de ambiente ou permite todas as origens como fallback
+  origin: CORS_ORIGIN, // Permite todas as origens
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key']
 }));
