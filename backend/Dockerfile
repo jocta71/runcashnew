@@ -1,18 +1,16 @@
-FROM node:18
+FROM node:18-slim
 
 WORKDIR /app
 
-# Copiar todo o diretório api
+COPY api/package*.json ./
+
+RUN npm install --omit=dev
+
 COPY api/ ./
 
-# Instalar dependências
-RUN npm install --production
-
-# Definir variáveis de ambiente
 ENV PORT=3000
+ENV NODE_ENV=production
 
-# Expor a porta
 EXPOSE 3000
 
-# Comando para iniciar a aplicação
 CMD ["node", "index.js"] 
