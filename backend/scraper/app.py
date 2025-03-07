@@ -1,7 +1,6 @@
 import time
 import random
 import re
-import schedule
 import json
 import os
 import platform
@@ -17,7 +16,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from webdriver_manager.chrome import ChromeDriverManager
 from supabase import create_client
 
-from config import CASINO_URL, SUPABASE_URL, SUPABASE_KEY, roleta_permitida_por_id, SCRAPE_INTERVAL_MINUTES, logger, MAX_CICLOS
+from config import CASINO_URL, SUPABASE_URL, SUPABASE_KEY, roleta_permitida_por_id, logger, MAX_CICLOS
 from strategy_analyzer import StrategyAnalyzer
 
 # Inicialização do cliente Supabase
@@ -25,6 +24,9 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Dicionário global para manter os analisadores de cada mesa
 analisadores_mesas = {}
+
+# Intervalo de verificação em segundos (verifica constantemente, com pequena pausa)
+VERIFICACAO_INTERVALO = 3
 
 def configurar_driver():
     """Configura o driver do Selenium com as opções apropriadas para o Heroku"""
@@ -184,7 +186,7 @@ def atualizar_supabase(dados_roletas):
         return False
 
 def scrape_roletas():
-    """Função principal que realiza o scraping das roletas"""
+    """Função principal que realiza o scraping das roletas em loop contínuo"""
     driver = None
     try:
         # Configurar o driver
@@ -199,14 +201,18 @@ def scrape_roletas():
         # Aguardar carregamento da página (5-10 segundos)
         time.sleep(random.uniform(5, 10))
         
-        # Iniciar ciclo de scraping
+        # Dicionário para armazenar o último número visto para cada roleta
+        ultimos_numeros = {}
+        
+        # Loop contínuo para verificação em tempo real
         ciclo = 1
-        while ciclo <= MAX_CICLOS:
-            logger.info(f"Iniciando ciclo {ciclo} de scraping")
+        logger.info(f"Iniciando monitoramento contínuo das roletas")
+        
+        while True:
+            logger.info(f"Ciclo de verificação {ciclo}")
             
             # Encontrar todas as roletas na página
             elementos_roletas = driver.find_elements(By.CSS_SELECTOR, ".cy-live-casino-grid-item")
-            logger.info(f"Encontradas {len(elementos_roletas)} roletas na página")
             
             # Dicionário para armazenar os dados atualizados
             dados_atualizados = {}
@@ -225,61 +231,65 @@ def scrape_roletas():
                     if not roleta_permitida_por_id(id_roleta):
                         continue
                     
-                    logger.info(f"Processando roleta: {titulo_roleta} (ID: {id_roleta})")
-                    
-                    # Inicializar analisador para a roleta se não existir
-                    if titulo_roleta not in analisadores_mesas:
-                        analisadores_mesas[titulo_roleta] = StrategyAnalyzer(titulo_roleta)
-                    
-                    # Extrair números da roleta
+                    # Extrair o número mais recente
                     numeros = extrair_numeros_js(driver, elemento_roleta)
                     
-                    # Adicionar números ao analisador
-                    if analisadores_mesas[titulo_roleta].add_numbers(numeros):
-                        logger.info(f"Novos números adicionados para {titulo_roleta}: {numeros}")
+                    # Verificar se o número mudou desde a última verificação
+                    numero_atual = numeros[0] if numeros else None
+                    ultimo_numero = ultimos_numeros.get(titulo_roleta)
                     
-                    # Adicionar dados da mesa ao dicionário de dados atualizados
-                    dados = analisadores_mesas[titulo_roleta].get_data()
-                    dados["id"] = id_roleta  # Adicionar o ID da roleta aos dados
-                    dados_atualizados[titulo_roleta] = dados
+                    if numero_atual and numero_atual != ultimo_numero:
+                        logger.info(f"NOVO NÚMERO para {titulo_roleta}: {numero_atual} (anterior: {ultimo_numero})")
+                        
+                        # Atualizar o último número visto
+                        ultimos_numeros[titulo_roleta] = numero_atual
+                        
+                        # Inicializar analisador para a roleta se não existir
+                        if titulo_roleta not in analisadores_mesas:
+                            analisadores_mesas[titulo_roleta] = StrategyAnalyzer(titulo_roleta)
+                        
+                        # Adicionar novo número ao analisador
+                        if analisadores_mesas[titulo_roleta].add_numbers(numeros):
+                            logger.info(f"Novo número adicionado para {titulo_roleta}: {numeros}")
+                        
+                        # Adicionar dados da mesa ao dicionário de dados atualizados
+                        dados = analisadores_mesas[titulo_roleta].get_data()
+                        dados["id"] = id_roleta  # Adicionar o ID da roleta aos dados
+                        dados_atualizados[titulo_roleta] = dados
+                    else:
+                        logger.debug(f"Sem novos números para {titulo_roleta}")
                 
                 except Exception as e:
                     logger.error(f"Erro ao processar roleta: {str(e)}")
             
-            # Atualizar dados no Supabase
+            # Atualizar dados no Supabase somente se houver novos dados
             if dados_atualizados:
                 atualizar_supabase(dados_atualizados)
             
-            # Pausa entre ciclos (entre 2 e 3 segundos)
-            pausa = random.uniform(2, 3)
-            time.sleep(pausa)
+            # Pequena pausa antes da próxima verificação
+            time.sleep(VERIFICACAO_INTERVALO)
+            
+            # Recarregar a página a cada 30 ciclos para evitar problemas de memória
+            if ciclo % 30 == 0:
+                logger.info("Recarregando a página para manter a sessão fresca")
+                driver.refresh()
+                time.sleep(5)
             
             ciclo += 1
-    
+        
     except Exception as e:
-        logger.error(f"Erro no processo de scraping: {str(e)}")
+        logger.error(f"Erro no loop de scraping: {str(e)}")
     
     finally:
-        # Fechar o driver ao finalizar
+        # Fechar o driver ao sair
         if driver:
             driver.quit()
-            logger.info("Driver fechado")
-
-def main():
-    """Função principal que agenda o scraping"""
-    logger.info("Iniciando aplicação de scraping")
-    
-    # Executar scraping imediatamente
-    scrape_roletas()
-    
-    # Agendar execuções periódicas
-    schedule.every(SCRAPE_INTERVAL_MINUTES).minutes.do(scrape_roletas)
-    
-    # Loop principal para executar as tarefas agendadas
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
 
 if __name__ == "__main__":
-    import os  # Para verificar variáveis de ambiente
-    main()
+    try:
+        logger.info("Iniciando scraper em modo contínuo")
+        scrape_roletas()
+    except KeyboardInterrupt:
+        logger.info("Scraper interrompido pelo usuário")
+    except Exception as e:
+        logger.error(f"Erro ao executar scraper: {str(e)}")
