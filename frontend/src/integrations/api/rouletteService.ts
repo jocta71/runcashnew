@@ -1,6 +1,17 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:3001/api';
+// Usar a variável de ambiente para a URL da API, com fallback para localhost
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_KEY = import.meta.env.VITE_API_KEY || 'runcash-default-key';
+
+// Configuração do axios com headers padrão
+const api = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+    'X-API-Key': API_KEY
+  }
+});
 
 export interface RouletteData {
   id: string;
@@ -31,7 +42,7 @@ export interface LatestRouletteNumber {
 
 export const fetchAllRoulettes = async (): Promise<RouletteData[]> => {
   try {
-    const response = await axios.get<RouletteData[]>(`${API_URL}/roletas`);
+    const response = await api.get<RouletteData[]>('/roletas');
     return response.data;
   } catch (error) {
     console.error('Erro ao buscar roletas:', error);
@@ -41,7 +52,7 @@ export const fetchAllRoulettes = async (): Promise<RouletteData[]> => {
 
 export const fetchLatestRouletteNumbers = async (): Promise<LatestRouletteNumber[]> => {
   try {
-    const response = await axios.get<LatestRouletteNumber[]>(`${API_URL}/roletas/latest`);
+    const response = await api.get<LatestRouletteNumber[]>('/roletas/latest');
     return response.data;
   } catch (error) {
     console.error('Erro ao buscar números mais recentes das roletas:', error);
@@ -51,7 +62,7 @@ export const fetchLatestRouletteNumbers = async (): Promise<LatestRouletteNumber
 
 export const fetchRouletteById = async (id: string): Promise<RouletteData> => {
   try {
-    const response = await axios.get<RouletteData>(`${API_URL}/roletas/${id}`);
+    const response = await api.get<RouletteData>(`/roletas/${id}`);
     return response.data;
   } catch (error) {
     console.error(`Erro ao buscar roleta ${id}:`, error);
