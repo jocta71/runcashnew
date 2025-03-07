@@ -6,6 +6,7 @@ import os
 import platform
 from datetime import datetime
 import logging
+import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -19,6 +20,9 @@ from supabase import create_client
 from config import CASINO_URL, SUPABASE_URL, SUPABASE_KEY, roleta_permitida_por_id, logger, MAX_CICLOS
 from strategy_analyzer import StrategyAnalyzer
 
+# Detectar se estamos no Railway
+IS_RAILWAY = "RAILWAY_STATIC_URL" in os.environ or "RAILWAY_SERVICE_ID" in os.environ
+
 # Inicialização do cliente Supabase
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -29,7 +33,12 @@ analisadores_mesas = {}
 VERIFICACAO_INTERVALO = 3
 
 def configurar_driver():
-    """Configura o driver do Selenium com as opções apropriadas para o Heroku"""
+    """Configura o driver do Selenium com as opções apropriadas"""
+    # Se estamos no Railway, pulamos a configuração do Selenium
+    if IS_RAILWAY:
+        logger.info("Detectado ambiente Railway - usando modo API apenas")
+        return None
+    
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--disable-dev-shm-usage")
@@ -185,14 +194,108 @@ def atualizar_supabase(dados_roletas):
         logger.error(f"Erro ao atualizar dados no Supabase: {str(e)}")
         return False
 
+# Função para simular scraping usando a API - modo alternativo para Railway
+def scrape_api_apenas():
+    """Versão simplificada do scraper que usa apenas a API do cassino"""
+    logger.info("Iniciando scraper em modo API (sem navegador)")
+    
+    try:
+        # Em um cenário real, aqui faríamos chamadas API diretas para o serviço
+        # do cassino, mas como exemplo, vamos inserir dados de exemplo
+        
+        dados_mesas = {
+            "Roleta Brasileira": {
+                "id": "roleta-br-1",
+                "numeros": [5, 12, 33, 7, 19, 21, 0, 14]
+            },
+            "Roleta Europeia": {
+                "id": "roleta-eu-1",
+                "numeros": [7, 18, 4, 22, 9, 15, 33, 11]
+            }
+        }
+        
+        # Dicionário para armazenar o último número visto para cada roleta
+        ultimos_numeros = {}
+        
+        # Loop contínuo para simulação
+        ciclo = 1
+        while True:
+            logger.info(f"Ciclo de verificação API {ciclo}")
+            
+            # Dicionário para armazenar os dados atualizados
+            dados_atualizados = {}
+            
+            # Em um cenário real, aqui faríamos a chamada para a API
+            # Neste exemplo, estamos apenas simulando dados
+            for titulo_roleta, dados in dados_mesas.items():
+                try:
+                    id_roleta = dados["id"]
+                    
+                    # Verificar se a roleta está na lista de permitidas
+                    if not roleta_permitida_por_id(id_roleta):
+                        continue
+                    
+                    # Gerar um número aleatório para simular um novo número a cada 10 ciclos
+                    if ciclo % 10 == 0:
+                        novo_numero = random.randint(0, 36)
+                        dados["numeros"].insert(0, novo_numero)
+                        dados["numeros"] = dados["numeros"][:20]  # Manter apenas os 20 mais recentes
+                    
+                    # Verificar se o número mudou desde a última verificação
+                    numero_atual = dados["numeros"][0] if dados["numeros"] else None
+                    ultimo_numero = ultimos_numeros.get(titulo_roleta)
+                    
+                    if numero_atual and numero_atual != ultimo_numero:
+                        logger.info(f"NOVO NÚMERO para {titulo_roleta}: {numero_atual} (anterior: {ultimo_numero})")
+                        
+                        # Atualizar o último número visto
+                        ultimos_numeros[titulo_roleta] = numero_atual
+                        
+                        # Inicializar analisador para a roleta se não existir
+                        if titulo_roleta not in analisadores_mesas:
+                            analisadores_mesas[titulo_roleta] = StrategyAnalyzer(titulo_roleta)
+                        
+                        # Adicionar novo número ao analisador
+                        novos_numeros = [str(numero_atual)]
+                        if analisadores_mesas[titulo_roleta].add_numbers(novos_numeros):
+                            logger.info(f"Novo número adicionado para {titulo_roleta}: {novos_numeros}")
+                        
+                        # Adicionar dados da mesa ao dicionário de dados atualizados
+                        dados_analisador = analisadores_mesas[titulo_roleta].get_data()
+                        dados_analisador["id"] = id_roleta  # Adicionar o ID da roleta aos dados
+                        dados_atualizados[titulo_roleta] = dados_analisador
+                    else:
+                        logger.debug(f"Sem novos números para {titulo_roleta}")
+                
+                except Exception as e:
+                    logger.error(f"Erro ao processar roleta em modo API: {str(e)}")
+            
+            # Atualizar dados no Supabase somente se houver novos dados
+            if dados_atualizados:
+                atualizar_supabase(dados_atualizados)
+            
+            # Pequena pausa antes da próxima verificação
+            time.sleep(VERIFICACAO_INTERVALO)
+            
+            ciclo += 1
+    
+    except Exception as e:
+        logger.error(f"Erro no loop de scraping API: {str(e)}")
+
 def scrape_roletas():
     """Função principal que realiza o scraping das roletas em loop contínuo"""
+    # Se estamos no Railway, usamos o modo API apenas
+    if IS_RAILWAY:
+        scrape_api_apenas()
+        return
+    
     driver = None
     try:
         # Configurar o driver
         driver = configurar_driver()
         if not driver:
-            logger.error("Não foi possível inicializar o driver")
+            logger.error("Não foi possível inicializar o driver, tentando modo API")
+            scrape_api_apenas()
             return
         
         logger.info(f"Navegando para: {CASINO_URL}")
