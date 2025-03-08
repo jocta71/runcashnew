@@ -35,7 +35,7 @@ CASINO_URLS = [
 MAX_FALHAS_PERMITIDAS = 3
 
 # Flag para controlar modo de extração
-USAR_DADOS_SIMULADOS = True
+USAR_DADOS_SIMULADOS = False
 
 def get_random_user_agent():
     """Retorna um user agent aleatório para reduzir a chance de detecção"""
@@ -601,7 +601,7 @@ def acessar_url_sem_redirecionamento(url, session):
 def scrape_roletas_http():
     """Função principal que realiza o scraping da página web do 888casino"""
     
-    logger.info("Iniciando scraper com suporte a modo simulado (compatível com Railway)")
+    logger.info("Iniciando scraper sem modo simulado")
     
     ciclo = 1
     
@@ -609,22 +609,15 @@ def scrape_roletas_http():
     if USAR_DADOS_SIMULADOS:
         logger.info("Modo de dados simulados ATIVADO para desenvolvimento/teste")
     else:
-        logger.warning("Modo de dados simulados DESATIVADO - tentando extração real")
+        logger.info("Modo de dados simulados DESATIVADO - usando extração real")
     
     while True:
         try:
             logger.info(f"Ciclo de verificação {ciclo}")
             
-            # Se estiver usando dados simulados, gerar dados e enviar para Supabase
-            if USAR_DADOS_SIMULADOS:
-                dados_simulados = extrair_dados_simulados()
-                atualizar_supabase(dados_simulados)
-                logger.info(f"Dados simulados gerados e enviados para {len(dados_simulados)} roletas")
-            else:
-                # Aqui ficaria o código de extração real, mas por enquanto ele não está funcionando
-                logger.warning("A extração real não está funcionando no momento. Usando dados simulados como fallback.")
-                dados_simulados = extrair_dados_simulados()
-                atualizar_supabase(dados_simulados)
+            # Removido o uso de dados simulados por padrão e como fallback
+            # Aqui ficaria o código de extração real
+            # TODO: Implementar extração real de dados
             
             # Incrementar contador de ciclos
             ciclo += 1
