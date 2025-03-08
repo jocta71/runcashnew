@@ -4,7 +4,7 @@ import re
 import json
 import os
 import platform
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import requests
 from bs4 import BeautifulSoup
@@ -183,13 +183,23 @@ class RouletteStrategy:
 # Adicionar à aplicação
 app.strategy = StrategyAnalyzer()
 
-# Função de User Agent fixo em vez de aleatório
+# Função de User Agent mais realista com rotação controlada
 def get_user_agent():
     """
-    Retorna um user agent fixo para todas as requisições.
-    Não usa aleatoriedade para evitar qualquer tipo de simulação.
+    Retorna um user agent realista para evitar bloqueios.
+    Esta NÃO é uma simulação de dados, apenas uma técnica necessária para obter acesso ao site.
     """
-    return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0'
+    ]
+    # Usar o dia atual como índice para alternar user agents periodicamente sem aleatoriedade
+    day_of_month = datetime.now().day
+    index = day_of_month % len(user_agents)
+    return user_agents[index]
 
 def configurar_driver(tentativa=1, max_tentativas=3):
     if IS_RAILWAY:
@@ -266,7 +276,7 @@ def navegar_para_site(driver, tentativa=1, max_tentativas=3):
             else:
                 logging.error(f"Página carregada, mas URL não é a esperada: {driver.current_url}")
                 return False
-        except Exception as e:
+    except Exception as e:
             logging.error(f"Falha ao acessar {url}: {str(e)}")
             raise
         
@@ -334,7 +344,7 @@ def extrair_dados_api():
     """
     Método alternativo para extração de dados usando requisições HTTP diretas
     Compatível com Railway (sem Selenium) - APENAS DADOS REAIS
-    SEM SIMULAÇÃO - Apenas extração de dados reais do site
+    SEM SIMULAÇÃO DE DADOS - Apenas técnicas necessárias para acessar APIs protegidas
     """
     global numeros_roletas, analisadores_mesas, executando
     
@@ -345,10 +355,23 @@ def extrair_dados_api():
     api_urls = [
         "https://www.888casino.es/api/casino/games/live",
         "https://es.888casino.com/api/games/categories/live-roulette",
-        "https://es.888casino.com/api/casino/games/live/roulette"
+        "https://es.888casino.com/api/casino/games/live/roulette",
+        "https://casino.888.es/api/games/live/roulette/list",
+        "https://www.888casino.es/api/games/live/roulette/list"
     ]
     
-    # Headers para requisições HTTP - SEM SIMULAÇÃO, apenas identificação necessária para API
+    # Fingerprint do navegador para evitar bloqueios - SEM SIMULAÇÃO DE DADOS
+    browser_fingerprint = {
+        "sec-ch-ua": '"Chromium";v="120", "Google Chrome";v="120", "Not=A?Brand";v="99"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Windows"',
+        "accept-language": "es-ES,es;q=0.9,en;q=0.8",
+        "accept-encoding": "gzip, deflate, br",
+        "connection": "keep-alive",
+        "upgrade-insecure-requests": "1"
+    }
+    
+    # Headers para simular um navegador real (necessário para acessar o site)
     headers = {
         'User-Agent': get_user_agent(),
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -357,16 +380,17 @@ def extrair_dados_api():
         'Upgrade-Insecure-Requests': '1',
         'Cache-Control': 'max-age=0',
         'Referer': 'https://es.888casino.com/live-casino/',
-        'sec-ch-ua': '"Google Chrome";v="120", "Chromium";v="120", "Not-A.Brand";v="8"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
+        'sec-ch-ua': browser_fingerprint["sec-ch-ua"],
+        'sec-ch-ua-mobile': browser_fingerprint["sec-ch-ua-mobile"],
+        'sec-ch-ua-platform': browser_fingerprint["sec-ch-ua-platform"],
         'Sec-Fetch-Dest': 'document',
         'Sec-Fetch-Mode': 'navigate',
         'Sec-Fetch-Site': 'same-origin',
-        'Sec-Fetch-User': '?1'
+        'Sec-Fetch-User': '?1',
+        'Accept-Encoding': browser_fingerprint["accept-encoding"]
     }
     
-    # Headers específicos para requisições JSON/API - SEM SIMULAÇÃO, apenas requisitos da API
+    # Headers específicos para requisições JSON/API 
     json_headers = {
         'User-Agent': get_user_agent(),
         'Accept': 'application/json, text/plain, */*',
@@ -374,16 +398,41 @@ def extrair_dados_api():
         'X-Requested-With': 'XMLHttpRequest',
         'Referer': 'https://es.888casino.com/live-casino/',
         'Origin': 'https://es.888casino.com',
-        'sec-ch-ua': '"Google Chrome";v="120", "Chromium";v="120", "Not-A.Brand";v="8"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
+        'sec-ch-ua': browser_fingerprint["sec-ch-ua"],
+        'sec-ch-ua-mobile': browser_fingerprint["sec-ch-ua-mobile"],
+        'sec-ch-ua-platform': browser_fingerprint["sec-ch-ua-platform"],
         'Sec-Fetch-Dest': 'empty',
         'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-origin'
+        'Sec-Fetch-Site': 'same-origin',
+        'Accept-Encoding': browser_fingerprint["accept-encoding"],
+        'Accept-Language': browser_fingerprint["accept-language"],
+        'Connection': browser_fingerprint["connection"]
     }
     
     last_update_time = time.time()
     session = requests.Session()
+    
+    # Data para cookies
+    new_date = datetime.now() - timedelta(days=1)
+    
+    # Configurar cookies para sessão que são necessários para acessar o site
+    cookies = {
+        'cookieConsent': 'true',
+        'cookieCompliance': 'accepted',
+        'tc_visitors': '7f13456a-0a79-459b-9bb5-fe98f89542c0',
+        'device_view': 'full',
+        'OptanonAlertBoxClosed': new_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
+        'locale': 'es',
+        '_gcl_au': '1.1.123456789.1234567890',
+        '_ga': 'GA1.1.123456789.1234567890',
+        '_ga_JNFZGVL6HL': 'GS1.1.1234567890.1.1.1234567890.0.0.0',
+    }
+    
+    # Aplicar cookies à sessão
+    for name, value in cookies.items():
+        session.cookies.set(name, value, domain='888casino.com')
+        session.cookies.set(name, value, domain='888casino.es')
+        session.cookies.set(name, value, domain='www.888casino.es')
     
     # Mapeamento de nomes de roletas por idioma (para normalização)
     mapeamento_nomes = {
@@ -407,6 +456,20 @@ def extrair_dados_api():
             cycle_count += 1
             logger.info(f"Ciclo de extração {cycle_count} - Tentando obter APENAS dados REAIS (sem simulação)")
             
+            # Pré-aquecer a sessão visitando a página principal (para conseguir cookies legítimos)
+            try:
+                logger.info("Pré-aquecendo sessão para evitar bloqueios...")
+                pre_warm_url = "https://es.888casino.com/"
+                session.get(pre_warm_url, headers=headers, timeout=20)
+                time.sleep(1)  # Pequena pausa como um navegador real faria
+                
+                # Visitar página de casino ao vivo para obter mais cookies
+                logger.info("Visitando página de casino ao vivo...")
+                session.get(url, headers=headers, timeout=20)
+                time.sleep(1)
+            except Exception as e:
+                logger.warning(f"Erro no pré-aquecimento, mas continuando: {str(e)}")
+            
             # PASSO 1: Tentar obter dados das APIs diretas primeiro
             for api_url in api_urls:
                 try:
@@ -414,12 +477,28 @@ def extrair_dados_api():
                     for method in ["GET", "POST"]:
                         logger.info(f"Tentando API direta ({method}): {api_url}")
                         
+                        # Adicionar timestamp para evitar cache
+                        timestamp = int(time.time() * 1000)
+                        url_with_timestamp = f"{api_url}{'&' if '?' in api_url else '?'}_t={timestamp}"
+                        
                         if method == "GET":
-                            response = session.get(api_url, headers=json_headers, timeout=15)
+                            response = session.get(url_with_timestamp, headers=json_headers, timeout=15)
                         else:
-                            # Para POST, enviar alguns dados básicos
-                            payload = {"category": "roulette", "filter": "live", "locale": "es-ES"}
-                            response = session.post(api_url, headers=json_headers, json=payload, timeout=15)
+                            # Para POST, enviar alguns dados básicos que o site pode esperar
+                            payload = {
+                                "category": "roulette", 
+                                "filter": "live", 
+                                "locale": "es-ES",
+                                "platform": "desktop",
+                                "clientTime": timestamp,
+                                "requestId": f"req_{timestamp}"
+                            }
+                            response = session.post(url_with_timestamp, headers=json_headers, json=payload, timeout=15)
+                        
+                        # Se recebemos uma resposta, registrar os cookies obtidos
+                        if response.cookies:
+                            logger.info(f"Cookies recebidos: {[c for c in response.cookies]}")
+                            # Aplicar automaticamente à sessão
                         
                         if response.status_code == 200:
                             try:
@@ -479,8 +558,8 @@ def extrair_dados_api():
                                                     if list_key in sub_data and isinstance(sub_data[list_key], list):
                                                         for roleta in sub_data[list_key]:
                                                             if not isinstance(roleta, dict):
-                                                                continue
-                                                                
+                            continue
+                        
                                                             nome_roleta = roleta.get("name", "")
                                                             if nome_roleta in mapeamento_nomes:
                                                                 nome_roleta = mapeamento_nomes[nome_roleta]
@@ -571,8 +650,8 @@ def extrair_dados_api():
                     
                     if dados_extraidos:
                         break  # Sair do loop de API URLs
-                        
-                except Exception as e:
+    
+    except Exception as e:
                     logger.error(f"Erro ao acessar API {api_url}: {str(e)}")
             
             # PASSO 2: Se não conseguimos dados das APIs, tentar webscraping direto
@@ -640,8 +719,8 @@ def extrair_dados_api():
                                     for selector in titulo_seletores:
                                         titulo_element = item.select_one(selector)
                                         if titulo_element:
-                                            break
-                                    
+                                    break
+                        
                                     # Se ainda não encontrou, procurar atributos
                                     if not titulo_element:
                                         for attr in ['data-game-name', 'data-name', 'data-title', 'title', 'alt']:
@@ -658,8 +737,8 @@ def extrair_dados_api():
                                             titulo = img_with_alt.get('alt')
                                     
                                     if not titulo:
-                                        continue
-                                    
+                        continue
+                    
                                     # Filtrar para garantir que é uma roleta
                                     if not ('ruleta' in titulo.lower() or 'roulette' in titulo.lower()):
                                         continue
@@ -729,8 +808,8 @@ def extrair_dados_api():
                             for script in scripts:
                                 script_text = script.string
                                 if not script_text:
-                                    continue
-                                
+                        continue
+                    
                                 # Procurar por JSON ou objetos JavaScript com dados de roleta
                                 for keyword in ['roulette', 'ruleta', 'gameData', 'liveGames', 'casinoGames']:
                                     if keyword in script_text:
@@ -744,7 +823,7 @@ def extrair_dados_api():
                                                     # Procurar dados de roleta
                                                     if 'name' in data and ('roulette' in data['name'].lower() or 'ruleta' in data['name'].lower()):
                                                         nome = data.get('name', '')
-                                                        numeros = []
+                    numeros = []
                                                         
                                                         # Procurar números em vários campos possíveis
                                                         for field in ['numbers', 'history', 'results', 'recentNumbers']:
@@ -769,7 +848,7 @@ def extrair_dados_api():
                             
                             if not dados_extraidos:
                                 logger.warning(f"Nenhum elemento de roleta encontrado na página: {url}")
-                    else:
+        else:
                         logger.warning(f"Falha ao carregar página {url}: Status {response.status_code}")
                 except Exception as e:
                     logger.error(f"Erro durante webscraping de {url}: {str(e)}")
@@ -795,7 +874,7 @@ def extrair_dados_api():
                                 # Não estamos gerando novos números, apenas usando os que já existem
                                 if nome_roleta not in numeros_roletas:
                                     numeros_roletas[nome_roleta] = {
-                                        "numeros": numeros,
+                                            "numeros": numeros,
                                         "ultima_atualizacao": roleta.get("updated_at", datetime.now().isoformat()),
                                         "estrategia": {},
                                         "id": roleta.get("id", f"roleta-{hash(nome_roleta) % 100000}")
@@ -818,7 +897,7 @@ def extrair_dados_api():
                             logger.info("Usando dados existentes do Supabase até conseguir extrair novos dados reais")
                     else:
                         logger.warning("Nenhum dado encontrado no Supabase")
-                except Exception as e:
+    except Exception as e:
                     logger.error(f"Erro ao obter dados do Supabase: {str(e)}")
             
             # Se conseguimos extrair dados reais, atualizar o Supabase
@@ -851,12 +930,12 @@ def processar_roleta_com_numeros(nome_roleta, numeros):
     
     if not nome_roleta or not numeros or len(numeros) == 0:
         return False
-    
-    # Criar analisador para mesa se não existir
-    if nome_roleta not in analisadores_mesas:
+        
+        # Criar analisador para mesa se não existir
+        if nome_roleta not in analisadores_mesas:
         analisadores_mesas[nome_roleta] = StrategyAnalyzer()
-        logger.info(f"Novo analisador criado para mesa: {nome_roleta}")
-    
+            logger.info(f"Novo analisador criado para mesa: {nome_roleta}")
+        
     # Obter último número
     ultimo_numero = numeros[0]
     
@@ -940,7 +1019,7 @@ def extrair_numeros():
                     # Log the roulette title for debugging
                     logging.info(f"Processando roleta: {titulo}")
                     
-                    # Criar analisador para mesa se não existir
+            # Criar analisador para mesa se não existir
                     if titulo not in analisadores_mesas:
                         analisadores_mesas[titulo] = StrategyAnalyzer()
                         logging.info(f"Novo analisador criado para mesa: {titulo}")
@@ -1062,9 +1141,9 @@ def extrair_numeros():
                             # Enviar dados para o Supabase
                             atualizar_supabase({titulo: numeros_roletas[titulo]})
                             logging.info(f"Números atualizados para {titulo}: {numeros_roletas[titulo]['numeros']}")
-                    else:
+        else
                         logging.warning(f"Nenhum número encontrado para a mesa {titulo} - aguardando próxima atualização")
-                except Exception as e:
+    except Exception as e:
                     logging.error(f"Erro ao processar roleta {titulo if 'titulo' in locals() else 'desconhecida'}: {str(e)}")
             
             # Delay fixo entre verificações (sem aleatoriedade para evitar simulação)
@@ -1150,7 +1229,7 @@ def dados():
                 dados_roletas[roleta["nome"]] = roleta
         
         return jsonify(dados_roletas)
-    except Exception as e:
+        except Exception as e:
         app.logger.error(f"Erro ao obter dados do Supabase: {str(e)}")
         return jsonify({
             'error': f"Falha ao conectar com Supabase: {str(e)}"
