@@ -18,7 +18,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ChevronDown, User, UserCog, CreditCard, Wallet, LogOut, Lock, Mail, Edit } from "lucide-react";
+import { ChevronDown, User, UserCog, CreditCard, Wallet, LogOut, Lock, Mail, Edit, CreditCard as PlanCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { useState } from "react";
@@ -157,6 +157,15 @@ const ProfileDropdown = () => {
               </div>
             </DialogContent>
           </Dialog>
+          
+          {/* Planos e Assinaturas */}
+          <DropdownMenuItem 
+            className="cursor-pointer flex items-center gap-2 focus:bg-[#262626] focus:text-white"
+            onClick={() => navigate('/planos')}
+          >
+            <PlanCard size={16} />
+            <span>Planos e Assinaturas</span>
+          </DropdownMenuItem>
           
           {/* Configurações */}
           <DropdownMenuItem className="cursor-pointer flex items-center gap-2 focus:bg-[#262626] focus:text-white">
