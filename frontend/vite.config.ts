@@ -11,8 +11,7 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
-    mode === 'development' &&
-    componentTagger(),
+    mode === 'development' && componentTagger(),
   ].filter(Boolean),
   resolve: {
     alias: {
@@ -22,22 +21,9 @@ export default defineConfig(({ mode }) => ({
   build: {
     outDir: "dist",
     assetsDir: "assets",
-    // Garantir que dependências problemáticas sejam processadas corretamente
-    commonjsOptions: {
-      include: [/@stripe\/stripe-js/, /node_modules/],
-    },
-    // Configuração do Rollup para lidar com o Stripe
+    // Configuração simplificada para evitar problemas no build
     rollupOptions: {
-      external: [],
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          stripe: ['@stripe/stripe-js']
-        }
-      }
+      external: []
     }
   },
-  optimizeDeps: {
-    include: ['@stripe/stripe-js']
-  }
 }));
