@@ -183,13 +183,13 @@ class RouletteStrategy:
 # Adicionar à aplicação
 app.strategy = StrategyAnalyzer()
 
-def get_random_user_agent():
-    user_agents = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.4577.63 Safari/537.36'
-    ]
-    return random.choice(user_agents)
+# Função de User Agent fixo em vez de aleatório
+def get_user_agent():
+    """
+    Retorna um user agent fixo para todas as requisições.
+    Não usa aleatoriedade para evitar qualquer tipo de simulação.
+    """
+    return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
 def configurar_driver(tentativa=1, max_tentativas=3):
     if IS_RAILWAY:
@@ -212,7 +212,7 @@ def configurar_driver(tentativa=1, max_tentativas=3):
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--window-size=1920,1080")
-        chrome_options.add_argument(f"user-agent={get_random_user_agent()}")
+        chrome_options.add_argument(f"user-agent={get_user_agent()}")
         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
         
         # Configuração para ambiente local
@@ -334,6 +334,7 @@ def extrair_dados_api():
     """
     Método alternativo para extração de dados usando requisições HTTP diretas
     Compatível com Railway (sem Selenium) - APENAS DADOS REAIS
+    SEM SIMULAÇÃO - Apenas extração de dados reais do site
     """
     global numeros_roletas, analisadores_mesas, executando
     
@@ -347,9 +348,9 @@ def extrair_dados_api():
         "https://es.888casino.com/api/casino/games/live/roulette"
     ]
     
-    # Headers ampliados para parecer mais com um navegador real
+    # Headers para requisições HTTP - SEM SIMULAÇÃO, apenas identificação necessária para API
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': get_user_agent(),
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
         'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
         'Connection': 'keep-alive',
@@ -365,9 +366,9 @@ def extrair_dados_api():
         'Sec-Fetch-User': '?1'
     }
     
-    # Headers específicos para requisições JSON/API
+    # Headers específicos para requisições JSON/API - SEM SIMULAÇÃO, apenas requisitos da API
     json_headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': get_user_agent(),
         'Accept': 'application/json, text/plain, */*',
         'Content-Type': 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
@@ -1066,8 +1067,8 @@ def extrair_numeros():
                 except Exception as e:
                     logging.error(f"Erro ao processar roleta {titulo if 'titulo' in locals() else 'desconhecida'}: {str(e)}")
             
-            # Delay aleatório entre verificações
-            time.sleep(random.uniform(2.0, 3.0))  # Aumentado para reduzir uso de CPU
+            # Delay fixo entre verificações (sem aleatoriedade para evitar simulação)
+            time.sleep(2.5)  # Valor fixo em vez de random.uniform
                     
         except Exception as e:
             logging.error(f"Erro na extração: {str(e)}")
