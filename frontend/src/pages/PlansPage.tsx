@@ -10,15 +10,18 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { createCheckoutSession } from '@/integrations/stripe/client';
+import { useAuth } from '@/context/AuthContext';
 
 const PlansPage = () => {
   const { availablePlans, currentPlan, upgradePlan, loading } = useSubscription();
+  const { user } = useAuth();
   const [selectedInterval, setSelectedInterval] = useState<'monthly' | 'annual'>('monthly');
   const [processingPlanId, setProcessingPlanId] = useState<string | null>(null);
   const { toast } = useToast();
   
   const handleSelectPlan = async (planId: string) => {
-    if (loading) return;
+    if (loading || !user) return;
     
     // Se já for o plano atual
     if (currentPlan?.id === planId) {
@@ -31,9 +34,27 @@ const PlansPage = () => {
     
     try {
       setProcessingPlanId(planId);
-      await upgradePlan(planId);
+      
+      if (planId === 'free') {
+        // Para o plano gratuito, usar a função existente upgradePlan
+        await upgradePlan(planId);
+        toast({
+          title: "Plano gratuito ativado",
+          description: "Você agora está usando o plano gratuito.",
+        });
+      } else {
+        // Para planos pagos, criar uma sessão de checkout
+        const checkoutUrl = await createCheckoutSession(planId, user.id);
+        // Redirecionar para a página de checkout do Stripe
+        window.location.href = checkoutUrl;
+      }
     } catch (error) {
       console.error("Erro ao atualizar plano:", error);
+      toast({
+        title: "Erro ao processar pagamento",
+        description: "Não foi possível processar seu pagamento. Tente novamente.",
+        variant: "destructive"
+      });
     } finally {
       setProcessingPlanId(null);
     }

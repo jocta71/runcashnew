@@ -1,8 +1,8 @@
 export enum PlanType {
-  FREE = 'free',
-  BASIC = 'basic',
-  PRO = 'pro',
-  PREMIUM = 'premium'
+  FREE = 'FREE',
+  BASIC = 'BASIC',
+  PRO = 'PRO',
+  PREMIUM = 'PREMIUM'
 }
 
 export interface Plan {
@@ -13,7 +13,6 @@ export interface Plan {
   price: number;
   interval: 'monthly' | 'annual';
   features: string[];
-  // Recursos específicos que este plano permite acessar
   allowedFeatures: string[];
 }
 
@@ -22,14 +21,11 @@ export interface UserSubscription {
   userId: string;
   planId: string;
   planType: PlanType;
-  // Data de início da assinatura
   startDate: Date;
-  // Data de término da assinatura (null para assinaturas ativas)
   endDate: Date | null;
-  // Status da assinatura
-  status: 'active' | 'canceled' | 'expired' | 'trial';
-  // Método de pagamento usado
+  status: 'active' | 'canceled' | 'past_due' | 'trial';
   paymentMethod?: string;
-  // Data do próximo pagamento
+  paymentProvider?: 'stripe' | 'manual';
+  paymentId?: string;
   nextBillingDate?: Date;
 } 

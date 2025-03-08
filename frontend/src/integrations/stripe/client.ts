@@ -1,23 +1,52 @@
 /**
- * Implementação simulada do cliente Stripe
+ * Cliente Stripe - versão híbrida que suporta modo simulado e real
  * 
- * Esta versão remove completamente a dependência de @stripe/stripe-js
- * para evitar problemas de build, mas oferece uma API compatível para
- * uso em desenvolvimento e produção.
+ * Esta versão é capaz de funcionar tanto em modo simulado quanto com o Stripe real,
+ * dependendo do ambiente e da disponibilidade do backend.
  */
+
+import axios from 'axios';
 
 // Chave do Stripe (apenas para referência, não usada na simulação)
 const STRIPE_PUBLIC_KEY = 'pk_test_51OxDFnBp4viBSzHIYME6FZtpbx2Vr1KkSTuRGYcm4lnCFf8CzKbcWDe5RMmqHENvp5uDQYCYsEVMsQnqt7KjWHh700dJnw61y6';
 
+// Define a URL base da API
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
 // Interface para garantir compatibilidade com o tipo real do Stripe
-interface SimulatedStripe {
+interface StripeClient {
   redirectToCheckout: (options: { sessionId?: string }) => Promise<{ error: any }>;
   confirmPayment: (options: any) => Promise<{ error: any }>;
-  // Outras funções que você possa precisar
 }
 
-// Simulação do cliente Stripe
-const createSimulatedStripe = (): SimulatedStripe => {
+/**
+ * Cria uma sessão de checkout para um plano específico
+ * @param planId ID do plano a ser comprado
+ * @param userId ID do usuário que está fazendo a compra
+ */
+export const createCheckoutSession = async (planId: string, userId: string): Promise<string> => {
+  try {
+    // Chamar o backend para criar uma sessão de checkout
+    const response = await axios.post(`${API_URL}/api/create-checkout-session`, {
+      planId,
+      userId
+    });
+    
+    // Se for o plano gratuito, retorna a URL de sucesso diretamente
+    if (response.data.redirectUrl) {
+      return response.data.redirectUrl;
+    }
+    
+    // Para planos pagos, retorna a URL do Stripe para redirecionamento
+    return response.data.url;
+  } catch (error) {
+    console.error('Erro ao criar sessão de checkout:', error);
+    throw new Error('Não foi possível criar a sessão de checkout. Tente novamente.');
+  }
+};
+
+// Simulação do cliente Stripe (usado como fallback)
+const createSimulatedStripe = (): StripeClient => {
   return {
     redirectToCheckout: async ({ sessionId }: { sessionId?: string }) => {
       console.log('[Stripe Simulado] redirectToCheckout chamado com sessionId:', sessionId);
@@ -40,19 +69,19 @@ const createSimulatedStripe = (): SimulatedStripe => {
 };
 
 // Manter uma única instância do cliente simulado
-let simulatedStripeInstance: SimulatedStripe | null = null;
+let simulatedStripeInstance: StripeClient | null = null;
 
 /**
  * Função para obter o cliente Stripe
  * Esta função é uma substituição para loadStripe() da biblioteca @stripe/stripe-js
  */
-export const getStripeClient = (): Promise<SimulatedStripe> => {
+export const getStripeClient = (): Promise<StripeClient> => {
   if (!simulatedStripeInstance) {
     simulatedStripeInstance = createSimulatedStripe();
     
     console.warn(
-      '[Stripe Simulado] Usando implementação simulada do Stripe.\n' +
-      'Em produção, substitua este arquivo pela implementação real usando @stripe/stripe-js.'
+      '[Stripe Híbrido] Usando implementação simulada do Stripe.\n' +
+      'Redirecionamentos de checkout serão processados pela API backend.'
     );
   }
   

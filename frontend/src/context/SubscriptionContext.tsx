@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Plan, PlanType, UserSubscription } from '@/types/plans';
 import { useAuth } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { getStripeClient } from '@/integrations/stripe/client';
+import { getStripeClient, createCheckoutSession } from '@/integrations/stripe/client';
 
 // Lista de planos disponíveis
 export const availablePlans: Plan[] = [
@@ -240,56 +240,14 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         return;
       }
 
-      // Para planos pagos, redirecionar para o Stripe
-      // Na implementação real você chamaria seu backend para criar uma sessão do Stripe
-      try {
-        const stripe = await getStripeClient();
-        
-        // Aqui você deve chamar o backend para criar a sessão de checkout
-        // Por enquanto, vamos simular isso
-        toast({
-          title: "Redirecionando para pagamento",
-          description: "Você será redirecionado para o Stripe para concluir o pagamento.",
-        });
-        
-        // Simulação para exemplo (em produção, esta seria uma chamada real à API)
-        setTimeout(() => {
-          // Redirecionar para a página de sucesso com um ID falso para simulação
-          window.location.href = `/payment-success?session_id=sim_${Date.now()}`;
-        }, 2000);
-        
-        /*
-        // Código real para produção:
-        const response = await fetch('/api/create-checkout-session', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            planId: selectedPlan.id,
-            userId: user.id
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Erro ao processar pagamento');
-        }
-
-        const { url } = await response.json();
-        
-        // Redirecionar para o checkout do Stripe
-        window.location.href = url;
-        */
-      } catch (stripeError) {
-        console.error('Erro ao redirecionar para o Stripe:', stripeError);
-        throw new Error('Erro ao redirecionar para o checkout do Stripe');
-      }
+      // Para planos pagos, redirecionar para o checkout do Stripe via backend
+      const checkoutUrl = await createCheckoutSession(planId, user.id);
+      window.location.href = checkoutUrl;
     } catch (error) {
       console.error('Erro ao atualizar plano:', error);
       toast({
-        title: "Erro ao atualizar plano",
-        description: error.message || "Ocorreu um erro ao atualizar seu plano. Tente novamente.",
+        title: "Erro ao processar pagamento",
+        description: "Ocorreu um erro ao processar seu pagamento. Tente novamente mais tarde.",
         variant: "destructive"
       });
     } finally {

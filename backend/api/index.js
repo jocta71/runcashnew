@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 require('dotenv').config();
 
 const app = express();
@@ -158,6 +159,266 @@ app.get('/api/roletas/:id', async (req, res) => {
 // Endpoint para health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'healthy' });
+});
+
+// Rota para criar uma sessão de checkout do Stripe
+app.post('/api/create-checkout-session', async (req, res) => {
+  try {
+    const { planId, userId } = req.body;
+    
+    if (!planId || !userId) {
+      return res.status(400).json({ error: 'planId e userId são obrigatórios' });
+    }
+    
+    // Buscar informações do plano no banco de dados ou usar um mapeamento fixo
+    const planPriceMap = {
+      'free': { priceId: null, amount: 0 },
+      'basic': { priceId: 'price_basic', amount: 1990 }, // R$ 19,90
+      'pro': { priceId: 'price_pro', amount: 4990 }, // R$ 49,90
+      'premium': { priceId: 'price_premium', amount: 9990 }, // R$ 99,90
+    };
+    
+    const planInfo = planPriceMap[planId];
+    
+    if (!planInfo) {
+      return res.status(400).json({ error: 'Plano inválido' });
+    }
+    
+    // Se for o plano gratuito, crie/atualize a assinatura diretamente
+    if (planId === 'free') {
+      // Verificar se já existe uma assinatura
+      const { data: existingSubscription, error: fetchError } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .single();
+        
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 é o código para "nenhum resultado encontrado"
+        return res.status(500).json({ error: 'Erro ao buscar assinatura existente', details: fetchError });
+      }
+      
+      if (existingSubscription) {
+        // Atualizar assinatura existente
+        const { error: updateError } = await supabase
+          .from('subscriptions')
+          .update({
+            plan_id: 'free',
+            plan_type: 'FREE',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingSubscription.id);
+          
+        if (updateError) {
+          return res.status(500).json({ error: 'Erro ao atualizar assinatura', details: updateError });
+        }
+      } else {
+        // Criar nova assinatura
+        const { error: insertError } = await supabase
+          .from('subscriptions')
+          .insert({
+            user_id: userId,
+            plan_id: 'free',
+            plan_type: 'FREE',
+            start_date: new Date().toISOString(),
+            status: 'active'
+          });
+          
+        if (insertError) {
+          return res.status(500).json({ error: 'Erro ao criar assinatura', details: insertError });
+        }
+      }
+      
+      return res.json({ success: true, redirectUrl: '/payment-success?free=true' });
+    }
+    
+    // Para planos pagos, criar uma sessão de checkout do Stripe
+    // Em um ambiente real, você teria IDs de preço reais do Stripe
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'brl',
+            product_data: {
+              name: `Plano ${planId.charAt(0).toUpperCase() + planId.slice(1)}`,
+            },
+            unit_amount: planInfo.amount, // Em centavos
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'subscription',
+      success_url: `${req.headers.origin}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${req.headers.origin}/payment-canceled`,
+      client_reference_id: userId,
+      metadata: {
+        userId,
+        planId
+      }
+    });
+    
+    res.json({ url: session.url, sessionId: session.id });
+  } catch (error) {
+    console.error('Erro ao criar sessão de checkout:', error);
+    res.status(500).json({ error: 'Erro ao criar sessão de checkout', details: error.message });
+  }
+});
+
+// Webhook para processar eventos do Stripe
+app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  
+  let event;
+  
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error(`Webhook Error: ${err.message}`);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+  
+  // Tratar eventos específicos
+  switch (event.type) {
+    case 'checkout.session.completed': {
+      const session = event.data.object;
+      const userId = session.metadata.userId;
+      const planId = session.metadata.planId;
+      
+      if (!userId || !planId) {
+        console.error('Metadados incompletos na sessão:', session);
+        return res.status(400).json({ error: 'Metadados incompletos' });
+      }
+      
+      try {
+        // Verificar se já existe uma assinatura
+        const { data: existingSubscription, error: fetchError } = await supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('status', 'active')
+          .single();
+          
+        const planTypeMap = {
+          'basic': 'BASIC',
+          'pro': 'PRO',
+          'premium': 'PREMIUM'
+        };
+        
+        const subscriptionData = {
+          plan_id: planId,
+          plan_type: planTypeMap[planId],
+          payment_provider: 'stripe',
+          payment_id: session.subscription,
+          status: 'active',
+          start_date: new Date().toISOString(),
+          next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // +30 dias
+          updated_at: new Date().toISOString()
+        };
+        
+        if (existingSubscription) {
+          // Atualizar assinatura existente
+          const { error: updateError } = await supabase
+            .from('subscriptions')
+            .update(subscriptionData)
+            .eq('id', existingSubscription.id);
+            
+          if (updateError) {
+            console.error('Erro ao atualizar assinatura:', updateError);
+          }
+        } else {
+          // Criar nova assinatura
+          const { error: insertError } = await supabase
+            .from('subscriptions')
+            .insert({
+              user_id: userId,
+              ...subscriptionData
+            });
+            
+          if (insertError) {
+            console.error('Erro ao criar assinatura:', insertError);
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao processar assinatura:', error);
+      }
+      break;
+    }
+    
+    case 'invoice.payment_succeeded': {
+      // Atualizar a data do próximo pagamento
+      const invoice = event.data.object;
+      const subscriptionId = invoice.subscription;
+      
+      try {
+        // Buscar a assinatura pelo ID do Stripe
+        const { data: subscription, error: fetchError } = await supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('payment_id', subscriptionId)
+          .single();
+          
+        if (fetchError || !subscription) {
+          console.error('Assinatura não encontrada:', fetchError);
+          break;
+        }
+        
+        // Atualizar a data do próximo pagamento
+        const { error: updateError } = await supabase
+          .from('subscriptions')
+          .update({
+            next_billing_date: new Date(invoice.lines.data[0].period.end * 1000).toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', subscription.id);
+          
+        if (updateError) {
+          console.error('Erro ao atualizar data do próximo pagamento:', updateError);
+        }
+      } catch (error) {
+        console.error('Erro ao processar pagamento de fatura:', error);
+      }
+      break;
+    }
+    
+    case 'customer.subscription.deleted': {
+      // Cancelar a assinatura
+      const subscription = event.data.object;
+      
+      try {
+        // Buscar a assinatura pelo ID do Stripe
+        const { data: dbSubscription, error: fetchError } = await supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('payment_id', subscription.id)
+          .single();
+          
+        if (fetchError || !dbSubscription) {
+          console.error('Assinatura não encontrada:', fetchError);
+          break;
+        }
+        
+        // Atualizar o status da assinatura
+        const { error: updateError } = await supabase
+          .from('subscriptions')
+          .update({
+            status: 'canceled',
+            end_date: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', dbSubscription.id);
+          
+        if (updateError) {
+          console.error('Erro ao cancelar assinatura:', updateError);
+        }
+      } catch (error) {
+        console.error('Erro ao processar cancelamento de assinatura:', error);
+      }
+      break;
+    }
+  }
+  
+  res.json({ received: true });
 });
 
 // Iniciar o servidor
