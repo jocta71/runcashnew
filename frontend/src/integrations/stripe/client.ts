@@ -8,7 +8,7 @@
 import axios from 'axios';
 
 // Chave publicável do Stripe (usada para referência)
-const STRIPE_PUBLIC_KEY = 'pk_live_51MTxBYGLEdW1oQ9E7pX9cXQqOMopw2XgRVI6gNRDLG9VU2poXeox6O8CvdIhwjwHULAOVccHNcLlZkuE7CRt3oBj00w80prp31';
+const STRIPE_PUBLIC_KEY = 'pk_test_51MTxBYGLEdW1oQ9E03zQWJI1loAlQm7eNb28IK61K9vvFO7OmwXjSvIbKMBoPVahaSdDjG9w5XwnZIQnBicwie8Y00vhaR5iPV';
 
 // Define a URL base da API
 let API_URL = import.meta.env.VITE_API_URL || 'https://runcash-api.vercel.app';
