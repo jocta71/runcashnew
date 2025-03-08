@@ -266,7 +266,7 @@ def navegar_para_site(driver, tentativa=1, max_tentativas=3):
             else:
                 logging.error(f"Página carregada, mas URL não é a esperada: {driver.current_url}")
                 return False
-        except Exception as e:
+    except Exception as e:
             logging.error(f"Falha ao acessar {url}: {str(e)}")
             raise
     
@@ -474,8 +474,7 @@ def extrair_dados_api():
                                 logger.info(f"Total de {roletas_encontradas} roletas extraídas com sucesso da API")
                                 last_success_time = time.time()
                                 # Se tivermos sucesso com esta API, podemos passar para a próxima etapa
-                    break
-        
+                                break
                         except ValueError:
                             logger.warning(f"Resposta da API não é JSON válido: {api_url}")
                     else:
@@ -513,8 +512,8 @@ def extrair_dados_api():
                                     
                                     titulo = titulo_element.text.strip()
                                     if not titulo:
-                        continue
-                    
+                                                                                                            continue
+                        
                                     # Tentar extrair números
                                     numeros_elements = item.select('.cy-live-casino-grid-item-infobar-draws span, .result-number, .history-number, .roulette-number')
                                     numeros_atuais = []
@@ -522,7 +521,7 @@ def extrair_dados_api():
                                     if numeros_elements:
                                         for num_el in numeros_elements:
                                             num_text = num_el.text.strip()
-                                            if num_text.isdigit():
+                            if num_text.isdigit():
                                                 numeros_atuais.append(int(num_text))
                                     
                                     # Tentar método alternativo se não encontrou
@@ -536,7 +535,7 @@ def extrair_dados_api():
                                         processar_roleta_com_numeros(titulo, numeros_atuais)
                                         dados_extraidos = True
                                         last_success_time = time.time()
-                                except Exception as e:
+                    except Exception as e:
                                     logger.error(f"Erro ao processar elemento de roleta: {str(e)}")
                         else:
                             logger.warning(f"Nenhum elemento de roleta encontrado na página: {url}")
@@ -566,7 +565,7 @@ def extrair_dados_api():
                                 # Não estamos gerando novos números, apenas usando os que já existem
                                 if nome_roleta not in numeros_roletas:
                                     numeros_roletas[nome_roleta] = {
-                            "numeros": numeros,
+                                "numeros": numeros,
                                         "ultima_atualizacao": roleta.get("updated_at", datetime.now().isoformat()),
                                         "estrategia": {},
                                         "id": roleta.get("id", f"roleta-{hash(nome_roleta) % 100000}")
@@ -589,7 +588,7 @@ def extrair_dados_api():
                             logger.info("Usando dados existentes do Supabase até conseguir extrair novos dados reais")
                     else:
                         logger.warning("Nenhum dado encontrado no Supabase")
-                                except Exception as e:
+                except Exception as e:
                     logger.error(f"Erro ao obter dados do Supabase: {str(e)}")
             
             # Se conseguimos extrair dados reais, atualizar o Supabase
@@ -599,20 +598,20 @@ def extrair_dados_api():
                     atualizar_supabase(numeros_roletas)
                     last_update_time = current_time
                     logger.info("Dados atualizados no Supabase")
-                        else:
-                # Se estamos há muito tempo sem conseguir dados, registrar um alerta
-                current_time = time.time()
-                minutes_since_last_success = (current_time - last_success_time) / 60
-                if minutes_since_last_success > 5:  # Alerta após 5 minutos sem dados
-                    logger.error(f"ALERTA: Não foi possível obter dados reais por {int(minutes_since_last_success)} minutos")
-                    logger.error("Por favor, verifique sua conexão ou se o site mudou seu layout/API")
+                else:
+                    # Se estamos há muito tempo sem conseguir dados, registrar um alerta
+                    current_time = time.time()
+                    minutes_since_last_success = (current_time - last_success_time) / 60
+                    if minutes_since_last_success > 5:  # Alerta após 5 minutos sem dados
+                        logger.error(f"ALERTA: Não foi possível obter dados reais por {int(minutes_since_last_success)} minutos")
+                        logger.error("Por favor, verifique sua conexão ou se o site mudou seu layout/API")
             
             # Esperar antes da próxima tentativa
             tempo_espera = 5  # Aguardar 5 segundos entre ciclos
             logger.info(f"Ciclo {cycle_count} completo. Próximo ciclo em {tempo_espera} segundos.")
             time.sleep(tempo_espera)
-            
-        except Exception as e:
+    
+    except Exception as e:
             logger.error(f"Erro geral na extração: {str(e)}")
             time.sleep(10)  # Aguardar 10 segundos em caso de erro geral
 
@@ -833,15 +832,15 @@ def extrair_numeros():
                             # Enviar dados para o Supabase
                             atualizar_supabase({titulo: numeros_roletas[titulo]})
                             logging.info(f"Números atualizados para {titulo}: {numeros_roletas[titulo]['numeros']}")
-                    else:
-                        logging.warning(f"Nenhum número encontrado para a mesa {titulo} - aguardando próxima atualização")
+                        else:
+                            logging.warning(f"Nenhum número encontrado para a mesa {titulo} - aguardando próxima atualização")
                 except Exception as e:
                     logging.error(f"Erro ao processar roleta {titulo if 'titulo' in locals() else 'desconhecida'}: {str(e)}")
             
             # Delay aleatório entre verificações
             time.sleep(random.uniform(2.0, 3.0))  # Aumentado para reduzir uso de CPU
                     
-    except Exception as e:
+        except Exception as e:
             logging.error(f"Erro na extração: {str(e)}")
             
             # Se houver erro, tentar reiniciar o driver, mas com menos frequência
@@ -901,7 +900,7 @@ def iniciar():
             thread_extracao.start()
             
             return jsonify({"status": "success", "message": "Extração iniciada"})
-        except Exception as e:
+    except Exception as e:
             executando = False
             logging.error(f"Erro ao iniciar: {str(e)}")
             return jsonify({"status": "error", "message": f"Erro ao iniciar: {str(e)}"})
