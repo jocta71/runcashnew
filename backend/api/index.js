@@ -173,9 +173,9 @@ app.post('/api/create-checkout-session', async (req, res) => {
     // Buscar informações do plano no banco de dados ou usar um mapeamento fixo
     const planPriceMap = {
       'free': { priceId: null, amount: 0 },
-      'basic': { priceId: 'price_1MTxCnGLEdW1oQ9EXXXXXXXx', amount: 1990 }, // R$ 19,90
-      'pro': { priceId: 'price_1MTxDDGLEdW1oQ9EXXXXXXXx', amount: 4990 }, // R$ 49,90
-      'premium': { priceId: 'price_1MTxDXGLEdW1oQ9EXXXXXXXx', amount: 9990 }, // R$ 99,90
+      'basic': { priceId: 'price_1Negl8GLEdW1oQ9EWq1Vhm1I', amount: 1990 }, // R$ 19,90
+      'pro': { priceId: 'price_1Negl8GLEdW1oQ9EWq1Vhm1I', amount: 4990 }, // R$ 49,90
+      'premium': { priceId: 'price_1Negl8GLEdW1oQ9EWq1Vhm1I', amount: 9990 }, // R$ 99,90
     };
     
     const planInfo = planPriceMap[planId];
