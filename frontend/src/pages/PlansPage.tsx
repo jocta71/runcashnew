@@ -44,15 +44,30 @@ const PlansPage = () => {
         });
       } else {
         // Para planos pagos, criar uma sessão de checkout
+        console.log(`Iniciando processo de checkout para o plano: ${planId}`);
         const checkoutUrl = await createCheckoutSession(planId, user.id);
+        
+        if (!checkoutUrl) {
+          throw new Error("URL de checkout inválida");
+        }
+        
+        console.log(`Redirecionando para: ${checkoutUrl}`);
         // Redirecionar para a página de checkout do Stripe
         window.location.href = checkoutUrl;
       }
-    } catch (error) {
-      console.error("Erro ao atualizar plano:", error);
+    } catch (error: any) {
+      console.error("Erro detalhado ao atualizar plano:", error);
+      
+      // Mensagem de erro mais informativa
+      let errorMessage = "Não foi possível processar seu pagamento. Tente novamente.";
+      
+      if (error.message) {
+        errorMessage = `${errorMessage} (${error.message})`;
+      }
+      
       toast({
         title: "Erro ao processar pagamento",
-        description: "Não foi possível processar seu pagamento. Tente novamente.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {

@@ -11,7 +11,7 @@ import axios from 'axios';
 const STRIPE_PUBLIC_KEY = 'pk_live_51MTxBYGLEdW1oQ9E7pX9cXQqOMopw2XgRVI6gNRDLG9VU2poXeox6O8CvdIhwjwHULAOVccHNcLlZkuE7CRt3oBj00w80prp31';
 
 // Define a URL base da API
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_API_URL || 'https://runcashnew-frontend-nu.vercel.app/';
 
 // Interface para garantir compatibilidade com o tipo real do Stripe
 interface StripeClient {
@@ -26,21 +26,35 @@ interface StripeClient {
  */
 export const createCheckoutSession = async (planId: string, userId: string): Promise<string> => {
   try {
+    console.log(`Iniciando criação de sessão de checkout para planId: ${planId}, userId: ${userId}`);
+    console.log(`URL da API: ${API_URL}/api/create-checkout-session`);
+    
     // Chamar o backend para criar uma sessão de checkout
     const response = await axios.post(`${API_URL}/api/create-checkout-session`, {
       planId,
       userId
     });
     
+    console.log('Resposta do servidor:', response.data);
+    
     // Se for o plano gratuito, retorna a URL de sucesso diretamente
     if (response.data.redirectUrl) {
+      console.log(`Plano gratuito - Redirecionando para: ${response.data.redirectUrl}`);
       return response.data.redirectUrl;
     }
     
     // Para planos pagos, retorna a URL do Stripe para redirecionamento
+    console.log(`Plano pago - Redirecionando para: ${response.data.url}`);
     return response.data.url;
   } catch (error) {
     console.error('Erro ao criar sessão de checkout:', error);
+    if (axios.isAxiosError(error)) {
+      console.error('Detalhes do erro:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+    }
     throw new Error('Não foi possível criar a sessão de checkout. Tente novamente.');
   }
 };

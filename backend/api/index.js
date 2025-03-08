@@ -164,25 +164,30 @@ app.get('/api/health', (req, res) => {
 // Rota para criar uma sessão de checkout do Stripe
 app.post('/api/create-checkout-session', async (req, res) => {
   try {
+    console.log('Recebida solicitação para criar sessão de checkout:', req.body);
     const { planId, userId } = req.body;
     
     if (!planId || !userId) {
+      console.error('planId ou userId não fornecidos');
       return res.status(400).json({ error: 'planId e userId são obrigatórios' });
     }
     
     // Buscar informações do plano no banco de dados ou usar um mapeamento fixo
     const planPriceMap = {
       'free': { priceId: null, amount: 0 },
-      'basic': { priceId: 'price_1Negl8GLEdW1oQ9EWq1Vhm1I', amount: 1990 }, // R$ 19,90
-      'pro': { priceId: 'price_1Negl8GLEdW1oQ9EWq1Vhm1I', amount: 4990 }, // R$ 49,90
-      'premium': { priceId: 'price_1Negl8GLEdW1oQ9EWq1Vhm1I', amount: 9990 }, // R$ 99,90
+      'basic': { priceId: 'price_1OyKxFGLEdW1oQ9EwKkXIHfC', amount: 1990 }, // R$ 19,90
+      'pro': { priceId: 'price_1OyKxWGLEdW1oQ9ELpKNTNbp', amount: 4990 }, // R$ 49,90
+      'premium': { priceId: 'price_1OyKxlGLEdW1oQ9EuaDyiHsz', amount: 9990 }, // R$ 99,90
     };
     
     const planInfo = planPriceMap[planId];
     
     if (!planInfo) {
+      console.error(`Plano inválido: ${planId}`);
       return res.status(400).json({ error: 'Plano inválido' });
     }
+    
+    console.log(`Informações do plano ${planId}:`, planInfo);
     
     // Se for o plano gratuito, crie/atualize a assinatura diretamente
     if (planId === 'free') {
@@ -195,6 +200,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
         .single();
         
       if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 é o código para "nenhum resultado encontrado"
+        console.error('Erro ao buscar assinatura existente:', fetchError);
         return res.status(500).json({ error: 'Erro ao buscar assinatura existente', details: fetchError });
       }
       
@@ -233,25 +239,46 @@ app.post('/api/create-checkout-session', async (req, res) => {
     }
     
     // Para planos pagos, criar uma sessão de checkout do Stripe
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price: planInfo.priceId, // Usar o ID do preço real do Stripe
-          quantity: 1,
-        },
-      ],
-      mode: 'subscription',
-      success_url: `${req.headers.origin}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${req.headers.origin}/payment-canceled`,
-      client_reference_id: userId,
-      metadata: {
+    try {
+      console.log('Criando sessão de checkout do Stripe com:', {
+        modo: 'subscription',
+        priceId: planInfo.priceId,
         userId,
         planId
-      }
-    });
-    
-    res.json({ url: session.url, sessionId: session.id });
+      });
+      
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price: planInfo.priceId, // Usar o ID do preço real do Stripe
+            quantity: 1,
+          },
+        ],
+        mode: 'subscription',
+        success_url: `${req.headers.origin}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${req.headers.origin}/payment-canceled`,
+        client_reference_id: userId,
+        metadata: {
+          userId,
+          planId
+        }
+      });
+      
+      console.log('Sessão de checkout criada com sucesso:', {
+        sessionId: session.id,
+        url: session.url
+      });
+      
+      res.json({ url: session.url, sessionId: session.id });
+    } catch (stripeError) {
+      console.error('Erro ao criar sessão de checkout do Stripe:', stripeError);
+      return res.status(500).json({ 
+        error: 'Erro ao criar sessão de checkout', 
+        details: stripeError.message,
+        code: stripeError.code || 'unknown'
+      });
+    }
   } catch (error) {
     console.error('Erro ao criar sessão de checkout:', error);
     res.status(500).json({ error: 'Erro ao criar sessão de checkout', details: error.message });
