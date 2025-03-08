@@ -4,7 +4,7 @@ import re
 import json
 import os
 import platform
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 import requests
 from bs4 import BeautifulSoup
@@ -183,23 +183,13 @@ class RouletteStrategy:
 # Adicionar à aplicação
 app.strategy = StrategyAnalyzer()
 
-# Função de User Agent mais realista com rotação controlada
+# Função de User Agent fixo em vez de aleatório
 def get_user_agent():
     """
-    Retorna um user agent realista para evitar bloqueios.
-    Esta NÃO é uma simulação de dados, apenas uma técnica necessária para obter acesso ao site.
+    Retorna um user agent fixo para todas as requisições.
+    Não usa aleatoriedade para evitar qualquer tipo de simulação.
     """
-    user_agents = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0'
-    ]
-    # Usar o dia atual como índice para alternar user agents periodicamente sem aleatoriedade
-    day_of_month = datetime.now().day
-    index = day_of_month % len(user_agents)
-    return user_agents[index]
+    return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
 def configurar_driver(tentativa=1, max_tentativas=3):
     if IS_RAILWAY:
@@ -344,7 +334,7 @@ def extrair_dados_api():
     """
     Método alternativo para extração de dados usando requisições HTTP diretas
     Compatível com Railway (sem Selenium) - APENAS DADOS REAIS
-    SEM SIMULAÇÃO DE DADOS - Apenas técnicas necessárias para acessar APIs protegidas
+    SEM SIMULAÇÃO - Apenas extração de dados reais do site
     """
     global numeros_roletas, analisadores_mesas, executando
     
@@ -355,23 +345,10 @@ def extrair_dados_api():
     api_urls = [
         "https://www.888casino.es/api/casino/games/live",
         "https://es.888casino.com/api/games/categories/live-roulette",
-        "https://es.888casino.com/api/casino/games/live/roulette",
-        "https://casino.888.es/api/games/live/roulette/list",
-        "https://www.888casino.es/api/games/live/roulette/list"
+        "https://es.888casino.com/api/casino/games/live/roulette"
     ]
     
-    # Fingerprint do navegador para evitar bloqueios - SEM SIMULAÇÃO DE DADOS
-    browser_fingerprint = {
-        "sec-ch-ua": '"Chromium";v="120", "Google Chrome";v="120", "Not=A?Brand";v="99"',
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": '"Windows"',
-        "accept-language": "es-ES,es;q=0.9,en;q=0.8",
-        "accept-encoding": "gzip, deflate, br",
-        "connection": "keep-alive",
-        "upgrade-insecure-requests": "1"
-    }
-    
-    # Headers para simular um navegador real (necessário para acessar o site)
+    # Headers para requisições HTTP - SEM SIMULAÇÃO, apenas identificação necessária para API
     headers = {
         'User-Agent': get_user_agent(),
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -380,17 +357,16 @@ def extrair_dados_api():
         'Upgrade-Insecure-Requests': '1',
         'Cache-Control': 'max-age=0',
         'Referer': 'https://es.888casino.com/live-casino/',
-        'sec-ch-ua': browser_fingerprint["sec-ch-ua"],
-        'sec-ch-ua-mobile': browser_fingerprint["sec-ch-ua-mobile"],
-        'sec-ch-ua-platform': browser_fingerprint["sec-ch-ua-platform"],
+        'sec-ch-ua': '"Google Chrome";v="120", "Chromium";v="120", "Not-A.Brand";v="8"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
         'Sec-Fetch-Dest': 'document',
         'Sec-Fetch-Mode': 'navigate',
         'Sec-Fetch-Site': 'same-origin',
-        'Sec-Fetch-User': '?1',
-        'Accept-Encoding': browser_fingerprint["accept-encoding"]
+        'Sec-Fetch-User': '?1'
     }
     
-    # Headers específicos para requisições JSON/API 
+    # Headers específicos para requisições JSON/API - SEM SIMULAÇÃO, apenas requisitos da API
     json_headers = {
         'User-Agent': get_user_agent(),
         'Accept': 'application/json, text/plain, */*',
@@ -398,41 +374,16 @@ def extrair_dados_api():
         'X-Requested-With': 'XMLHttpRequest',
         'Referer': 'https://es.888casino.com/live-casino/',
         'Origin': 'https://es.888casino.com',
-        'sec-ch-ua': browser_fingerprint["sec-ch-ua"],
-        'sec-ch-ua-mobile': browser_fingerprint["sec-ch-ua-mobile"],
-        'sec-ch-ua-platform': browser_fingerprint["sec-ch-ua-platform"],
+        'sec-ch-ua': '"Google Chrome";v="120", "Chromium";v="120", "Not-A.Brand";v="8"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
         'Sec-Fetch-Dest': 'empty',
         'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-origin',
-        'Accept-Encoding': browser_fingerprint["accept-encoding"],
-        'Accept-Language': browser_fingerprint["accept-language"],
-        'Connection': browser_fingerprint["connection"]
+        'Sec-Fetch-Site': 'same-origin'
     }
     
     last_update_time = time.time()
     session = requests.Session()
-    
-    # Data para cookies
-    new_date = datetime.now() - timedelta(days=1)
-    
-    # Configurar cookies para sessão que são necessários para acessar o site
-    cookies = {
-        'cookieConsent': 'true',
-        'cookieCompliance': 'accepted',
-        'tc_visitors': '7f13456a-0a79-459b-9bb5-fe98f89542c0',
-        'device_view': 'full',
-        'OptanonAlertBoxClosed': new_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
-        'locale': 'es',
-        '_gcl_au': '1.1.123456789.1234567890',
-        '_ga': 'GA1.1.123456789.1234567890',
-        '_ga_JNFZGVL6HL': 'GS1.1.1234567890.1.1.1234567890.0.0.0',
-    }
-    
-    # Aplicar cookies à sessão
-    for name, value in cookies.items():
-        session.cookies.set(name, value, domain='888casino.com')
-        session.cookies.set(name, value, domain='888casino.es')
-        session.cookies.set(name, value, domain='www.888casino.es')
     
     # Mapeamento de nomes de roletas por idioma (para normalização)
     mapeamento_nomes = {
@@ -456,20 +407,6 @@ def extrair_dados_api():
             cycle_count += 1
             logger.info(f"Ciclo de extração {cycle_count} - Tentando obter APENAS dados REAIS (sem simulação)")
             
-            # Pré-aquecer a sessão visitando a página principal (para conseguir cookies legítimos)
-            try:
-                logger.info("Pré-aquecendo sessão para evitar bloqueios...")
-                pre_warm_url = "https://es.888casino.com/"
-                session.get(pre_warm_url, headers=headers, timeout=20)
-                time.sleep(1)  # Pequena pausa como um navegador real faria
-                
-                # Visitar página de casino ao vivo para obter mais cookies
-                logger.info("Visitando página de casino ao vivo...")
-                session.get(url, headers=headers, timeout=20)
-                time.sleep(1)
-            except Exception as e:
-                logger.warning(f"Erro no pré-aquecimento, mas continuando: {str(e)}")
-            
             # PASSO 1: Tentar obter dados das APIs diretas primeiro
             for api_url in api_urls:
                 try:
@@ -477,28 +414,12 @@ def extrair_dados_api():
                     for method in ["GET", "POST"]:
                         logger.info(f"Tentando API direta ({method}): {api_url}")
                         
-                        # Adicionar timestamp para evitar cache
-                        timestamp = int(time.time() * 1000)
-                        url_with_timestamp = f"{api_url}{'&' if '?' in api_url else '?'}_t={timestamp}"
-                        
                         if method == "GET":
-                            response = session.get(url_with_timestamp, headers=json_headers, timeout=15)
+                            response = session.get(api_url, headers=json_headers, timeout=15)
                         else:
-                            # Para POST, enviar alguns dados básicos que o site pode esperar
-                            payload = {
-                                "category": "roulette", 
-                                "filter": "live", 
-                                "locale": "es-ES",
-                                "platform": "desktop",
-                                "clientTime": timestamp,
-                                "requestId": f"req_{timestamp}"
-                            }
-                            response = session.post(url_with_timestamp, headers=json_headers, json=payload, timeout=15)
-                        
-                        # Se recebemos uma resposta, registrar os cookies obtidos
-                        if response.cookies:
-                            logger.info(f"Cookies recebidos: {[c for c in response.cookies]}")
-                            # Aplicar automaticamente à sessão
+                            # Para POST, enviar alguns dados básicos
+                            payload = {"category": "roulette", "filter": "live", "locale": "es-ES"}
+                            response = session.post(api_url, headers=json_headers, json=payload, timeout=15)
                         
                         if response.status_code == 200:
                             try:
@@ -677,152 +598,256 @@ def extrair_dados_api():
                         # Usar BeautifulSoup para extrair dados
                         soup = BeautifulSoup(response.text, 'html.parser')
                         
-                        # Seletores atualizados para o site atual
-                        seletores_roletas = [
-                            # Seletores atualizados e expandidos
-                            '.game-tile-container', '.lobby-game', '.game-tile', '.roulette-item',
-                            '.live-roulette-item', '.casino-game-item', '.live-casino-item',
-                            '[data-game-type="roulette"]', '[data-category="roulette"]',
-                            '[data-game-id*="roulette"]', '[class*="roulette"]',
-                            # Seletores gerais que podem conter jogos
-                            '.game-list-item', '.game-container', '.game-wrapper'
+                        # Encontrar todas as roletas - tentando múltiplos seletores incluindo o específico mencionado
+                        logging.info("Tentando localizar elementos de roleta com diversos seletores")
+                        elementos = []
+                        
+                        # Lista de seletores para tentar, do mais específico ao mais genérico
+                        seletores = [
+                            (By.CSS_SELECTOR, "div.sc-eGugkK.bIsQrT.cy-live-casino-grid-item.cy-live-casino-grid-item-2010013.game-type-2010013"),
+                            (By.CSS_SELECTOR, "div.sc-eGugkK.bIsQrT"),
+                            (By.CSS_SELECTOR, "div[class*='cy-live-casino-grid-item-2010013']"),
+                            (By.CSS_SELECTOR, "div[class*='game-type-2010013']"),
+                            (By.CSS_SELECTOR, "div.cy-live-casino-grid-item"),
+                            (By.CSS_SELECTOR, ".lobby-game-tile"),
+                            (By.CSS_SELECTOR, "[data-game-id*='roulette']"),
+                            (By.CSS_SELECTOR, "[data-game-type='roulette']"),
+                            (By.CSS_SELECTOR, "[class*='roulette']"),
+                            (By.CLASS_NAME, "cy-live-casino-grid-item")
                         ]
                         
-                        # Tentar todos os seletores possíveis
-                        roleta_items = []
-                        for seletor in seletores_roletas:
-                            items = soup.select(seletor)
-                            if items:
-                                logger.info(f"Encontrados {len(items)} elementos com seletor '{seletor}'")
-                                roleta_items.extend(items)
+                        # Tentar cada seletor
+                        for selector_type, selector in seletores:
+                            try:
+                                elementos_encontrados = WebDriverWait(driver, 5).until(
+                                    EC.presence_of_all_elements_located((selector_type, selector))
+                                )
+                                if elementos_encontrados:
+                                    logging.info(f"Encontrados {len(elementos_encontrados)} elementos com seletor: {selector}")
+                                    elementos.extend(elementos_encontrados)
+                            except Exception as e:
+                                logging.info(f"Seletor {selector} não encontrou elementos: {str(e)}")
                         
-                        # Remover duplicatas (convertendo para conjunto e de volta para lista)
-                        roleta_items = list({item: None for item in roleta_items}.keys())
+                        # Remover duplicatas (baseado no ID ou texto)
+                        elementos_unicos = []
+                        ids_elementos = set()
                         
-                        if roleta_items:
-                            logger.info(f"Encontrados {len(roleta_items)} elementos de roleta no total")
-                            
-                            for item in roleta_items:
+                        for elem in elementos:
+                            try:
+                                # Tentar obter ID único do elemento
+                                elem_id = elem.get_attribute("id") or elem.get_attribute("data-game-id") or elem.text
+                                if elem_id and elem_id not in ids_elementos:
+                                    ids_elementos.add(elem_id)
+                                    elementos_unicos.append(elem)
+                            except:
+                                # Se não conseguir ID, adicionar de qualquer forma
+                                elementos_unicos.append(elem)
+                        
+                        elementos = elementos_unicos
+                        
+                        # Log the number of roulette elements found
+                        logging.info(f"Encontradas {len(elementos)} roletas únicas na página")
+                        
+                        # Process all roulette tables
+                        for elemento in elementos:
+                            try:
+                                # Extrair classe para debug
+                                class_attribute = elemento.get_attribute("class")
+                                logging.info(f"Processando elemento com classes: {class_attribute}")
+                                
+                                # Tentar extrair título com diferentes métodos
+                                titulo = None
+                                # Método 1: Buscar pelo seletor específico
                                 try:
-                                    # Depuração
-                                    # logger.debug(f"HTML do elemento: {item}")
-                                    
-                                    # Seletores expandidos para título
-                                    titulo_seletores = [
-                                        '.game-name', '.game-title', '.title', 'h3', 'h4', 
-                                        '[class*="title"]', '[class*="name"]', '.game-info-name',
-                                        'span[data-game-name]', '[data-title]'
-                                    ]
-                                    
-                                    # Tentar todos os seletores para título
-                                    titulo_element = None
-                                    for selector in titulo_seletores:
-                                        titulo_element = item.select_one(selector)
-                                        if titulo_element:
-                                    break
-                        
-                                    # Se ainda não encontrou, procurar atributos
-                                    if not titulo_element:
-                                        for attr in ['data-game-name', 'data-name', 'data-title', 'title', 'alt']:
-                                            if item.has_attr(attr):
-                                                titulo = item[attr].strip()
+                                    titulo_element = elemento.find_element(By.CLASS_NAME, "cy-live-casino-grid-item-title")
+                                    if titulo_element:
+                                        titulo = titulo_element.text
+                                except:
+                                    pass
+                                
+                                # Método 2: Buscar por outros seletores comuns
+                                if not titulo:
+                                    for selector in [".game-name", ".title", ".game-title", "h3", "h4"]:
+                                        try:
+                                            titulo_element = elemento.find_element(By.CSS_SELECTOR, selector)
+                                            if titulo_element:
+                                                titulo = titulo_element.text
                                                 break
-                                    else:
-                                        titulo = titulo_element.text.strip()
+                                        except:
+                                            pass
+                                
+                                # Método 3: Buscar por atributos
+                                if not titulo:
+                                    for attr in ["data-name", "data-title", "title", "alt"]:
+                                        try:
+                                            titulo = elemento.get_attribute(attr)
+                                            if titulo:
+                                                break
+                                        except:
+                                            pass
+                                
+                                # Se ainda não temos título, usar ID do jogo ou texto abreviado
+                                if not titulo:
+                                    try:
+                                        game_id = elemento.get_attribute("data-game-id") or elemento.get_attribute("id")
+                                        titulo = f"Roleta ID: {game_id}" if game_id else "Roleta Sem Nome"
+                                    except:
+                                        titulo = "Roleta Desconhecida"
+                                
+                                # Log o título encontrado
+                                logging.info(f"Título extraído: {titulo}")
+                                
+                                # Continuar apenas se parece ser uma roleta
+                                if not ('ruleta' in titulo.lower() or 'roulette' in titulo.lower()):
+                                    logging.info(f"Ignorando {titulo} pois não parece ser uma roleta")
+                                    continue
+                                
+                                # Criar analisador para mesa se não existir
+                                if titulo not in analisadores_mesas:
+                                    analisadores_mesas[titulo] = StrategyAnalyzer()
+                                    logging.info(f"Novo analisador criado para mesa: {titulo}")
+                                
+                                # Extrair todos os números usando JavaScript - método mais robusto
+                                numeros_atuais = driver.execute_script("""
+                                    function extrairNumeros(elemento) {
+                                        try {
+                                            let numeros = [];
+                                            
+                                            // Primeiro método: buscar spans com números - seletores ampliados
+                                            let spans = elemento.querySelectorAll('.cy-live-casino-grid-item-infobar-draws span, .cy-live-casino-grid-item-infobar-draws div, .history span, .result-number, .number, [class*="number"], [class*="result"], [class*="history"]');
+                                            if (spans && spans.length > 0) {
+                                                numeros = Array.from(spans)
+                                                    .filter(span => span && span.textContent)
+                                                    .map(span => span.textContent.trim())
+                                                    .filter(texto => /^\\d+$/.test(texto))
+                                                    .map(num => parseInt(num));
+                                            }
+                                            
+                                            // Segundo método: buscar em diversas classes com históricos
+                                            if (numeros.length === 0) {
+                                                let infobars = elemento.querySelectorAll('.cy-live-casino-grid-item-infobar-draws, .history, .results, .numbers, [class*="result"], [class*="history"], [class*="numbers"]');
+                                                for (let infobar of infobars) {
+                                                    if (infobar && infobar.textContent) {
+                                                        let matches = infobar.textContent.match(/\\d+/g);
+                                                        if (matches) {
+                                                            numeros = matches.map(num => parseInt(num));
+                                                            if (numeros.length > 0) break;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            
+                                            // Terceiro método: buscar em atributos data
+                                            if (numeros.length === 0) {
+                                                for (let attr of ["data-results", "data-history", "data-numbers"]) {
+                                                    let dataAttr = elemento.getAttribute(attr);
+                                                    if (dataAttr) {
+                                                        try {
+                                                            // Tentar como JSON
+                                                            let jsonData = JSON.parse(dataAttr);
+                                                            if (Array.isArray(jsonData)) {
+                                                                numeros = jsonData.filter(n => typeof n === 'number' || 
+                                                                      (typeof n === 'string' && /^\\d+$/.test(n)))
+                                                                 .map(n => parseInt(n));
+                                                            }
+                                                        } catch(e) {
+                                                            // Se falhar JSON, tentar como string
+                                                            let matches = dataAttr.match(/\\d+/g);
+                                                            if (matches) {
+                                                                numeros = matches.map(num => parseInt(num));
+                                                            }
+                                                        }
+                                                        if (numeros.length > 0) break;
+                                                    }
+                                                }
+                                            }
+                                            
+                                            // Quarto método: último recurso, buscar em toda a string
+                                            if (numeros.length === 0) {
+                                                let fullText = elemento.textContent;
+                                                if (fullText) {
+                                                    // Procurar por padrões de números separados
+                                                    let matches = fullText.match(/\\b\\d{1,2}\\b/g);
+                                                    if (matches) {
+                                                        numeros = matches.map(num => parseInt(num))
+                                                                     .filter(num => num >= 0 && num <= 36);
+                                                    }
+                                                }
+                                            }
+                                            
+                                            return numeros;
+                                        } catch (e) {
+                                            console.error("Erro na extração JS:", e);
+                                            return [];
+                                        }
+                                    }
+                                    return extrairNumeros(arguments[0]);
+                                """, elemento)
+                                
+                                # Log the extracted numbers for debugging
+                                logging.info(f"Números extraídos para {titulo}: {numeros_atuais}")
+                                
+                                if numeros_atuais and len(numeros_atuais) > 0:
+                                    ultimo_numero = numeros_atuais[0]  # O primeiro número é o mais recente
                                     
-                                    if not titulo:
-                                        # Tentar encontrar em elementos aninhados
-                                        img_with_alt = item.select_one('img[alt]')
-                                        if img_with_alt and img_with_alt.get('alt'):
-                                            titulo = img_with_alt.get('alt')
-                                    
-                                    if not titulo:
+                                    # Verificar se é um número novo comparando com o histórico atual
+                                    numeros_anteriores = numeros_roletas.get(titulo, {}).get("numeros", [])
+                                    if not numeros_anteriores or ultimo_numero != numeros_anteriores[0]:
+                                        logging.info(f"Novo número detectado para {titulo}: {ultimo_numero}")
+                                        
+                                        # Processar número na estratégia específica da mesa
+                                        analisadores_mesas[titulo].process_number(ultimo_numero)
+                                        
+                                        # Manter histórico acumulado de números, limitando o tamanho
+                                        if titulo not in numeros_roletas:
+                                            numeros_roletas[titulo] = {
+                                                "numeros": [],
+                                                "ultima_atualizacao": "",
+                                                "estrategia": {},
+                                                "id": f"roleta-{hash(titulo) % 100000}"
+                                            }
+                                        
+                                        # Adicionar novos números ao início da lista, evitando duplicatas e limitando tamanho
+                                        numeros_existentes = set(numeros_roletas[titulo]["numeros"])
+                                        novos_numeros = [n for n in numeros_atuais if n not in numeros_existentes]
+                                        numeros_roletas[titulo]["numeros"] = (novos_numeros + numeros_roletas[titulo]["numeros"])[:20]  # Limitar a 20 números
+                                        
+                                        # Atualizar timestamp e status da estratégia
+                                        timestamp_atual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                        numeros_roletas[titulo].update({
+                                            "ultima_atualizacao": timestamp_atual,
+                                            "estrategia": analisadores_mesas[titulo].get_status()
+                                        })
+                                        
+                                        # Enviar dados para o Supabase
+                                        atualizar_supabase({titulo: numeros_roletas[titulo]})
+                                        logging.info(f"Números atualizados para {titulo}: {numeros_roletas[titulo]['numeros']}")
+                            except Exception as e:
+                                logging.error(f"Erro ao processar elemento de roleta: {str(e)}")
+                    else:
+                        # Tenta extração mais agressiva de scripts no HTML
+                        logger.warning(f"Nenhum elemento de roleta encontrado com seletores normais. Tentando extrair de scripts...")
+                        
+                        # Procurar por dados em scripts JSON ou variáveis JavaScript
+                        scripts = soup.find_all('script')
+                        for script in scripts:
+                            script_text = script.string
+                            if not script_text:
                         continue
                     
-                                    # Filtrar para garantir que é uma roleta
-                                    if not ('ruleta' in titulo.lower() or 'roulette' in titulo.lower()):
-                                        continue
-                                    
-                                    # Seletores expandidos para números
-                                    numero_seletores = [
-                                        '.result', '.number', '.history', '.past-results', '.recent-numbers',
-                                        '[class*="result"]', '[class*="number"]', '[class*="history"]',
-                                        '.results-container span', '.numbers-container span', 
-                                        '[data-results]', '[data-history]'
-                                    ]
-                                    
-                                    numeros_atuais = []
-                                    
-                                    # Tentar vários métodos para obter números
-                                    for selector in numero_seletores:
-                                        elementos = item.select(selector)
-                                        if elementos:
-                                            for elem in elementos:
-                                                num_text = elem.text.strip()
-                                                if num_text.isdigit() and 0 <= int(num_text) <= 36:
-                                                    numeros_atuais.append(int(num_text))
-                                    
-                                    # Tentar atributos data
-                                    if not numeros_atuais:
-                                        for attr in ['data-results', 'data-history', 'data-numbers']:
-                                            if item.has_attr(attr):
-                                                try:
-                                                    attr_value = item[attr]
-                                                    # Tentar interpretar como JSON
-                                                    try:
-                                                        numbers_data = json.loads(attr_value)
-                                                        if isinstance(numbers_data, list):
-                                                            for n in numbers_data:
-                                                                if isinstance(n, int) and 0 <= n <= 36:
-                                                                    numeros_atuais.append(n)
-                                                                elif isinstance(n, str) and n.isdigit() and 0 <= int(n) <= 36:
-                                                                    numeros_atuais.append(int(n))
-                                                    except json.JSONDecodeError:
-                                                        # Se não for JSON, tentar extrair números diretamente
-                                                        numeros_atuais = [int(n) for n in re.findall(r'\d+', attr_value) 
-                                                                          if n.isdigit() and 0 <= int(n) <= 36]
-                                                except:
-                                                    pass
-                                    
-                                    # Se ainda não tem números, procurar em todo o texto
-                                    if not numeros_atuais:
-                                        # Procurar em qualquer texto contido no elemento
-                                        all_text = item.get_text()
-                                        # Tentar encontrar sequências de números
-                                        matches = re.findall(r'\b(\d{1,2})\b', all_text)
-                                        numeros_atuais = [int(n) for n in matches if n.isdigit() and 0 <= int(n) <= 36]
-                                    
-                                    if numeros_atuais:
-                                        logger.info(f"Extraídos números para {titulo}: {numeros_atuais}")
-                                        processar_roleta_com_numeros(titulo, numeros_atuais)
-                                        dados_extraidos = True
-                                        last_success_time = time.time()
-                                except Exception as e:
-                                    logger.error(f"Erro ao processar elemento de roleta: {str(e)}")
-                        else:
-                            # Tenta extração mais agressiva de scripts no HTML
-                            logger.warning(f"Nenhum elemento de roleta encontrado com seletores normais. Tentando extrair de scripts...")
-                            
-                            # Procurar por dados em scripts JSON ou variáveis JavaScript
-                            scripts = soup.find_all('script')
-                            for script in scripts:
-                                script_text = script.string
-                                if not script_text:
-                        continue
-                    
-                                # Procurar por JSON ou objetos JavaScript com dados de roleta
-                                for keyword in ['roulette', 'ruleta', 'gameData', 'liveGames', 'casinoGames']:
-                                    if keyword in script_text:
-                                        # Tentar extrair JSON
-                                        json_matches = re.findall(r'(\{.*?".*?".*?\})', script_text)
-                                        for json_str in json_matches:
-                                            try:
-                                                # Adicionar chaves para tentar formar um JSON válido
-                                                data = json.loads(json_str)
-                                                if isinstance(data, dict):
-                                                    # Procurar dados de roleta
-                                                    if 'name' in data and ('roulette' in data['name'].lower() or 'ruleta' in data['name'].lower()):
-                                                        nome = data.get('name', '')
+                            # Procurar por JSON ou objetos JavaScript com dados de roleta
+                            for keyword in ['roulette', 'ruleta', 'gameData', 'liveGames', 'casinoGames']:
+                                if keyword in script_text:
+                                    # Tentar extrair JSON
+                                    json_matches = re.findall(r'(\{.*?".*?".*?\})', script_text)
+                                    for json_str in json_matches:
+                                        try:
+                                            # Adicionar chaves para tentar formar um JSON válido
+                                            data = json.loads(json_str)
+                                            if isinstance(data, dict):
+                                                # Procurar dados de roleta
+                                                if 'name' in data and ('roulette' in data['name'].lower() or 'ruleta' in data['name'].lower()):
+                                                    nome = data.get('name', '')
                     numeros = []
                                                         
                                                         # Procurar números em vários campos possíveis
@@ -832,7 +857,6 @@ def extrair_dados_api():
                                                                     try:
                                                                         num = int(n) if isinstance(n, (int, str)) else (
                                                                             n.get("number", 0) if isinstance(n, dict) else 0
-                                                                        )
                                                                         if 0 <= num <= 36:
                                                                             numeros.append(num)
                                                                     except (ValueError, TypeError):
@@ -842,7 +866,6 @@ def extrair_dados_api():
                                                             logger.info(f"Extraídos dados de script para {nome}: {numeros}")
                                                             processar_roleta_com_numeros(nome, numeros)
                                                             dados_extraidos = True
-                                                            last_success_time = time.time()
                                             except json.JSONDecodeError:
                                                 pass
                             
@@ -1002,24 +1025,110 @@ def extrair_numeros():
                 # Reset counter every 5 minutes
                 redirection_count = 0
             
-            # Encontrar todas as roletas
-            elementos = WebDriverWait(driver, 15).until(
-                EC.presence_of_all_elements_located((By.CLASS_NAME, "cy-live-casino-grid-item"))
-            )
+            # Encontrar todas as roletas - tentando múltiplos seletores incluindo o específico mencionado
+            logging.info("Tentando localizar elementos de roleta com diversos seletores")
+            elementos = []
+            
+            # Lista de seletores para tentar, do mais específico ao mais genérico
+            seletores = [
+                (By.CSS_SELECTOR, "div.sc-eGugkK.bIsQrT.cy-live-casino-grid-item.cy-live-casino-grid-item-2010013.game-type-2010013"),
+                (By.CSS_SELECTOR, "div.sc-eGugkK.bIsQrT"),
+                (By.CSS_SELECTOR, "div[class*='cy-live-casino-grid-item-2010013']"),
+                (By.CSS_SELECTOR, "div[class*='game-type-2010013']"),
+                (By.CSS_SELECTOR, "div.cy-live-casino-grid-item"),
+                (By.CSS_SELECTOR, ".lobby-game-tile"),
+                (By.CSS_SELECTOR, "[data-game-id*='roulette']"),
+                (By.CSS_SELECTOR, "[data-game-type='roulette']"),
+                (By.CSS_SELECTOR, "[class*='roulette']"),
+                (By.CLASS_NAME, "cy-live-casino-grid-item")
+            ]
+            
+            # Tentar cada seletor
+            for selector_type, selector in seletores:
+                try:
+                    elementos_encontrados = WebDriverWait(driver, 5).until(
+                        EC.presence_of_all_elements_located((selector_type, selector))
+                    if elementos_encontrados:
+                        logging.info(f"Encontrados {len(elementos_encontrados)} elementos com seletor: {selector}")
+                        elementos.extend(elementos_encontrados)
+                except Exception as e:
+                    logging.info(f"Seletor {selector} não encontrou elementos: {str(e)}")
+            
+            # Remover duplicatas (baseado no ID ou texto)
+            elementos_unicos = []
+            ids_elementos = set()
+            
+            for elem in elementos:
+                try:
+                    # Tentar obter ID único do elemento
+                    elem_id = elem.get_attribute("id") or elem.get_attribute("data-game-id") or elem.text
+                    if elem_id and elem_id not in ids_elementos:
+                        ids_elementos.add(elem_id)
+                        elementos_unicos.append(elem)
+                except:
+                    # Se não conseguir ID, adicionar de qualquer forma
+                    elementos_unicos.append(elem)
+            
+            elementos = elementos_unicos
             
             # Log the number of roulette elements found
-            logging.info(f"Encontradas {len(elementos)} roletas na página")
+            logging.info(f"Encontradas {len(elementos)} roletas únicas na página")
             
-            # Process all roulette tables instead of filtering
+            # Process all roulette tables
             for elemento in elementos:
                 try:
-                    # Extrair título da roleta
-                    titulo = elemento.find_element(By.CLASS_NAME, "cy-live-casino-grid-item-title").text
+                    # Extrair classe para debug
+                    class_attribute = elemento.get_attribute("class")
+                    logging.info(f"Processando elemento com classes: {class_attribute}")
                     
-                    # Log the roulette title for debugging
-                    logging.info(f"Processando roleta: {titulo}")
+                    # Tentar extrair título com diferentes métodos
+                    titulo = None
+                    # Método 1: Buscar pelo seletor específico
+                    try:
+                        titulo_element = elemento.find_element(By.CLASS_NAME, "cy-live-casino-grid-item-title")
+                        if titulo_element:
+                            titulo = titulo_element.text
+                    except:
+                        pass
                     
-            # Criar analisador para mesa se não existir
+                    # Método 2: Buscar por outros seletores comuns
+                    if not titulo:
+                        for selector in [".game-name", ".title", ".game-title", "h3", "h4"]:
+                            try:
+                                titulo_element = elemento.find_element(By.CSS_SELECTOR, selector)
+                                if titulo_element:
+                                    titulo = titulo_element.text
+                                    break
+                            except:
+                                pass
+                    
+                    # Método 3: Buscar por atributos
+                    if not titulo:
+                        for attr in ["data-name", "data-title", "title", "alt"]:
+                            try:
+                                titulo = elemento.get_attribute(attr)
+                                if titulo:
+                                    break
+                            except:
+                                pass
+                    
+                    # Se ainda não temos título, usar ID do jogo ou texto abreviado
+                    if not titulo:
+                        try:
+                            game_id = elemento.get_attribute("data-game-id") or elemento.get_attribute("id")
+                            titulo = f"Roleta ID: {game_id}" if game_id else "Roleta Sem Nome"
+                        except:
+                            titulo = "Roleta Desconhecida"
+                    
+                    # Log o título encontrado
+                    logging.info(f"Título extraído: {titulo}")
+                    
+                    # Continuar apenas se parece ser uma roleta
+                    if not ('ruleta' in titulo.lower() or 'roulette' in titulo.lower()):
+                        logging.info(f"Ignorando {titulo} pois não parece ser uma roleta")
+                        continue
+                    
+                    # Criar analisador para mesa se não existir
                     if titulo not in analisadores_mesas:
                         analisadores_mesas[titulo] = StrategyAnalyzer()
                         logging.info(f"Novo analisador criado para mesa: {titulo}")
@@ -1030,8 +1139,8 @@ def extrair_numeros():
                             try {
                                 let numeros = [];
                                 
-                                // Primeiro método: buscar spans com números
-                                let spans = elemento.querySelectorAll('.cy-live-casino-grid-item-infobar-draws span, .cy-live-casino-grid-item-infobar-draws div');
+                                // Primeiro método: buscar spans com números - seletores ampliados
+                                let spans = elemento.querySelectorAll('.cy-live-casino-grid-item-infobar-draws span, .cy-live-casino-grid-item-infobar-draws div, .history span, .result-number, .number, [class*="number"], [class*="result"], [class*="history"]');
                                 if (spans && spans.length > 0) {
                                     numeros = Array.from(spans)
                                         .filter(span => span && span.textContent)
@@ -1040,63 +1149,61 @@ def extrair_numeros():
                                         .map(num => parseInt(num));
                                 }
                                 
-                                // Segundo método: buscar no texto completo da div de números
+                                // Segundo método: buscar em diversas classes com históricos
                                 if (numeros.length === 0) {
-                                    let infobar = elemento.querySelector('.cy-live-casino-grid-item-infobar-draws');
-                                    if (infobar && infobar.textContent) {
-                                        let matches = infobar.textContent.match(/\\d+/g);
-                                        if (matches) {
-                                            numeros = matches.map(num => parseInt(num));
-                                        }
-                                    }
-                                }
-                                
-                                // Terceiro método: tentar outros seletores comuns
-                                if (numeros.length === 0) {
-                                    let possiveisSeletores = [
-                                        '.number', '.roulette-number', '.result', 
-                                        '[data-result]', '[data-number]',
-                                        '[data-latest-result]', '.latest-result',
-                                        '.previous-results', '.history-numbers',
-                                        '.game-history', '.recent-numbers',
-                                        '.roulette-results', '.game-results'
-                                    ];
-                                    
-                                    for (let seletor of possiveisSeletores) {
-                                        let elementos = elemento.querySelectorAll(seletor);
-                                        if (elementos && elementos.length > 0) {
-                                            let novosNumeros = Array.from(elementos)
-                                                .filter(el => el && el.textContent)
-                                                .map(el => el.textContent.trim())
-                                                .filter(texto => /^\\d+$/.test(texto))
-                                                .map(num => parseInt(num));
-                                            
-                                            if (novosNumeros.length > 0) {
-                                                numeros = numeros.concat(novosNumeros);
+                                    let infobars = elemento.querySelectorAll('.cy-live-casino-grid-item-infobar-draws, .history, .results, .numbers, [class*="result"], [class*="history"], [class*="numbers"]');
+                                    for (let infobar of infobars) {
+                                        if (infobar && infobar.textContent) {
+                                            let matches = infobar.textContent.match(/\\d+/g);
+                                            if (matches) {
+                                                numeros = matches.map(num => parseInt(num));
+                                                if (numeros.length > 0) break;
                                             }
                                         }
                                     }
                                 }
                                 
-                                // Quarto método: tentar atributos data-*
-                                let dataElements = elemento.querySelectorAll('[data-latest-result], [data-number], [data-value]');
-                                if (dataElements && dataElements.length > 0) {
-                                    dataElements.forEach(el => {
-                                        ['data-latest-result', 'data-number', 'data-value'].forEach(attr => {
-                                            if (el.hasAttribute(attr)) {
-                                                let valor = el.getAttribute(attr);
-                                                if (valor && /^\\d+$/.test(valor)) {
-                                                    numeros.push(parseInt(valor));
+                                // Terceiro método: buscar em atributos data
+                                if (numeros.length === 0) {
+                                    for (let attr of ["data-results", "data-history", "data-numbers"]) {
+                                        let dataAttr = elemento.getAttribute(attr);
+                                        if (dataAttr) {
+                                            try {
+                                                // Tentar como JSON
+                                                let jsonData = JSON.parse(dataAttr);
+                                                if (Array.isArray(jsonData)) {
+                                                    numeros = jsonData.filter(n => typeof n === 'number' || 
+                                                                              (typeof n === 'string' && /^\\d+$/.test(n)))
+                                                             .map(n => parseInt(n));
+                                                }
+                                            } catch(e) {
+                                                // Se falhar JSON, tentar como string
+                                                let matches = dataAttr.match(/\\d+/g);
+                                                if (matches) {
+                                                    numeros = matches.map(num => parseInt(num));
                                                 }
                                             }
-                                        });
-                                    });
+                                            if (numeros.length > 0) break;
+                                        }
+                                    }
                                 }
                                 
-                                // Remover duplicatas e retornar
-                                return [...new Set(numeros)];
-                            } catch (error) {
-                                console.error('Erro ao extrair números:', error);
+                                // Quarto método: último recurso, buscar em toda a string
+                                if (numeros.length === 0) {
+                                    let fullText = elemento.textContent;
+                                    if (fullText) {
+                                        // Procurar por padrões de números separados
+                                        let matches = fullText.match(/\\b\\d{1,2}\\b/g);
+                                        if (matches) {
+                                            numeros = matches.map(num => parseInt(num))
+                                                         .filter(num => num >= 0 && num <= 36);
+                                        }
+                                    }
+                                }
+                                
+                                return numeros;
+                            } catch (e) {
+                                console.error("Erro na extração JS:", e);
                                 return [];
                             }
                         }
@@ -1141,7 +1248,7 @@ def extrair_numeros():
                             # Enviar dados para o Supabase
                             atualizar_supabase({titulo: numeros_roletas[titulo]})
                             logging.info(f"Números atualizados para {titulo}: {numeros_roletas[titulo]['numeros']}")
-        else
+        else:
                         logging.warning(f"Nenhum número encontrado para a mesa {titulo} - aguardando próxima atualização")
     except Exception as e:
                     logging.error(f"Erro ao processar roleta {titulo if 'titulo' in locals() else 'desconhecida'}: {str(e)}")
