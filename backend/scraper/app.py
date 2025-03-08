@@ -266,7 +266,7 @@ def navegar_para_site(driver, tentativa=1, max_tentativas=3):
             else:
                 logging.error(f"Página carregada, mas URL não é a esperada: {driver.current_url}")
                 return False
-    except Exception as e:
+        except Exception as e:
             logging.error(f"Falha ao acessar {url}: {str(e)}")
             raise
     
@@ -477,6 +477,8 @@ def extrair_dados_api():
                                 break
                         except ValueError:
                             logger.warning(f"Resposta da API não é JSON válido: {api_url}")
+                        except Exception as e:
+                            logger.error(f"Erro ao processar dados JSON: {str(e)}")
                     else:
                         logger.warning(f"API retornou status {response.status_code}: {api_url}")
                         
@@ -512,8 +514,8 @@ def extrair_dados_api():
                                     
                                     titulo = titulo_element.text.strip()
                                     if not titulo:
-                                                                                                            continue
-                        
+                                        continue
+                                    
                                     # Tentar extrair números
                                     numeros_elements = item.select('.cy-live-casino-grid-item-infobar-draws span, .result-number, .history-number, .roulette-number')
                                     numeros_atuais = []
@@ -521,7 +523,7 @@ def extrair_dados_api():
                                     if numeros_elements:
                                         for num_el in numeros_elements:
                                             num_text = num_el.text.strip()
-                            if num_text.isdigit():
+                                            if num_text.isdigit():
                                                 numeros_atuais.append(int(num_text))
                                     
                                     # Tentar método alternativo se não encontrou
@@ -535,12 +537,13 @@ def extrair_dados_api():
                                         processar_roleta_com_numeros(titulo, numeros_atuais)
                                         dados_extraidos = True
                                         last_success_time = time.time()
-                    except Exception as e:
+                                except Exception as e:
                                     logger.error(f"Erro ao processar elemento de roleta: {str(e)}")
+                                    continue
+                            else:
+                                logger.warning(f"Nenhum elemento de roleta encontrado na página: {url}")
                         else:
-                            logger.warning(f"Nenhum elemento de roleta encontrado na página: {url}")
-                    else:
-                        logger.warning(f"Falha ao carregar página {url}: Status {response.status_code}")
+                            logger.warning(f"Falha ao carregar página {url}: Status {response.status_code}")
                 except Exception as e:
                     logger.error(f"Erro durante webscraping de {url}: {str(e)}")
             
@@ -565,7 +568,7 @@ def extrair_dados_api():
                                 # Não estamos gerando novos números, apenas usando os que já existem
                                 if nome_roleta not in numeros_roletas:
                                     numeros_roletas[nome_roleta] = {
-                                "numeros": numeros,
+                                        "numeros": numeros,
                                         "ultima_atualizacao": roleta.get("updated_at", datetime.now().isoformat()),
                                         "estrategia": {},
                                         "id": roleta.get("id", f"roleta-{hash(nome_roleta) % 100000}")
@@ -882,25 +885,19 @@ def iniciar():
             executando = True
             
             if IS_RAILWAY:
-                # No Railway, usar método API
-                logger.info("Iniciando extração via API (modo Railway)")
-                thread_extracao = threading.Thread(target=extrair_dados_api)
+                # Iniciar thread de extração via API
+                thread = threading.Thread(target=scrape_roletas)
+                thread.daemon = True
+                thread.start()
             else:
-                # Em ambiente local, usar Selenium
+                # Iniciar extração via Selenium
                 driver = configurar_driver()
-                if driver:
-                    navegar_para_site(driver)
-                    thread_extracao = threading.Thread(target=extrair_numeros)
-                else:
-                    # Fallback para API se o driver falhar
-                    logger.warning("Driver falhou, caindo para método API")
-                    thread_extracao = threading.Thread(target=extrair_dados_api)
-            
-            thread_extracao.daemon = True
-            thread_extracao.start()
+                thread = threading.Thread(target=extrair_numeros)
+                thread.daemon = True
+                thread.start()
             
             return jsonify({"status": "success", "message": "Extração iniciada"})
-    except Exception as e:
+        except Exception as e:
             executando = False
             logging.error(f"Erro ao iniciar: {str(e)}")
             return jsonify({"status": "error", "message": f"Erro ao iniciar: {str(e)}"})
