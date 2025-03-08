@@ -1,4 +1,3 @@
-
 export interface ChatMessage {
   id: number;
   sender: string;
@@ -7,4 +6,10 @@ export interface ChatMessage {
   isModerator?: boolean;
   avatar?: string;
   timestamp: Date;
+}
+
+export interface ActiveUsers {
+  count: number;
+  trend: 'up' | 'down' | 'stable';
+  lastUpdate: Date;
 }

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
@@ -227,4 +228,4 @@ const AuthPage = () => {
   );
 };
 
-export default AuthPage; 
+export default AuthPage;

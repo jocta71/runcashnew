@@ -1,14 +1,12 @@
-import { useState, useMemo, useEffect } from 'react';
-import { Search, Wallet, ChevronDown } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Search, Wallet, Menu, MessageSquare } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import RouletteCard from '@/components/RouletteCard';
 import { Input } from '@/components/ui/input';
 import ChatUI from '@/components/ChatUI';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import AnimatedInsights from '@/components/AnimatedInsights';
-import { fetchAllRoulettes, fetchLatestRouletteNumbers, RouletteData, LatestRouletteNumber } from '@/integrations/api/rouletteService';
-import { filterAllowedRoulettes } from '@/config/allowedRoulettes';
+import ProfileDropdown from '@/components/ProfileDropdown';
 
 interface ChatMessage {
   id: string;
@@ -24,7 +22,6 @@ interface ChatMessage {
 }
 
 const mockRoulettes = [{
-  id: "1",
   name: "Roleta Brasileira",
   lastNumbers: [7, 11, 23, 5, 18],
   wins: 150,
@@ -35,7 +32,6 @@ const mockRoulettes = [{
     value: Math.random() * 100
   }))
 }, {
-  id: "2",
   name: "Roleta Europeia",
   lastNumbers: [32, 15, 3, 26, 8],
   wins: 180,
@@ -46,7 +42,6 @@ const mockRoulettes = [{
     value: Math.random() * 100
   }))
 }, {
-  id: "3",
   name: "Roleta Americana",
   lastNumbers: [0, 12, 28, 35, 14],
   wins: 200,
@@ -57,7 +52,6 @@ const mockRoulettes = [{
     value: Math.random() * 100
   }))
 }, {
-  id: "4",
   name: "Roleta Platinum VIP",
   lastNumbers: [17, 22, 9, 31, 4],
   wins: 220,
@@ -68,7 +62,6 @@ const mockRoulettes = [{
     value: Math.random() * 100
   }))
 }, {
-  id: "5",
   name: "Roleta Diamond",
   lastNumbers: [19, 6, 27, 13, 36],
   wins: 190,
@@ -79,7 +72,6 @@ const mockRoulettes = [{
     value: Math.random() * 100
   }))
 }, {
-  id: "6",
   name: "Roleta Gold",
   lastNumbers: [2, 10, 20, 33, 16],
   wins: 170,
@@ -90,7 +82,6 @@ const mockRoulettes = [{
     value: Math.random() * 100
   }))
 }, {
-  id: "7",
   name: "Roleta Lightning",
   lastNumbers: [29, 24, 1, 30, 21],
   wins: 210,
@@ -101,7 +92,6 @@ const mockRoulettes = [{
     value: Math.random() * 100
   }))
 }, {
-  id: "8",
   name: "Roleta Premium",
   lastNumbers: [5, 18, 34, 11, 25],
   wins: 230,
@@ -112,7 +102,6 @@ const mockRoulettes = [{
     value: Math.random() * 100
   }))
 }, {
-  id: "9",
   name: "Roleta Turbo",
   lastNumbers: [8, 17, 29, 2, 19],
   wins: 185,
@@ -218,85 +207,59 @@ const mockChatMessages: ChatMessage[] = [{
 
 const Index = () => {
   const [search, setSearch] = useState("");
-  const [roulettes, setRoulettes] = useState(mockRoulettes);
-  const [isLoading, setIsLoading] = useState(true);
-  const [latestNumbers, setLatestNumbers] = useState<LatestRouletteNumber[]>([]);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   
-  // Fetch roulettes from API
-  useEffect(() => {
-    const fetchRoulettes = async () => {
-      try {
-        setIsLoading(true);
-        const apiRoulettes = await fetchAllRoulettes();
-        const latestNumbersData = await fetchLatestRouletteNumbers();
-        
-        // Filter to include only allowed roulettes
-        const filteredRoulettes = filterAllowedRoulettes(apiRoulettes);
-        const filteredLatestNumbers = filterAllowedRoulettes(latestNumbersData);
-        
-        setLatestNumbers(filteredLatestNumbers);
-        console.log('Números mais recentes carregados:', filteredLatestNumbers);
-        
-        if (filteredRoulettes && filteredRoulettes.length > 0) {
-          // Map API data to component format and maintain order
-          const formattedRoulettes = filteredRoulettes
-            .map(roulette => {
-              const latestNumber = filteredLatestNumbers.find(item => item.id === roulette.id);
-              
-              return {
-                id: roulette.id, // Adicionar ID para manter a ordem
-                name: roulette.nome,
-                lastNumbers: roulette.numeros.slice(0, 5),
-                latestNumber: latestNumber?.numero_recente || null,
-                wins: roulette.vitorias || 0,
-                losses: roulette.derrotas || 0,
-                trend: Array.from({ length: 20 }, () => ({ value: Math.random() * 100 }))
-              };
-            })
-            .sort((a, b) => a.id.localeCompare(b.id)); // Ordenar por ID para manter a ordem consistente
-          
-          setRoulettes(formattedRoulettes);
-          console.log('Roletas permitidas carregadas da API:', formattedRoulettes);
-        } else {
-          console.log('Nenhuma roleta permitida encontrada na API, usando dados mockados');
-        }
-      } catch (error) {
-        console.error('Erro ao buscar roletas da API:', error);
-        console.log('Usando dados mockados devido a erro na API');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    fetchRoulettes();
-    
-    const intervalId = setInterval(fetchRoulettes, 5000);
-    
-    return () => clearInterval(intervalId);
-  }, []);
-  
-  const filteredRoulettes = roulettes.filter(roulette => 
-    roulette.name.toLowerCase().includes(search.toLowerCase())
-  );
-  
+  const filteredRoulettes = mockRoulettes.filter(roulette => roulette.name.toLowerCase().includes(search.toLowerCase()));
   const topRoulettes = useMemo(() => {
-    return [...roulettes].sort((a, b) => {
+    return [...mockRoulettes].sort((a, b) => {
       const aWinRate = a.wins / (a.wins + a.losses) * 100;
       const bWinRate = b.wins / (b.wins + b.losses) * 100;
       return bWinRate - aWinRate;
     }).slice(0, 3);
-  }, [roulettes]);
+  }, []);
 
-  return <div className="min-h-screen flex bg-vegas-black">
+  return (
+    <div className="min-h-screen flex bg-vegas-black">
+      {/* Desktop Sidebar */}
       <Sidebar />
       
+      {/* Mobile Sidebar (drawer) */}
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} isMobile={true} />
+      
       <div className="flex-1 relative">
-        <div className="fixed top-0 left-0 right-0 md:left-64 md:right-80 z-50 h-[70px] flex items-center justify-between px-4 border-b border-[#33333359] bg-[#100f13]">
+        {/* Mobile Header */}
+        <div className="mobile-header">
+          <button 
+            className="p-2"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <Menu size={24} className="text-[#00ff00]" />
+          </button>
+          
+          <span className="text-white text-xl font-bold">RunCash</span>
+          
+          <button 
+            className="p-2"
+            onClick={() => setChatOpen(true)}
+          >
+            <MessageSquare size={24} className="text-[#00ff00]" />
+          </button>
+        </div>
+        
+        {/* Desktop Header */}
+        <div className="hidden md:flex fixed top-0 left-0 right-0 md:left-64 md:right-80 z-40 h-[70px] items-center justify-between px-4 border-b border-[#33333359] bg-[#100f13]">
           <div className="flex items-center gap-2">
             <span className="text-white text-2xl font-bold">RunCash</span>
             <div className="relative flex items-center ml-4 max-w-[180px]">
               <Search size={14} className="absolute left-2 text-gray-400" />
-              <Input type="text" placeholder="Pesquisar roleta..." className="h-8 pl-7 py-1 pr-2 text-xs bg-[#1A191F] border-none rounded-full text-white focus-visible:ring-0 focus-visible:ring-offset-0" value={search} onChange={e => setSearch(e.target.value)} />
+              <Input 
+                type="text" 
+                placeholder="Pesquisar roleta..." 
+                className="h-8 pl-7 py-1 pr-2 text-xs bg-[#1A191F] border-none rounded-full text-white focus-visible:ring-0 focus-visible:ring-offset-0" 
+                value={search} 
+                onChange={e => setSearch(e.target.value)} 
+              />
             </div>
           </div>
           
@@ -308,38 +271,64 @@ const Index = () => {
                 <span className="text-[10px] text-white">R$</span>
               </span>
               <span className="text-white text-xs">1.346,34</span>
-              <ChevronDown size={14} className="text-gray-400" />
+              <Wallet size={14} className="text-gray-400" />
             </div>
             
-            <Button variant="default" size="sm" className="h-8 text-black font-medium bg-gradient-to-b from-[#00ff00] to-[#34db53] hover:from-[#00ff00]/90 hover:to-[#8bff00]/90">
+            <Button variant="default" size="sm" className="h-8 text-black font-medium bg-gradient-to-b from-[#00ff00] to-[#00ff00] hover:from-[#00ff00]/90 hover:to-[#00ff00]/90">
               <Wallet size={14} className="mr-1" /> Saldo
             </Button>
             
-            <div className="flex items-center gap-2">
-              <Avatar className="h-8 w-8 border border-vegas-darkgray">
-                <AvatarImage src="https://github.com/shadcn.png" alt="@user" />
-                <AvatarFallback>CN</AvatarFallback>
-              </Avatar>
-              <ChevronDown size={12} className="text-gray-400" />
-              
-              <div className="h-8 w-8 bg-vegas-green/20 rounded-full flex items-center justify-center ml-1">
-                <span className="text-vegas-green font-bold text-xs">3</span>
-              </div>
-            </div>
+            <ProfileDropdown />
           </div>
         </div>
         
-        <main className="pt-[70px] pb-8 px-6 md:pl-[280px] md:pr-[340px] w-full min-h-screen bg-[#100f13]">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-            {filteredRoulettes.map((roulette) => (
-              <RouletteCard key={roulette.id} {...roulette} />
-            ))}
+        {/* Mobile Search Bar */}
+        <div className="md:hidden px-4 pt-20 pb-2">
+          <div className="relative flex items-center w-full">
+            <Search size={16} className="absolute left-3 text-gray-400" />
+            <Input 
+              type="text" 
+              placeholder="Pesquisar roleta..." 
+              className="w-full pl-9 py-2 pr-3 text-sm bg-[#1A191F] border-none rounded-full text-white focus-visible:ring-0 focus-visible:ring-offset-0" 
+              value={search} 
+              onChange={e => setSearch(e.target.value)} 
+            />
           </div>
+        </div>
+        
+        {/* Mobile User Info */}
+        <div className="md:hidden flex justify-between items-center px-4 py-3">
+          <ProfileDropdown />
+          
+          <Button variant="default" size="sm" className="h-8 text-black font-medium bg-gradient-to-b from-[#00ff00] to-[#00ff00] hover:from-[#00ff00]/90 hover:to-[#00ff00]/90">
+            <Wallet size={14} className="mr-1" /> Saldo
+          </Button>
+        </div>
+        
+        {/* Mobile Insights */}
+        <div className="md:hidden px-4 py-2">
+          <div className="bg-[#1A191F]/50 rounded-lg p-3">
+            <AnimatedInsights />
+          </div>
+        </div>
+        
+        <main className="pt-4 md:pt-[70px] pb-8 px-4 md:px-6 md:pl-[280px] md:pr-[340px] w-full min-h-screen bg-[#100f13]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mt-2 md:mt-6">
+            {filteredRoulettes.map((roulette, index) => <RouletteCard key={index} {...roulette} />)}
+          </div>
+          
+          {/* Mobile Footer Space (to avoid content being hidden behind fixed elements) */}
+          <div className="h-16 md:h-0"></div>
         </main>
       </div>
       
+      {/* Desktop Chat */}
       <ChatUI />
-    </div>;
+      
+      {/* Mobile Chat (drawer) */}
+      <ChatUI isOpen={chatOpen} onClose={() => setChatOpen(false)} isMobile={true} />
+    </div>
+  );
 };
 
 export default Index;

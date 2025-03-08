@@ -1,13 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
+
+import React, { useState } from 'react';
 import ChatHeader from './chat/ChatHeader';
 import ChatMessageList from './chat/ChatMessageList';
 import ChatInput from './chat/ChatInput';
-import ChatSettings from './chat/ChatSettings';
 import { ChatMessage } from './chat/types';
-import { generateAIResponse, simulateChat, stopChatSimulation } from '@/integrations/ai/chatService';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { X } from 'lucide-react';
 
-const ChatUI = () => {
+interface ChatUIProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+  isMobile?: boolean;
+}
+
+const ChatUI = ({ isOpen = false, onClose, isMobile = false }: ChatUIProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 1,
@@ -91,118 +96,51 @@ const ChatUI = () => {
   ]);
   
   const [newMessage, setNewMessage] = useState('');
-  const simulationRef = useRef<number | null>(null);
-  const [isSimulationActive, setIsSimulationActive] = useState(true);
-  const [minInterval, setMinInterval] = useState(5000); // 5 segundos
-  const [maxInterval, setMaxInterval] = useState(15000); // 15 segundos
-  const [showSettings, setShowSettings] = useState(false);
-  const messageListRef = useRef<HTMLDivElement>(null);
-  
-  // Função para iniciar a simulação
-  const startSimulation = () => {
-    // Função para adicionar uma nova mensagem ao chat
-    const addNewMessage = (message: ChatMessage) => {
-      setMessages(prevMessages => [...prevMessages, message]);
-    };
-    
-    // Iniciar a simulação e guardar o ID do timeout
-    simulationRef.current = simulateChat(addNewMessage, minInterval, maxInterval);
-  };
-  
-  // Função para parar a simulação
-  const stopSimulation = () => {
-    if (simulationRef.current !== null) {
-      stopChatSimulation(simulationRef.current);
-      simulationRef.current = null;
-    }
-  };
-  
-  // Iniciar ou parar a simulação quando o status mudar
-  useEffect(() => {
-    if (isSimulationActive) {
-      startSimulation();
-    } else {
-      stopSimulation();
-    }
-    
-    // Limpar a simulação quando o componente desmontar
-    return () => {
-      stopSimulation();
-    };
-  }, [isSimulationActive, minInterval, maxInterval]);
-  
-  // Função para lidar com a alteração do status da simulação
-  const handleToggleSimulation = (active: boolean) => {
-    setIsSimulationActive(active);
-  };
-  
-  // Função para atualizar os intervalos de simulação
-  const handleUpdateIntervals = (min: number, max: number) => {
-    setMinInterval(min);
-    setMaxInterval(max);
-    
-    // Reiniciar a simulação com os novos intervalos se estiver ativa
-    if (isSimulationActive) {
-      stopSimulation();
-      startSimulation();
-    }
-  };
-  
-  // Efeito para rolar automaticamente para a mensagem mais recente
-  useEffect(() => {
-    if (messageListRef.current) {
-      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
-    }
-  }, [messages]);
   
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
     
-    // Adicionar a mensagem do usuário
-    const userMessage: ChatMessage = {
-      id: Date.now(),
-      sender: 'Você',
-      message: newMessage,
-      timestamp: new Date()
-    };
+    setMessages([
+      ...messages,
+      {
+        id: Date.now(),
+        sender: 'Você',
+        message: newMessage,
+        timestamp: new Date()
+      }
+    ]);
     
-    setMessages(prevMessages => [...prevMessages, userMessage]);
     setNewMessage('');
-    
-    // Gerar uma resposta da IA após um pequeno atraso para simular digitação
-    setTimeout(() => {
-      const aiResponse = generateAIResponse(newMessage, messages);
-      setMessages(prevMessages => [...prevMessages, aiResponse]);
-    }, 1000 + Math.random() * 2000); // Atraso entre 1-3 segundos
   };
+
+  // Styles for mobile vs desktop
+  const chatClasses = isMobile
+    ? "fixed inset-0 bg-vegas-darkgray z-50 flex flex-col"
+    : "fixed top-0 right-0 h-screen w-80 flex flex-col bg-vegas-darkgray z-50 border-l border-[#33333359] md:block hidden";
+  
+  // For mobile, if it's not open, don't render
+  if (isMobile && !isOpen) return null;
   
   return (
-    <div className="fixed top-0 right-0 h-screen w-80 flex flex-col bg-vegas-darkgray z-50 border-l border-[#33333359]">
-      <ChatHeader onSettingsClick={() => setShowSettings(true)} />
-      <ChatMessageList messages={messages} ref={messageListRef} />
+    <div className={chatClasses}>
+      {isMobile && (
+        <div className="flex justify-end p-2">
+          <button onClick={onClose} className="p-1 rounded-md text-gray-400 hover:text-white">
+            <X size={24} />
+          </button>
+        </div>
+      )}
+      <ChatHeader />
+      <ChatMessageList messages={messages} />
       <ChatInput 
         newMessage={newMessage}
         setNewMessage={setNewMessage}
         handleSendMessage={handleSendMessage}
       />
-      
-      <Dialog open={showSettings} onOpenChange={setShowSettings}>
-        <DialogContent className="bg-vegas-darkgray text-white border-vegas-gold/30">
-          <DialogHeader>
-            <DialogTitle>Configurações do Chat</DialogTitle>
-          </DialogHeader>
-          <ChatSettings 
-            isSimulationActive={isSimulationActive}
-            minInterval={minInterval}
-            maxInterval={maxInterval}
-            onToggleSimulation={handleToggleSimulation}
-            onUpdateIntervals={handleUpdateIntervals}
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
 
 export default ChatUI;
+

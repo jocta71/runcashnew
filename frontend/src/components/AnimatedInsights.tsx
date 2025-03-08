@@ -12,22 +12,22 @@ const insights: Insight[] = [
   { 
     icon: <TrendingUp size={14} />, 
     text: "Roleta Brasileira em alta: 78% de vitórias hoje", 
-    color: "text-vegas-green" 
+    color: "text-[#00ff00]" 
   },
   { 
     icon: <Star size={14} />, 
     text: "Números quentes: 7, 11, 23", 
-    color: "text-vegas-gold" 
+    color: "text-[#00ff00]" 
   },
   { 
     icon: <Award size={14} />, 
     text: "Maior sequência de vitórias: 9", 
-    color: "text-vegas-blue" 
+    color: "text-[#00ff00]" 
   },
   { 
     icon: <Users size={14} />, 
     text: "2,458 jogadores online agora", 
-    color: "text-purple-400" 
+    color: "text-[#00ff00]" 
   },
 ];
 
