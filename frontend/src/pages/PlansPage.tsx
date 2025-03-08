@@ -38,23 +38,21 @@ const PlansPage = () => {
     // Marcar que começamos a processar
     setProcessingPlanId(planId);
     
-    // Mostrar toast apenas uma vez
+    // Mostrar toast e redirecionar imediatamente
     toast({
-      title: "Ativando plano",
-      description: "Aguarde um momento, você será redirecionado..."
+      title: "Plano selecionado!",
+      description: "Redirecionando para ativação..."
     });
     
-    // Plano gratuito
-    if (planId === 'free') {
-      // Redirecionar sem fazer nada
-      window.location.href = `/payment-success?free=true`;
-      return;
-    }
+    // Redirecionamento direto sem espera para todos os tipos de plano
+    console.log(`Redirecionando para página de sucesso com plano: ${planId}`);
     
-    // Para planos pagos - redirecionar diretamente
-    setTimeout(() => {
-      window.location.href = `/payment-success?session_id=sim_${Date.now()}`;
-    }, 1500);
+    // Usar redirecionamento imediato para evitar carregamento infinito
+    if (planId === 'free') {
+      window.location.replace('/payment-success?free=true');
+    } else {
+      window.location.replace(`/payment-success?session_id=sim_${Date.now()}`);
+    }
   };
   
   // Calcular preço anual (com desconto)
