@@ -248,31 +248,27 @@ def navegar_para_site(driver, tentativa=1, max_tentativas=3):
         driver.execute_cdp_cmd('Network.clearBrowserCache', {})
         driver.execute_cdp_cmd('Network.clearBrowserCookies', {})
         
-        # Tentar acessar o site com diferentes URLs - priorizando a versão espanhola
-        urls = [
-            "https://es.888casino.com/live-casino/#filters=live-roulette",
-            "https://www.888casino.es/live-casino/#filters=live-roulette",
-            "https://www.888casino.com/live-casino/#filters=live-roulette",
-            "https://www.888casino.pt/live-casino/#filters=live-roulette"
-        ]
+        # Usar apenas a URL principal onde todas as roletas estão disponíveis
+        url = "https://es.888casino.com/live-casino/#filters=live-roulette"
         
-        for url in urls:
-            try:
-                driver.get(url)
-                # Aguardar carregamento inicial com timeout maior
-                WebDriverWait(driver, 30).until(
-                    EC.presence_of_element_located((By.TAG_NAME, "body"))
-                )
-                time.sleep(5)
-                
-                if "888casino" in driver.current_url and "live-casino" in driver.current_url:
-                    logging.info(f"Sucesso ao acessar: {url}")
-                    return True
-            except Exception as e:
-                logging.warning(f"Falha ao acessar {url}: {str(e)}")
-                continue
-        
-        raise Exception("Não foi possível acessar nenhuma URL disponível")
+        try:
+            logger.info(f"Acessando URL única: {url}")
+            driver.get(url)
+            # Aguardar carregamento inicial com timeout maior
+            WebDriverWait(driver, 30).until(
+                EC.presence_of_element_located((By.TAG_NAME, "body"))
+            )
+            time.sleep(5)
+            
+            if "888casino" in driver.current_url and "live-casino" in driver.current_url:
+                logging.info(f"Sucesso ao acessar: {url}")
+                return True
+            else:
+                logging.error(f"Página carregada, mas URL não é a esperada: {driver.current_url}")
+                return False
+        except Exception as e:
+            logging.error(f"Falha ao acessar {url}: {str(e)}")
+            raise
         
     except Exception as e:
         logging.error(f"Erro ao navegar para o site (tentativa {tentativa}): {str(e)}")
@@ -341,28 +337,13 @@ def extrair_dados_api():
     """
     global numeros_roletas, analisadores_mesas, executando
     
-    # URLs para tentar extrair dados diretamente via scraping
-    urls = [
-        "https://es.888casino.com/live-casino/#filters=live-roulette",
-        "https://www.888casino.es/live-casino/#filters=live-roulette",
-        "https://www.888casino.com/live-casino/#filters=live-roulette",
-        "https://www.888casino.pt/live-casino/#filters=live-roulette"
-    ]
+    # Apenas a URL principal com todas as roletas
+    url = "https://es.888casino.com/live-casino/#filters=live-roulette"
     
     # APIs diretas (maior chance de sucesso)
     api_urls = [
-        "https://www.888casino.com/api/casino/lobby/games/live",
-        "https://www.888casino.com/api/games/live?category=roulette",
-        "https://es.888casino.com/api/games/live?category=roulette",
-        "https://api.888.com/v1/casino/games/live?type=roulette",
-        "https://content.888casino.com/roulette/latest"
-    ]
-    
-    # Mais APIs alternativas para tentar
-    mais_api_urls = [
-        "https://www.888casino.es/api/casino/games/live",
-        "https://casino.888.com/api/games/live/roulette",
-        "https://casino.888.com/api/casino/games/live/latest"
+        "https://es.888casino.com/api/casino/lobby/games/live",
+        "https://es.888casino.com/api/games/live?category=roulette"
     ]
     
     headers = {
@@ -372,13 +353,15 @@ def extrair_dados_api():
         'Connection': 'keep-alive',
         'Upgrade-Insecure-Requests': '1',
         'Cache-Control': 'max-age=0',
+        'Referer': 'https://es.888casino.com/live-casino/'
     }
     
     json_headers = {
         'User-Agent': get_random_user_agent(),
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest'
+        'X-Requested-With': 'XMLHttpRequest',
+        'Referer': 'https://es.888casino.com/live-casino/'
     }
     
     last_update_time = time.time()
@@ -403,7 +386,7 @@ def extrair_dados_api():
             logger.info(f"Ciclo de extração {cycle_count} - Tentando obter APENAS dados REAIS (sem simulação)")
             
             # PASSO 1: Tentar obter dados das APIs diretas primeiro (maior chance de sucesso)
-            for api_url in api_urls + mais_api_urls:
+            for api_url in api_urls:
                 try:
                     logger.info(f"Tentando API direta: {api_url}")
                     response = session.get(api_url, headers=json_headers, timeout=15)
@@ -505,63 +488,62 @@ def extrair_dados_api():
             if not dados_extraidos:
                 logger.info("APIs diretas falharam. Tentando webscraping direto...")
                 
-                for url in urls:
-                    try:
-                        logger.info(f"Tentando webscraping de: {url}")
-                        response = session.get(url, headers=headers, timeout=30)
+                try:
+                    logger.info(f"Tentando webscraping de: {url}")
+                    response = session.get(url, headers=headers, timeout=30)
+                    
+                    if response.status_code == 200:
+                        logger.info(f"Página carregada com sucesso: {url}")
                         
-                        if response.status_code == 200:
-                            logger.info(f"Página carregada com sucesso: {url}")
+                        # Usar BeautifulSoup para extrair dados
+                        soup = BeautifulSoup(response.text, 'html.parser')
+                        
+                        # Procurar elementos da roleta com vários seletores possíveis
+                        roleta_items = soup.select('.cy-live-casino-grid-item, .game-tile, .casino-game, .roulette-game, .live-game')
+                        
+                        if roleta_items:
+                            logger.info(f"Encontrados {len(roleta_items)} elementos de roleta")
                             
-                            # Usar BeautifulSoup para extrair dados
-                            soup = BeautifulSoup(response.text, 'html.parser')
-                            
-                            # Procurar elementos da roleta com vários seletores possíveis
-                            roleta_items = soup.select('.cy-live-casino-grid-item, .game-tile, .casino-game, .roulette-game, .live-game')
-                            
-                            if roleta_items:
-                                logger.info(f"Encontrados {len(roleta_items)} elementos de roleta")
-                                
-                                for item in roleta_items:
-                                    try:
-                                        # Tentar extrair o título
-                                        titulo_element = item.select_one('.cy-live-casino-grid-item-title, .game-title, .game-name, h3, h4')
-                                        if not titulo_element:
-                                            continue
-                                        
-                                        titulo = titulo_element.text.strip()
-                                        if not titulo:
-                                            continue
-                                        
-                                        # Tentar extrair números
-                                        numeros_elements = item.select('.cy-live-casino-grid-item-infobar-draws span, .result-number, .history-number, .roulette-number')
-                                        numeros_atuais = []
-                                        
-                                        if numeros_elements:
-                                            for num_el in numeros_elements:
-                                                num_text = num_el.text.strip()
-                                                if num_text.isdigit():
-                                                    numeros_atuais.append(int(num_text))
-                                        
-                                        # Tentar método alternativo se não encontrou
-                                        if not numeros_atuais:
-                                            history_text = item.select_one('.history, .previous-results, .recent-numbers')
-                                            if history_text:
-                                                numeros_atuais = [int(n) for n in re.findall(r'\d+', history_text.text) if int(n) <= 36]
-                                        
-                                        if numeros_atuais:
-                                            logger.info(f"Extraídos números para {titulo}: {numeros_atuais}")
-                                            processar_roleta_com_numeros(titulo, numeros_atuais)
-                                            dados_extraidos = True
-                                            last_success_time = time.time()
-                                    except Exception as e:
-                                        logger.error(f"Erro ao processar elemento de roleta: {str(e)}")
-                            else:
-                                logger.warning(f"Nenhum elemento de roleta encontrado na página: {url}")
+                            for item in roleta_items:
+                                try:
+                                    # Tentar extrair o título
+                                    titulo_element = item.select_one('.cy-live-casino-grid-item-title, .game-title, .game-name, h3, h4')
+                                    if not titulo_element:
+                                        continue
+                                    
+                                    titulo = titulo_element.text.strip()
+                                    if not titulo:
+                                        continue
+                                    
+                                    # Tentar extrair números
+                                    numeros_elements = item.select('.cy-live-casino-grid-item-infobar-draws span, .result-number, .history-number, .roulette-number')
+                                    numeros_atuais = []
+                                    
+                                    if numeros_elements:
+                                        for num_el in numeros_elements:
+                                            num_text = num_el.text.strip()
+                                            if num_text.isdigit():
+                                                numeros_atuais.append(int(num_text))
+                                    
+                                    # Tentar método alternativo se não encontrou
+                                    if not numeros_atuais:
+                                        history_text = item.select_one('.history, .previous-results, .recent-numbers')
+                                        if history_text:
+                                            numeros_atuais = [int(n) for n in re.findall(r'\d+', history_text.text) if int(n) <= 36]
+                                    
+                                    if numeros_atuais:
+                                        logger.info(f"Extraídos números para {titulo}: {numeros_atuais}")
+                                        processar_roleta_com_numeros(titulo, numeros_atuais)
+                                        dados_extraidos = True
+                                        last_success_time = time.time()
+                                except Exception as e:
+                                    logger.error(f"Erro ao processar elemento de roleta: {str(e)}")
                         else:
-                            logger.warning(f"Falha ao carregar página {url}: Status {response.status_code}")
-                    except Exception as e:
-                        logger.error(f"Erro durante webscraping de {url}: {str(e)}")
+                            logger.warning(f"Nenhum elemento de roleta encontrado na página: {url}")
+                    else:
+                        logger.warning(f"Falha ao carregar página {url}: Status {response.status_code}")
+                except Exception as e:
+                    logger.error(f"Erro durante webscraping de {url}: {str(e)}")
             
             # PASSO 3: Se não conseguimos dados novos, buscar dados existentes do Supabase
             # (isso não é simulação, apenas busca dados reais anteriores)
