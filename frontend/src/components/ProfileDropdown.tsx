@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { 
   DropdownMenu,
@@ -63,7 +62,16 @@ const ProfileDropdown = () => {
           {/* Editar perfil */}
           <Dialog open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen}>
             <DialogTrigger asChild>
-              <DropdownMenuItem className="cursor-pointer flex items-center gap-2 focus:bg-[#262626] focus:text-white">
+              <DropdownMenuItem 
+                className="cursor-pointer flex items-center gap-2 focus:bg-[#262626] focus:text-white"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setIsEditProfileOpen(true);
+                }}
+                onSelect={(e) => {
+                  e.preventDefault();
+                }}
+              >
                 <User size={16} />
                 <span>Editar Perfil</span>
               </DropdownMenuItem>
@@ -100,7 +108,16 @@ const ProfileDropdown = () => {
           {/* Senha */}
           <Dialog open={isPasswordOpen} onOpenChange={setIsPasswordOpen}>
             <DialogTrigger asChild>
-              <DropdownMenuItem className="cursor-pointer flex items-center gap-2 focus:bg-[#262626] focus:text-white">
+              <DropdownMenuItem 
+                className="cursor-pointer flex items-center gap-2 focus:bg-[#262626] focus:text-white"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setIsPasswordOpen(true);
+                }}
+                onSelect={(e) => {
+                  e.preventDefault();
+                }}
+              >
                 <Lock size={16} />
                 <span>Alterar Senha</span>
               </DropdownMenuItem>
@@ -149,7 +166,16 @@ const ProfileDropdown = () => {
           {/* Depositar */}
           <Dialog open={isDepositOpen} onOpenChange={setIsDepositOpen}>
             <DialogTrigger asChild>
-              <DropdownMenuItem className="cursor-pointer flex items-center gap-2 focus:bg-[#262626] focus:text-white">
+              <DropdownMenuItem 
+                className="cursor-pointer flex items-center gap-2 focus:bg-[#262626] focus:text-white"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setIsDepositOpen(true);
+                }}
+                onSelect={(e) => {
+                  e.preventDefault();
+                }}
+              >
                 <CreditCard size={16} />
                 <span>Depositar</span>
               </DropdownMenuItem>
@@ -190,7 +216,16 @@ const ProfileDropdown = () => {
           {/* Sacar */}
           <Dialog open={isWithdrawOpen} onOpenChange={setIsWithdrawOpen}>
             <DialogTrigger asChild>
-              <DropdownMenuItem className="cursor-pointer flex items-center gap-2 focus:bg-[#262626] focus:text-white">
+              <DropdownMenuItem 
+                className="cursor-pointer flex items-center gap-2 focus:bg-[#262626] focus:text-white"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setIsWithdrawOpen(true);
+                }}
+                onSelect={(e) => {
+                  e.preventDefault();
+                }}
+              >
                 <Wallet size={16} />
                 <span>Sacar</span>
               </DropdownMenuItem>
