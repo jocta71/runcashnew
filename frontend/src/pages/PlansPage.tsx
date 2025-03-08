@@ -17,16 +17,10 @@ const PlansPage = () => {
   const { availablePlans, currentPlan, upgradePlan, loading } = useSubscription();
   const { user } = useAuth();
   const [selectedInterval, setSelectedInterval] = useState<'monthly' | 'annual'>('monthly');
-  const [processingPlanId, setProcessingPlanId] = useState<string | null>(null);
   const { toast } = useToast();
   
-  const handleSelectPlan = async (planId: string) => {
-    // Verificar se já estamos processando
-    if (processingPlanId) {
-      return; // Evitar múltiplos cliques
-    }
-    
-    // Se já for o plano atual
+  const handleSelectPlan = (planId: string) => {
+    // Se já for o plano atual, apenas mostrar mensagem
     if (currentPlan?.id === planId) {
       toast({
         title: "Plano já ativo",
@@ -35,23 +29,17 @@ const PlansPage = () => {
       return;
     }
     
-    // Marcar que começamos a processar
-    setProcessingPlanId(planId);
-    
-    // Mostrar toast e redirecionar imediatamente
+    // Mostrar toast
     toast({
       title: "Plano selecionado!",
       description: "Redirecionando para ativação..."
     });
     
-    // Redirecionamento direto sem espera para todos os tipos de plano
-    console.log(`Redirecionando para página de sucesso com plano: ${planId}`);
-    
-    // Usar redirecionamento imediato para evitar carregamento infinito
+    // Redirecionamento simples e direto
     if (planId === 'free') {
-      window.location.replace('/payment-success?free=true');
+      window.location.href = '/payment-success?free=true';
     } else {
-      window.location.replace(`/payment-success?session_id=sim_${Date.now()}`);
+      window.location.href = `/payment-success?session_id=sim_${Date.now()}`;
     }
   };
   
@@ -98,7 +86,6 @@ const PlansPage = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
         {availablePlans.map((plan) => {
           const isCurrentPlan = currentPlan?.id === plan.id;
-          const isProcessing = processingPlanId === plan.id;
           const displayPrice = selectedInterval === 'monthly' 
             ? plan.price 
             : getAnnualPrice(plan.price);
@@ -158,18 +145,9 @@ const PlansPage = () => {
                         : ''
                   }`}
                   onClick={() => handleSelectPlan(plan.id)}
-                  disabled={isCurrentPlan || isProcessing || loading}
+                  disabled={isCurrentPlan || loading}
                 >
-                  {isProcessing && plan.id === processingPlanId ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Processando...
-                    </>
-                  ) : isCurrentPlan ? (
-                    'Plano Atual'
-                  ) : (
-                    'Selecionar Plano'
-                  )}
+                  {isCurrentPlan ? 'Plano Atual' : 'Selecionar Plano'}
                 </Button>
               </div>
               
