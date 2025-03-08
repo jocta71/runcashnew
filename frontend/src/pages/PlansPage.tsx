@@ -21,12 +21,9 @@ const PlansPage = () => {
   const { toast } = useToast();
   
   const handleSelectPlan = async (planId: string) => {
-    if (loading || !user || processingPlanId) {
-      toast({
-        title: "Processando",
-        description: "Aguarde enquanto processamos sua solicitação.",
-      });
-      return;
+    // Verificar se já estamos processando
+    if (processingPlanId) {
+      return; // Evitar múltiplos cliques
     }
     
     // Se já for o plano atual
@@ -38,49 +35,26 @@ const PlansPage = () => {
       return;
     }
     
-    try {
-      setProcessingPlanId(planId);
-      
-      toast({
-        title: "Processando sua solicitação",
-        description: "Aguarde um momento enquanto processamos seu pedido...",
-      });
-      
-      if (planId === 'free') {
-        // Para o plano gratuito, usar a função existente upgradePlan
-        await upgradePlan(planId);
-        toast({
-          title: "Plano gratuito ativado",
-          description: "Você agora está usando o plano gratuito.",
-        });
-      } else {
-        // Para planos pagos, usar o modo simulado diretamente
-        console.log(`Iniciando processo simulado para o plano: ${planId}`);
-        
-        // Simular um processamento
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // Redirecionar para a página de sucesso
-        window.location.href = `/payment-success?session_id=sim_${Date.now()}`;
-      }
-    } catch (error: any) {
-      console.error("Erro ao atualizar plano:", error);
-      
-      toast({
-        title: "Ocorreu um erro",
-        description: "Estamos redirecionando você para concluir sua assinatura...",
-      });
-      
-      // Mesmo em caso de erro, redirecionamos para sucesso após um breve delay
-      setTimeout(() => {
-        window.location.href = `/payment-success?session_id=sim_${Date.now()}`;
-      }, 1500);
-    } finally {
-      // Limpar o estado de processamento
-      setTimeout(() => {
-        setProcessingPlanId(null);
-      }, 500);
+    // Marcar que começamos a processar
+    setProcessingPlanId(planId);
+    
+    // Mostrar toast apenas uma vez
+    toast({
+      title: "Ativando plano",
+      description: "Aguarde um momento, você será redirecionado..."
+    });
+    
+    // Plano gratuito
+    if (planId === 'free') {
+      // Redirecionar sem fazer nada
+      window.location.href = `/payment-success?free=true`;
+      return;
     }
+    
+    // Para planos pagos - redirecionar diretamente
+    setTimeout(() => {
+      window.location.href = `/payment-success?session_id=sim_${Date.now()}`;
+    }, 1500);
   };
   
   // Calcular preço anual (com desconto)
@@ -188,8 +162,16 @@ const PlansPage = () => {
                   onClick={() => handleSelectPlan(plan.id)}
                   disabled={isCurrentPlan || isProcessing || loading}
                 >
-                  {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {isCurrentPlan ? 'Plano Atual' : 'Selecionar Plano'}
+                  {isProcessing && plan.id === processingPlanId ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Processando...
+                    </>
+                  ) : isCurrentPlan ? (
+                    'Plano Atual'
+                  ) : (
+                    'Selecionar Plano'
+                  )}
                 </Button>
               </div>
               
