@@ -89,8 +89,12 @@ def scrape_api_apenas():
     # Função para extrair dados da página
     def extrair_dados_da_pagina():
         try:
-            logger.info(f"Fazendo request para {CASINO_URL}")
-            response = requests.get(CASINO_URL, headers=headers, timeout=15)
+            url = CASINO_URL.strip()  # Remover qualquer espaço em branco
+            if url.startswith('='):
+                url = url[1:]  # Remover o sinal de igual se existir
+            
+            logger.info(f"Fazendo request para URL: '{url}'")
+            response = requests.get(url, headers=headers, timeout=15)
             
             if response.status_code != 200:
                 logger.error(f"Erro ao acessar o site: Status {response.status_code}")

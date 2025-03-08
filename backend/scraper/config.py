@@ -28,7 +28,11 @@ SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 
 # URL do cassino
-CASINO_URL = os.getenv('CASINO_URL', 'https://es.888casino.com/live-casino/#filters=live-roulette')
+casino_url_env = os.getenv('CASINO_URL', 'https://es.888casino.com/live-casino/#filters=live-roulette')
+# Sanitizar a URL removendo espaços e símbolos indesejados
+CASINO_URL = casino_url_env.strip()
+if CASINO_URL.startswith('='):
+    CASINO_URL = CASINO_URL[1:]
 
 # Função para verificar se uma roleta é permitida
 def roleta_permitida_por_id(id_roleta):
