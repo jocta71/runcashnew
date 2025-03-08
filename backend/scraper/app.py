@@ -17,7 +17,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from webdriver_manager.chrome import ChromeDriverManager
 from supabase import create_client
 
-from config import CASINO_URL, SUPABASE_URL, SUPABASE_KEY, roleta_permitida_por_id, logger, MAX_CICLOS
+from config import CASINO_URL, SUPABASE_URL, SUPABASE_KEY, roleta_permitida_por_id, logger, MAX_CICLOS, CASINO_API_URLS
 from strategy_analyzer import StrategyAnalyzer
 
 # Detectar se estamos no Railway
@@ -194,93 +194,114 @@ def atualizar_supabase(dados_roletas):
         logger.error(f"Erro ao atualizar dados no Supabase: {str(e)}")
         return False
 
-# Função para simular scraping usando a API - modo alternativo para Railway
 def scrape_api_apenas():
-    """Versão simplificada do scraper que usa apenas a API do cassino"""
+    """Versão do scraper que usa requisições HTTP diretas para obter dados reais"""
     logger.info("Iniciando scraper em modo API (sem navegador)")
     
-    try:
-        # Em um cenário real, aqui faríamos chamadas API diretas para o serviço
-        # do cassino, mas como exemplo, vamos inserir dados de exemplo
-        
-        dados_mesas = {
-            "Roleta Brasileira": {
-                "id": "roleta-br-1",
-                "numeros": [5, 12, 33, 7, 19, 21, 0, 14]
-            },
-            "Roleta Europeia": {
-                "id": "roleta-eu-1",
-                "numeros": [7, 18, 4, 22, 9, 15, 33, 11]
-            }
-        }
-        
-        # Dicionário para armazenar o último número visto para cada roleta
-        ultimos_numeros = {}
-        
-        # Loop contínuo para simulação
-        ciclo = 1
-        while True:
-            logger.info(f"Ciclo de verificação API {ciclo}")
-            
-            # Dicionário para armazenar os dados atualizados
-            dados_atualizados = {}
-            
-            # Em um cenário real, aqui faríamos a chamada para a API
-            # Neste exemplo, estamos apenas simulando dados
-            for titulo_roleta, dados in dados_mesas.items():
-                try:
-                    id_roleta = dados["id"]
-                    
-                    # Verificar se a roleta está na lista de permitidas
-                    if not roleta_permitida_por_id(id_roleta):
-                        continue
-                    
-                    # Gerar um número aleatório para simular um novo número a cada 10 ciclos
-                    if ciclo % 10 == 0:
-                        novo_numero = random.randint(0, 36)
-                        dados["numeros"].insert(0, novo_numero)
-                        dados["numeros"] = dados["numeros"][:20]  # Manter apenas os 20 mais recentes
-                    
-                    # Verificar se o número mudou desde a última verificação
-                    numero_atual = dados["numeros"][0] if dados["numeros"] else None
-                    ultimo_numero = ultimos_numeros.get(titulo_roleta)
-                    
-                    if numero_atual and numero_atual != ultimo_numero:
-                        logger.info(f"NOVO NÚMERO para {titulo_roleta}: {numero_atual} (anterior: {ultimo_numero})")
-                        
-                        # Atualizar o último número visto
-                        ultimos_numeros[titulo_roleta] = numero_atual
-                        
-                        # Inicializar analisador para a roleta se não existir
-                        if titulo_roleta not in analisadores_mesas:
-                            analisadores_mesas[titulo_roleta] = StrategyAnalyzer(titulo_roleta)
-                        
-                        # Adicionar novo número ao analisador
-                        novos_numeros = [str(numero_atual)]
-                        if analisadores_mesas[titulo_roleta].add_numbers(novos_numeros):
-                            logger.info(f"Novo número adicionado para {titulo_roleta}: {novos_numeros}")
-                        
-                        # Adicionar dados da mesa ao dicionário de dados atualizados
-                        dados_analisador = analisadores_mesas[titulo_roleta].get_data()
-                        dados_analisador["id"] = id_roleta  # Adicionar o ID da roleta aos dados
-                        dados_atualizados[titulo_roleta] = dados_analisador
-                    else:
-                        logger.debug(f"Sem novos números para {titulo_roleta}")
-                
-                except Exception as e:
-                    logger.error(f"Erro ao processar roleta em modo API: {str(e)}")
-            
-            # Atualizar dados no Supabase somente se houver novos dados
-            if dados_atualizados:
-                atualizar_supabase(dados_atualizados)
-            
-            # Pequena pausa antes da próxima verificação
-            time.sleep(VERIFICACAO_INTERVALO)
-            
-            ciclo += 1
+    # Definir alguns headers para parecer um navegador real
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": CASINO_URL,
+        "Origin": CASINO_URL
+    }
     
-    except Exception as e:
-        logger.error(f"Erro no loop de scraping API: {str(e)}")
+    # Usar os endpoints definidos na configuração
+    roleta_endpoints = CASINO_API_URLS
+    
+    # Função para extrair dados de uma roleta específica
+    def obter_dados_roleta(nome_roleta, endpoint_url):
+        try:
+            logger.info(f"Obtendo dados para {nome_roleta} de {endpoint_url}")
+            response = requests.get(endpoint_url, headers=headers, timeout=10)
+            
+            if response.status_code != 200:
+                logger.error(f"Erro ao obter dados da roleta {nome_roleta}: Status {response.status_code}")
+                return None
+                
+            dados = response.json()
+            return dados
+        except Exception as e:
+            logger.error(f"Exceção ao obter dados da roleta {nome_roleta}: {str(e)}")
+            return None
+    
+    # Dicionário para armazenar o último número visto para cada roleta
+    ultimos_numeros = {}
+    
+    # Loop contínuo para monitoramento em tempo real
+    ciclo = 1
+    while True:
+        logger.info(f"Ciclo de verificação API {ciclo}")
+        
+        # Dicionário para armazenar os dados atualizados
+        dados_atualizados = {}
+        
+        # Verificar cada roleta registrada
+        for titulo_roleta, endpoint in roleta_endpoints.items():
+            try:
+                # Obter dados da API real
+                dados_api = obter_dados_roleta(titulo_roleta, endpoint)
+                
+                # Se não conseguiu obter dados, pular esta roleta
+                if not dados_api:
+                    continue
+                
+                # Extrair informações relevantes (ajuste conforme a estrutura real da API)
+                id_roleta = dados_api.get("id", f"roleta-{hash(titulo_roleta) % 10000}")
+                
+                # Verificar se a roleta está na lista de permitidas
+                if not roleta_permitida_por_id(id_roleta):
+                    continue
+                
+                # Extrair os números da roleta (ajuste conforme a estrutura real da API)
+                numeros = dados_api.get("numeros", [])
+                
+                if not numeros:
+                    logger.warning(f"Nenhum número encontrado para {titulo_roleta}")
+                    continue
+                
+                # Verificar se o número mudou desde a última verificação
+                numero_atual = str(numeros[0]) if numeros else None
+                ultimo_numero = ultimos_numeros.get(titulo_roleta)
+                
+                if numero_atual and numero_atual != ultimo_numero:
+                    logger.info(f"NOVO NÚMERO para {titulo_roleta}: {numero_atual} (anterior: {ultimo_numero})")
+                    
+                    # Atualizar o último número visto
+                    ultimos_numeros[titulo_roleta] = numero_atual
+                    
+                    # Inicializar analisador para a roleta se não existir
+                    if titulo_roleta not in analisadores_mesas:
+                        analisadores_mesas[titulo_roleta] = StrategyAnalyzer(titulo_roleta)
+                    
+                    # Adicionar novo número ao analisador
+                    if analisadores_mesas[titulo_roleta].add_numbers([numero_atual]):
+                        logger.info(f"Novo número adicionado para {titulo_roleta}: {numero_atual}")
+                    
+                    # Adicionar dados da mesa ao dicionário de dados atualizados
+                    dados_analisador = analisadores_mesas[titulo_roleta].get_data()
+                    dados_analisador["id"] = id_roleta  # Adicionar o ID da roleta aos dados
+                    dados_atualizados[titulo_roleta] = dados_analisador
+                else:
+                    logger.debug(f"Sem novos números para {titulo_roleta}")
+            
+            except Exception as e:
+                logger.error(f"Erro ao processar roleta {titulo_roleta}: {str(e)}")
+        
+        # Atualizar dados no Supabase somente se houver novos dados
+        if dados_atualizados:
+            atualizar_supabase(dados_atualizados)
+        
+        # Pequena pausa antes da próxima verificação
+        time.sleep(VERIFICACAO_INTERVALO)
+        
+        # Periodicamente limpar caches para evitar problemas de memória
+        if ciclo % 100 == 0:
+            logger.info("Limpando caches temporários")
+            # Limpar caches aqui, se necessário
+        
+        ciclo += 1
 
 def scrape_roletas():
     """Função principal que realiza o scraping das roletas em loop contínuo"""
