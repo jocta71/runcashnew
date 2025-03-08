@@ -1,6 +1,6 @@
 import os
-from dotenv import load_dotenv
 import logging
+from dotenv import load_dotenv
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -27,14 +27,8 @@ MAX_CICLOS = 0
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 
-# URL base do cassino para navegação Selenium
-CASINO_URL = os.getenv('CASINO_URL', 'https://www.bugabet.com/casino')
-
-# URLs das APIs do cassino (para acesso direto sem Selenium)
-CASINO_API_URLS = {
-    "Roleta Brasileira": os.getenv('CASINO_API_BR', 'https://api.bugabet.com/api/v1/data/roulette/br'),
-    "Roleta Europeia": os.getenv('CASINO_API_EU', 'https://api.bugabet.com/api/v1/data/roulette/eu')
-}
+# URL do cassino
+CASINO_URL = os.getenv('CASINO_URL', 'https://es.888casino.com/live-casino/#filters=live-roulette')
 
 # Função para verificar se uma roleta é permitida
 def roleta_permitida_por_id(id_roleta):

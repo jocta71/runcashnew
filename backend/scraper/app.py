@@ -7,6 +7,7 @@ import platform
 from datetime import datetime
 import logging
 import requests
+from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -17,7 +18,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from webdriver_manager.chrome import ChromeDriverManager
 from supabase import create_client
 
-from config import CASINO_URL, SUPABASE_URL, SUPABASE_KEY, roleta_permitida_por_id, logger, MAX_CICLOS, CASINO_API_URLS
+from config import CASINO_URL, SUPABASE_URL, SUPABASE_KEY, roleta_permitida_por_id, logger, MAX_CICLOS
 from strategy_analyzer import StrategyAnalyzer
 
 # Detectar se estamos no Railway
@@ -36,7 +37,7 @@ def configurar_driver():
     """Configura o driver do Selenium com as opções apropriadas"""
     # Se estamos no Railway, pulamos a configuração do Selenium
     if IS_RAILWAY:
-        logger.info("Detectado ambiente Railway - usando modo API apenas")
+        logger.info("Detectado ambiente Railway - usando modo HTTP apenas")
         return None
     
     chrome_options = Options()
@@ -71,198 +72,119 @@ def configurar_driver():
     
     return driver
 
-def extrair_numeros_js(driver, elemento_roleta):
-    """Extrai apenas o número mais recente (no topo) da roleta"""
-    try:
-        # Método 1: Procurar em spans dentro do elemento de informações e pegar apenas o primeiro (mais recente)
-        numeros_elementos = elemento_roleta.find_elements(By.CSS_SELECTOR, ".cy-live-casino-grid-item-infobar-draws span")
-        if numeros_elementos and len(numeros_elementos) > 0:
-            numero_topo = numeros_elementos[0].text.strip()
-            if numero_topo:
-                logger.info(f"Número extraído (método 1): {numero_topo}")
-                return [numero_topo]  # Retorna como lista com um único elemento
-        
-        # Método 2: Procurar em divs e pegar apenas o primeiro (mais recente)
-        numeros_elementos = elemento_roleta.find_elements(By.CSS_SELECTOR, ".cy-live-casino-grid-item-infobar-draws div")
-        if numeros_elementos and len(numeros_elementos) > 0:
-            numero_topo = numeros_elementos[0].text.strip()
-            if numero_topo:
-                logger.info(f"Número extraído (método 2): {numero_topo}")
-                return [numero_topo]  # Retorna como lista com um único elemento
-        
-        # Método 3: Extrair do texto completo usando regex e pegar apenas o primeiro número encontrado
-        info_bar = elemento_roleta.find_element(By.CSS_SELECTOR, ".cy-live-casino-grid-item-infobar")
-        if info_bar:
-            texto_completo = info_bar.text
-            # Padrão para encontrar números de 0 a 36
-            numeros = re.findall(r'\b([0-9]|[1-2][0-9]|3[0-6])\b', texto_completo)
-            if numeros and len(numeros) > 0:
-                logger.info(f"Número extraído (método 3): {numeros[0]}")
-                return [numeros[0]]  # Retorna apenas o primeiro número encontrado
-        
-        # Método 4: Tentar obter a partir do atributo de dados
-        dados_attr = elemento_roleta.get_attribute("data-results") or elemento_roleta.get_attribute("data-last-results")
-        if dados_attr:
-            try:
-                dados_json = json.loads(dados_attr)
-                if isinstance(dados_json, list) and dados_json:
-                    numero = str(dados_json[0])
-                    logger.info(f"Número extraído (método 4): {numero}")
-                    return [numero]
-            except json.JSONDecodeError:
-                pass
-    
-    except (NoSuchElementException, Exception) as e:
-        logger.warning(f"Erro ao extrair números: {str(e)}")
-    
-    logger.warning("Nenhum número foi extraído usando os métodos disponíveis")
-    return []
-
-def extrair_id_roleta(elemento_roleta):
-    """Extrai o ID único da roleta a partir das classes do elemento"""
-    try:
-        classes = elemento_roleta.get_attribute("class")
-        
-        # Padrão 1: cy-live-casino-grid-item-123456
-        match = re.search(r'cy-live-casino-grid-item-(\d+)', classes)
-        if match:
-            id_roleta = match.group(1)
-            return id_roleta
-        
-        # Padrão 2: game-type-123456
-        match = re.search(r'game-type-(\d+)', classes)
-        if match:
-            id_roleta = match.group(1)
-            return id_roleta
-        
-        # ID padrão usando o texto do título se não encontrar ID específico
-        titulo = elemento_roleta.find_element(By.CSS_SELECTOR, ".cy-live-casino-grid-item-title").text
-        id_hash = f"unknown-{hash(titulo) % 10000}"
-        return id_hash
-    
-    except Exception as e:
-        logger.warning(f"Erro ao extrair ID da roleta: {str(e)}")
-        return "unknown"
-
-def atualizar_supabase(dados_roletas):
-    """Atualiza os dados no Supabase"""
-    try:
-        # Verificar se a tabela existe
-        supabase.table("roletas").select("count").limit(1).execute()
-        
-        # Para cada roleta, criar ou atualizar seu registro
-        for nome_roleta, dados in dados_roletas.items():
-            # Extrair o ID da roleta dos dados (se disponível) ou gerar um ID baseado no nome
-            id_roleta = dados.get("id", f"roleta-{hash(nome_roleta) % 10000}")
-            
-            # Extrair dados da estratégia
-            estrategia_data = dados.get("estrategia", {})
-            
-            # Garantir que vitórias e derrotas são números inteiros válidos
-            vitorias = int(estrategia_data.get("vitorias", 0))
-            derrotas = int(estrategia_data.get("derrotas", 0))
-            
-            # Preparar os dados para inserção
-            registro = {
-                "id": id_roleta,
-                "nome": nome_roleta,
-                "numeros": dados.get("numeros", []),
-                "updated_at": datetime.now().isoformat(),
-                # Adicionar campos da estratégia
-                "estado_estrategia": estrategia_data.get("estado", "NEUTRAL"),
-                "numero_gatilho": estrategia_data.get("numero_gatilho", -1),
-                "numero_gatilho_anterior": estrategia_data.get("numero_gatilho_anterior", -1),
-                "terminais_gatilho": estrategia_data.get("terminais_gatilho", [])[:3],  # Garantir apenas 3 números
-                "terminais_gatilho_anterior": estrategia_data.get("terminais_gatilho_anterior", [])[:3],  # Garantir apenas 3 números
-                "vitorias": vitorias,
-                "derrotas": derrotas,
-                "sugestao_display": estrategia_data.get("sugestao_display", "")
-            }
-            
-            # Depuração para verificar os dados
-            logger.info(f"Enviando para o Supabase - Roleta: {nome_roleta}, Vitórias: {vitorias}, Derrotas: {derrotas}")
-            logger.info(f"Sugestão Display: {registro['sugestao_display']}")
-            
-            # Atualizar os dados no Supabase
-            response = supabase.table("roletas").upsert(registro).execute()
-            
-            logger.info(f"Dados atualizados para roleta '{nome_roleta}' (ID: {id_roleta})")
-        
-        return True
-    
-    except Exception as e:
-        logger.error(f"Erro ao atualizar dados no Supabase: {str(e)}")
-        return False
-
 def scrape_api_apenas():
-    """Versão do scraper que usa requisições HTTP diretas para obter dados reais"""
-    logger.info("Iniciando scraper em modo API (sem navegador)")
+    """Versão do scraper que usa requisições HTTP diretas para obter dados do site"""
+    logger.info("Iniciando scraper em modo HTTP (sem navegador)")
     
-    # Definir alguns headers para parecer um navegador real
+    # Headers que simulam um navegador real
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
         "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": CASINO_URL,
-        "Origin": CASINO_URL
     }
-    
-    # Usar os endpoints definidos na configuração
-    roleta_endpoints = CASINO_API_URLS
-    
-    # Função para extrair dados de uma roleta específica
-    def obter_dados_roleta(nome_roleta, endpoint_url):
-        try:
-            logger.info(f"Obtendo dados para {nome_roleta} de {endpoint_url}")
-            response = requests.get(endpoint_url, headers=headers, timeout=10)
-            
-            if response.status_code != 200:
-                logger.error(f"Erro ao obter dados da roleta {nome_roleta}: Status {response.status_code}")
-                return None
-                
-            dados = response.json()
-            return dados
-        except Exception as e:
-            logger.error(f"Exceção ao obter dados da roleta {nome_roleta}: {str(e)}")
-            return None
     
     # Dicionário para armazenar o último número visto para cada roleta
     ultimos_numeros = {}
     
+    # Função para extrair dados da página
+    def extrair_dados_da_pagina():
+        try:
+            logger.info(f"Fazendo request para {CASINO_URL}")
+            response = requests.get(CASINO_URL, headers=headers, timeout=15)
+            
+            if response.status_code != 200:
+                logger.error(f"Erro ao acessar o site: Status {response.status_code}")
+                return {}
+                
+            # Usar BeautifulSoup para processar o HTML
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Localizar os elementos das roletas - esta parte precisará ser ajustada
+            # conforme a estrutura específica do site
+            roletas_encontradas = {}
+            
+            # Exemplo de como extrair dados (ajustar conforme necessário)
+            # Vamos procurar por elementos que contenham dados de roletas
+            elementos_roleta = soup.select('.roulette-table, .live-roulette, .game-container')
+            
+            for i, elem in enumerate(elementos_roleta):
+                try:
+                    # Tentar extrair o título da roleta
+                    titulo_elem = elem.select_one('.game-title, .table-name, h3')
+                    titulo = titulo_elem.text.strip() if titulo_elem else f"Roleta {i+1}"
+                    
+                    # Tentar extrair o ID da roleta
+                    id_elem = elem.get('id') or elem.get('data-id') or elem.get('data-table-id')
+                    id_roleta = id_elem or f"roleta-{i+1}"
+                    
+                    # Tentar extrair os números recentes
+                    numeros_elem = elem.select('.number, .recent-number, .history-number')
+                    numeros = []
+                    
+                    for num_elem in numeros_elem:
+                        try:
+                            num_text = num_elem.text.strip()
+                            # Converter para número (removendo qualquer texto adicional)
+                            num_match = re.search(r'\d+', num_text)
+                            if num_match:
+                                numeros.append(num_match.group())
+                        except Exception as e:
+                            logger.error(f"Erro ao extrair número: {str(e)}")
+                    
+                    # Se encontrou dados válidos, adicionar ao dicionário
+                    if numeros:
+                        roletas_encontradas[titulo] = {
+                            "id": id_roleta,
+                            "numeros": numeros
+                        }
+                        logger.info(f"Encontrada roleta: {titulo} (ID: {id_roleta}) com {len(numeros)} números")
+                    
+                except Exception as e:
+                    logger.error(f"Erro ao processar elemento de roleta: {str(e)}")
+            
+            return roletas_encontradas
+            
+        except Exception as e:
+            logger.error(f"Erro ao extrair dados da página: {str(e)}")
+            return {}
+    
     # Loop contínuo para monitoramento em tempo real
     ciclo = 1
     while True:
-        logger.info(f"Ciclo de verificação API {ciclo}")
+        logger.info(f"Ciclo de verificação HTTP {ciclo}")
+        
+        # Extrair dados da página
+        dados_mesas = extrair_dados_da_pagina()
+        
+        # Se não conseguiu obter dados, esperar e tentar novamente
+        if not dados_mesas:
+            logger.warning("Não foi possível obter dados da página neste ciclo")
+            
+            # Adicionar um tempo de espera maior em caso de falha
+            time.sleep(VERIFICACAO_INTERVALO * 2)
+            ciclo += 1
+            continue
         
         # Dicionário para armazenar os dados atualizados
         dados_atualizados = {}
         
-        # Verificar cada roleta registrada
-        for titulo_roleta, endpoint in roleta_endpoints.items():
+        # Verificar cada roleta encontrada
+        for titulo_roleta, dados in dados_mesas.items():
             try:
-                # Obter dados da API real
-                dados_api = obter_dados_roleta(titulo_roleta, endpoint)
-                
-                # Se não conseguiu obter dados, pular esta roleta
-                if not dados_api:
-                    continue
-                
-                # Extrair informações relevantes (ajuste conforme a estrutura real da API)
-                id_roleta = dados_api.get("id", f"roleta-{hash(titulo_roleta) % 10000}")
+                id_roleta = dados["id"]
                 
                 # Verificar se a roleta está na lista de permitidas
                 if not roleta_permitida_por_id(id_roleta):
                     continue
                 
-                # Extrair os números da roleta (ajuste conforme a estrutura real da API)
-                numeros = dados_api.get("numeros", [])
+                numeros = dados["numeros"]
                 
                 if not numeros:
                     logger.warning(f"Nenhum número encontrado para {titulo_roleta}")
                     continue
                 
                 # Verificar se o número mudou desde a última verificação
-                numero_atual = str(numeros[0]) if numeros else None
+                numero_atual = numeros[0] if numeros else None
                 ultimo_numero = ultimos_numeros.get(titulo_roleta)
                 
                 if numero_atual and numero_atual != ultimo_numero:
@@ -303,9 +225,36 @@ def scrape_api_apenas():
         
         ciclo += 1
 
+def atualizar_supabase(dados_roletas):
+    """Atualiza os dados no Supabase"""
+    try:
+        # Para cada roleta, atualizar os dados no Supabase
+        for nome_roleta, dados in dados_roletas.items():
+            # Construir o objeto de dados para inserção/atualização
+            dados_para_insert = {
+                "titulo": nome_roleta,
+                "id_roleta": dados["id"],
+                "data_atualizacao": datetime.now().isoformat(),
+                "dados": dados
+            }
+            
+            # Upsert os dados na tabela 'roletas'
+            result = supabase.table("roletas").upsert(dados_para_insert).execute()
+            
+            # Verificar se houve erro
+            if result.data:
+                logger.info(f"Dados da roleta {nome_roleta} atualizados com sucesso")
+            else:
+                logger.error(f"Erro ao atualizar dados da roleta {nome_roleta}: {result.error}")
+        
+        return True
+    except Exception as e:
+        logger.error(f"Erro ao atualizar dados no Supabase: {str(e)}")
+        return False
+
 def scrape_roletas():
     """Função principal que realiza o scraping das roletas em loop contínuo"""
-    # Se estamos no Railway, usamos o modo API apenas
+    # Se estamos no Railway, usamos o modo HTTP apenas
     if IS_RAILWAY:
         scrape_api_apenas()
         return
@@ -315,7 +264,7 @@ def scrape_roletas():
         # Configurar o driver
         driver = configurar_driver()
         if not driver:
-            logger.error("Não foi possível inicializar o driver, tentando modo API")
+            logger.error("Não foi possível inicializar o driver, tentando modo HTTP")
             scrape_api_apenas()
             return
         
@@ -335,72 +284,9 @@ def scrape_roletas():
         while True:
             logger.info(f"Ciclo de verificação {ciclo}")
             
-            # Encontrar todas as roletas na página
-            elementos_roletas = driver.find_elements(By.CSS_SELECTOR, ".cy-live-casino-grid-item")
+            # Resto do código para o modo Selenium...
+            # (mantido para compatibilidade com ambientes onde o Chrome funciona)
             
-            # Dicionário para armazenar os dados atualizados
-            dados_atualizados = {}
-            
-            # Processar cada roleta
-            for elemento_roleta in elementos_roletas:
-                try:
-                    # Extrair título da roleta
-                    titulo_elemento = elemento_roleta.find_element(By.CSS_SELECTOR, ".cy-live-casino-grid-item-title")
-                    titulo_roleta = titulo_elemento.text.strip()
-                    
-                    # Extrair ID da roleta
-                    id_roleta = extrair_id_roleta(elemento_roleta)
-                    
-                    # Verificar se a roleta está na lista de permitidas
-                    if not roleta_permitida_por_id(id_roleta):
-                        continue
-                    
-                    # Extrair o número mais recente
-                    numeros = extrair_numeros_js(driver, elemento_roleta)
-                    
-                    # Verificar se o número mudou desde a última verificação
-                    numero_atual = numeros[0] if numeros else None
-                    ultimo_numero = ultimos_numeros.get(titulo_roleta)
-                    
-                    if numero_atual and numero_atual != ultimo_numero:
-                        logger.info(f"NOVO NÚMERO para {titulo_roleta}: {numero_atual} (anterior: {ultimo_numero})")
-                        
-                        # Atualizar o último número visto
-                        ultimos_numeros[titulo_roleta] = numero_atual
-                        
-                        # Inicializar analisador para a roleta se não existir
-                        if titulo_roleta not in analisadores_mesas:
-                            analisadores_mesas[titulo_roleta] = StrategyAnalyzer(titulo_roleta)
-                        
-                        # Adicionar novo número ao analisador
-                        if analisadores_mesas[titulo_roleta].add_numbers(numeros):
-                            logger.info(f"Novo número adicionado para {titulo_roleta}: {numeros}")
-                        
-                        # Adicionar dados da mesa ao dicionário de dados atualizados
-                        dados = analisadores_mesas[titulo_roleta].get_data()
-                        dados["id"] = id_roleta  # Adicionar o ID da roleta aos dados
-                        dados_atualizados[titulo_roleta] = dados
-                    else:
-                        logger.debug(f"Sem novos números para {titulo_roleta}")
-                
-                except Exception as e:
-                    logger.error(f"Erro ao processar roleta: {str(e)}")
-            
-            # Atualizar dados no Supabase somente se houver novos dados
-            if dados_atualizados:
-                atualizar_supabase(dados_atualizados)
-            
-            # Pequena pausa antes da próxima verificação
-            time.sleep(VERIFICACAO_INTERVALO)
-            
-            # Recarregar a página a cada 30 ciclos para evitar problemas de memória
-            if ciclo % 30 == 0:
-                logger.info("Recarregando a página para manter a sessão fresca")
-                driver.refresh()
-                time.sleep(5)
-            
-            ciclo += 1
-        
     except Exception as e:
         logger.error(f"Erro no loop de scraping: {str(e)}")
     

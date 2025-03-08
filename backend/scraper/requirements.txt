@@ -6,3 +6,4 @@ requests==2.31.0
 schedule==1.2.1
 gunicorn==21.2.0
 httpx==0.24.1
+beautifulsoup4==4.12.2
