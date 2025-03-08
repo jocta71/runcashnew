@@ -8,25 +8,51 @@ import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/AuthPage";
 import RouletteDetailsPage from "./pages/RouletteDetailsPage";
 import { AuthProvider } from "./context/AuthContext";
+import { SubscriptionProvider } from "./context/SubscriptionContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+import AuthRoute from "./components/AuthRoute";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/auth" element={<AuthPage />} />
-            <Route path="/roulette/:rouletteId" element={<RouletteDetailsPage />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
+      <SubscriptionProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              {/* Rota pública - apenas para não-autenticados */}
+              <Route path="/auth" element={
+                <AuthRoute>
+                  <AuthPage />
+                </AuthRoute>
+              } />
+              
+              {/* Rotas protegidas - apenas para usuários autenticados */}
+              <Route path="/" element={
+                <ProtectedRoute>
+                  <Index />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/roulette/:rouletteId" element={
+                <ProtectedRoute>
+                  <RouletteDetailsPage />
+                </ProtectedRoute>
+              } />
+              
+              {/* Rota para página não encontrada - também protegida */}
+              <Route path="*" element={
+                <ProtectedRoute>
+                  <NotFound />
+                </ProtectedRoute>
+              } />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </SubscriptionProvider>
     </AuthProvider>
   </QueryClientProvider>
 );

@@ -6,7 +6,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export type Database = {
+export interface Database {
   public: {
     Tables: {
       recent_numbers: {
@@ -32,6 +32,55 @@ export type Database = {
           timestamp?: string
         }
         Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          id: string
+          user_id: string
+          plan_id: string
+          plan_type: string
+          start_date: string
+          end_date: string | null
+          status: 'active' | 'canceled' | 'expired' | 'trial'
+          payment_method?: string
+          next_billing_date?: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          plan_id: string
+          plan_type: string
+          start_date: string
+          end_date?: string | null
+          status: 'active' | 'canceled' | 'expired' | 'trial'
+          payment_method?: string
+          next_billing_date?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          plan_id?: string
+          plan_type?: string
+          start_date?: string
+          end_date?: string | null
+          status?: 'active' | 'canceled' | 'expired' | 'trial'
+          payment_method?: string
+          next_billing_date?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
     }
     Views: {
