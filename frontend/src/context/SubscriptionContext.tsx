@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Plan, PlanType, UserSubscription } from '@/types/plans';
 import { useAuth } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { getStripeClient } from '@/integrations/stripe/client';
 
 // Lista de planos disponíveis
 export const availablePlans: Plan[] = [
@@ -86,6 +87,7 @@ interface SubscriptionContextType {
   hasFeatureAccess: (featureId: string) => boolean;
   upgradePlan: (planId: string) => Promise<void>;
   cancelSubscription: () => Promise<void>;
+  loadUserSubscription: () => Promise<void>;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
@@ -97,65 +99,66 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [currentPlan, setCurrentPlan] = useState<Plan | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Carrega a assinatura do usuário quando ele faz login
-  useEffect(() => {
-    const loadUserSubscription = async () => {
-      if (!user) {
-        setCurrentSubscription(null);
-        setCurrentPlan(null);
-        setLoading(false);
-        return;
-      }
+  // Função para carregar a assinatura do usuário do Supabase
+  const loadUserSubscription = async () => {
+    if (!user) {
+      setCurrentSubscription(null);
+      setCurrentPlan(availablePlans.find(plan => plan.type === PlanType.FREE) || null);
+      setLoading(false);
+      return;
+    }
 
-      setLoading(true);
-      try {
-        // Buscar a assinatura do usuário no Supabase
-        const { data, error } = await supabase
-          .from('subscriptions')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-          .single();
+    setLoading(true);
+    try {
+      // Buscar a assinatura do usuário no Supabase
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .single();
 
-        if (error) {
-          console.error('Erro ao carregar assinatura:', error);
-          // Se não encontrar assinatura, definir o plano gratuito como padrão
-          setCurrentSubscription(null);
-          setCurrentPlan(availablePlans.find(plan => plan.type === PlanType.FREE) || null);
-        } else if (data) {
-          // Converter dados do banco para o formato da interface
-          const subscription: UserSubscription = {
-            id: data.id,
-            userId: data.user_id,
-            planId: data.plan_id,
-            planType: data.plan_type as PlanType,
-            startDate: new Date(data.start_date),
-            endDate: data.end_date ? new Date(data.end_date) : null,
-            status: data.status,
-            paymentMethod: data.payment_method,
-            nextBillingDate: data.next_billing_date ? new Date(data.next_billing_date) : undefined
-          };
-          
-          setCurrentSubscription(subscription);
-          
-          // Encontrar o plano correspondente
-          const plan = availablePlans.find(p => p.id === subscription.planId);
-          setCurrentPlan(plan || availablePlans.find(p => p.type === PlanType.FREE) || null);
-        } else {
-          // Se não encontrar assinatura, definir o plano gratuito como padrão
-          setCurrentSubscription(null);
-          setCurrentPlan(availablePlans.find(plan => plan.type === PlanType.FREE) || null);
-        }
-      } catch (err) {
-        console.error('Erro ao carregar dados da assinatura:', err);
-        // Em caso de erro, definir o plano gratuito como padrão
+      if (error) {
+        console.error('Erro ao carregar assinatura:', error);
+        // Se não encontrar assinatura, definir o plano gratuito como padrão
         setCurrentSubscription(null);
         setCurrentPlan(availablePlans.find(plan => plan.type === PlanType.FREE) || null);
-      } finally {
-        setLoading(false);
+      } else if (data) {
+        // Converter dados do banco para o formato da interface
+        const subscription: UserSubscription = {
+          id: data.id,
+          userId: data.user_id,
+          planId: data.plan_id,
+          planType: data.plan_type as PlanType,
+          startDate: new Date(data.start_date),
+          endDate: data.end_date ? new Date(data.end_date) : null,
+          status: data.status,
+          paymentMethod: data.payment_method,
+          nextBillingDate: data.next_billing_date ? new Date(data.next_billing_date) : undefined
+        };
+        
+        setCurrentSubscription(subscription);
+        
+        // Encontrar o plano correspondente
+        const plan = availablePlans.find(p => p.id === subscription.planId);
+        setCurrentPlan(plan || availablePlans.find(p => p.type === PlanType.FREE) || null);
+      } else {
+        // Se não encontrar assinatura, definir o plano gratuito como padrão
+        setCurrentSubscription(null);
+        setCurrentPlan(availablePlans.find(plan => plan.type === PlanType.FREE) || null);
       }
-    };
+    } catch (err) {
+      console.error('Erro ao carregar dados da assinatura:', err);
+      // Em caso de erro, definir o plano gratuito como padrão
+      setCurrentSubscription(null);
+      setCurrentPlan(availablePlans.find(plan => plan.type === PlanType.FREE) || null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  // Carregar assinatura quando o usuário mudar
+  useEffect(() => {
     loadUserSubscription();
   }, [user]);
 
@@ -165,7 +168,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return currentPlan.allowedFeatures.includes(featureId);
   };
 
-  // Função para atualizar o plano
+  // Função para atualizar o plano usando Stripe
   const upgradePlan = async (planId: string): Promise<void> => {
     if (!user) {
       toast({
@@ -184,59 +187,104 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         throw new Error("Plano não encontrado");
       }
 
-      // Aqui você implementaria a integração com gateway de pagamento
-      // Por enquanto, simularemos uma atualização direta no banco
+      // Para o plano gratuito, atualizar diretamente sem pagamento
+      if (selectedPlan.type === PlanType.FREE) {
+        // Verificar se já existe uma assinatura ativa
+        if (currentSubscription) {
+          // Atualizar assinatura existente
+          const { error } = await supabase
+            .from('subscriptions')
+            .update({
+              plan_id: selectedPlan.id,
+              plan_type: selectedPlan.type,
+              status: 'active',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', currentSubscription.id);
 
-      // Verificar se já existe uma assinatura ativa
-      if (currentSubscription) {
-        // Atualizar assinatura existente
-        const { error } = await supabase
-          .from('subscriptions')
-          .update({
-            plan_id: selectedPlan.id,
-            plan_type: selectedPlan.type,
-            status: 'active',
-            updated_at: new Date().toISOString(),
-            next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // +30 dias
-          })
-          .eq('id', currentSubscription.id);
+          if (error) throw error;
+        } else {
+          // Criar nova assinatura
+          const { error } = await supabase
+            .from('subscriptions')
+            .insert({
+              user_id: user.id,
+              plan_id: selectedPlan.id,
+              plan_type: selectedPlan.type,
+              start_date: new Date().toISOString(),
+              status: 'active'
+            });
 
-        if (error) throw error;
-      } else {
-        // Criar nova assinatura
-        const { error } = await supabase
-          .from('subscriptions')
-          .insert({
-            user_id: user.id,
-            plan_id: selectedPlan.id,
-            plan_type: selectedPlan.type,
-            start_date: new Date().toISOString(),
-            status: 'active',
-            next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // +30 dias
-          });
+          if (error) throw error;
+        }
 
-        if (error) throw error;
+        // Atualizar estado local
+        const newSubscription: UserSubscription = {
+          id: currentSubscription?.id || `sub_${Date.now()}`,
+          userId: user.id,
+          planId: selectedPlan.id,
+          planType: selectedPlan.type,
+          startDate: new Date(),
+          endDate: null,
+          status: 'active'
+        };
+
+        setCurrentSubscription(newSubscription);
+        setCurrentPlan(selectedPlan);
+
+        toast({
+          title: "Plano atualizado com sucesso",
+          description: `Seu plano foi atualizado para ${selectedPlan.name}.`,
+        });
+        
+        return;
       }
 
-      // Atualizar estado local
-      const newSubscription: UserSubscription = {
-        id: currentSubscription?.id || `sub_${Date.now()}`,
-        userId: user.id,
-        planId: selectedPlan.id,
-        planType: selectedPlan.type,
-        startDate: new Date(),
-        endDate: null,
-        status: 'active',
-        nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // +30 dias
-      };
+      // Para planos pagos, redirecionar para o Stripe
+      // Na implementação real você chamaria seu backend para criar uma sessão do Stripe
+      try {
+        const stripe = await getStripeClient();
+        
+        // Aqui você deve chamar o backend para criar a sessão de checkout
+        // Por enquanto, vamos simular isso
+        toast({
+          title: "Redirecionando para pagamento",
+          description: "Você será redirecionado para o Stripe para concluir o pagamento.",
+        });
+        
+        // Simulação para exemplo (em produção, esta seria uma chamada real à API)
+        setTimeout(() => {
+          // Redirecionar para a página de sucesso com um ID falso para simulação
+          window.location.href = `/payment-success?session_id=sim_${Date.now()}`;
+        }, 2000);
+        
+        /*
+        // Código real para produção:
+        const response = await fetch('/api/create-checkout-session', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            planId: selectedPlan.id,
+            userId: user.id
+          }),
+        });
 
-      setCurrentSubscription(newSubscription);
-      setCurrentPlan(selectedPlan);
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Erro ao processar pagamento');
+        }
 
-      toast({
-        title: "Plano atualizado com sucesso",
-        description: `Seu plano foi atualizado para ${selectedPlan.name}.`,
-      });
+        const { url } = await response.json();
+        
+        // Redirecionar para o checkout do Stripe
+        window.location.href = url;
+        */
+      } catch (stripeError) {
+        console.error('Erro ao redirecionar para o Stripe:', stripeError);
+        throw new Error('Erro ao redirecionar para o checkout do Stripe');
+      }
     } catch (error) {
       console.error('Erro ao atualizar plano:', error);
       toast({
@@ -302,7 +350,8 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     loading,
     hasFeatureAccess,
     upgradePlan,
-    cancelSubscription
+    cancelSubscription,
+    loadUserSubscription
   };
 
   return <SubscriptionContext.Provider value={value}>{children}</SubscriptionContext.Provider>;

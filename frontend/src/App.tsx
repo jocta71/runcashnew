@@ -7,6 +7,9 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/AuthPage";
 import RouletteDetailsPage from "./pages/RouletteDetailsPage";
+import PaymentSuccess from "./pages/PaymentSuccess";
+import PaymentCanceled from "./pages/PaymentCanceled";
+import PlansPage from "./pages/PlansPage";
 import { AuthProvider } from "./context/AuthContext";
 import { SubscriptionProvider } from "./context/SubscriptionContext";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -40,6 +43,25 @@ const App = () => (
               <Route path="/roulette/:rouletteId" element={
                 <ProtectedRoute>
                   <RouletteDetailsPage />
+                </ProtectedRoute>
+              } />
+
+              {/* Rotas relacionadas a planos e pagamentos */}
+              <Route path="/planos" element={
+                <ProtectedRoute>
+                  <PlansPage />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/payment-success" element={
+                <ProtectedRoute>
+                  <PaymentSuccess />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/payment-canceled" element={
+                <ProtectedRoute>
+                  <PaymentCanceled />
                 </ProtectedRoute>
               } />
               
