@@ -25,8 +25,11 @@ analisadores_mesas = {}
 # Intervalo de verificação em segundos
 VERIFICACAO_INTERVALO = 3
 
-# URL específica para acessar
-CASINO_URL_PRIMARY = "https://es.888casino.com/live-casino/#filters=live-roulette"
+# URLs possíveis para acessar - tanto a original quanto a redirecionada
+CASINO_URLS = [
+    "https://es.888casino.com/live-casino/#filters=live-roulette",  # URL original
+    "https://www.888casino.es/ruleta-en-vivo/#filters=live-roulette"  # URL redirecionada
+]
 
 def get_random_user_agent():
     """Retorna um user agent aleatório para reduzir a chance de detecção"""
@@ -174,6 +177,25 @@ def analisar_html_para_roletas(html_content):
                         break
                     except json.JSONDecodeError:
                         pass
+            
+            # Procurar por padrões específicos da versão espanhola
+            for pattern in [
+                r'window\.liveRouletteTables\s*=\s*(\[.*?\]);',
+                r'var\s+liveRouletteTables\s*=\s*(\[.*?\]);',
+                r'ruleta(.*?)datos\s*=\s*({.*?});'
+            ]:
+                matches = re.search(pattern, script_content, re.DOTALL)
+                if matches:
+                    try:
+                        json_str = matches.group(1)
+                        # Se for um array, envolva-o em um objeto para processamento
+                        if json_str.startswith('['):
+                            json_str = '{"tables":' + json_str + '}'
+                        json_data = json.loads(json_str)
+                        logger.info(f"Dados JSON encontrados em padrão espanhol: {pattern}")
+                        break
+                    except json.JSONDecodeError:
+                        pass
         
         # Se encontrou algum dado JSON
         if json_data:
@@ -191,7 +213,7 @@ def analisar_html_para_roletas(html_content):
         # Se não encontrou dados JSON em scripts, procurar elementos HTML
         logger.info("Procurando elementos de roleta no HTML...")
         
-        # Lista de seletores possíveis para elementos de roleta
+        # Lista de seletores possíveis para elementos de roleta - incluindo versão espanhola
         seletores = [
             ".cy-live-casino-grid-item",
             ".live-casino-grid-item",
@@ -199,7 +221,11 @@ def analisar_html_para_roletas(html_content):
             ".game-item",
             "[data-game-type='roulette']",
             "[data-game-name*='ruleta']",
-            "[data-game-name*='roulette']"
+            "[data-game-name*='roulette']",
+            ".ruleta-en-vivo-item",
+            ".game-tile",
+            ".card-item",
+            ".live-casino-game"
         ]
         
         # Tentar cada seletor
@@ -257,6 +283,59 @@ def analisar_html_para_roletas(html_content):
                 if roletas_encontradas:
                     break
         
+        # Método adicional: analisar a estrutura do DOM para encontrar elementos que possam conter dados de roleta
+        if not roletas_encontradas:
+            logger.info("Tentando método alternativo: análise do DOM para tabelas/divs que possam conter dados de roleta")
+            
+            # Procurar tabelas
+            tables = soup.find_all('table')
+            for i, table in enumerate(tables):
+                try:
+                    # Verificar se a tabela parece uma tabela de resultados de roleta
+                    if any(palavra in table.text.lower() for palavra in ['ruleta', 'roulette', 'números', 'resultados']):
+                        rows = table.find_all('tr')
+                        numeros = []
+                        
+                        for row in rows:
+                            cells = row.find_all('td')
+                            for cell in cells:
+                                cell_text = cell.text.strip()
+                                if cell_text.isdigit() and 0 <= int(cell_text) <= 36:
+                                    numeros.append(cell_text)
+                        
+                        if numeros:
+                            nome_roleta = f"Roleta-Tabela-{i}"
+                            id_roleta = f"roleta-{hash(nome_roleta) % 100000}"
+                            
+                            roletas_encontradas[nome_roleta] = {
+                                "id": id_roleta,
+                                "numeros": numeros,
+                                "ultima_atualizacao": datetime.now().isoformat()
+                            }
+                except Exception as e:
+                    logger.error(f"Erro ao processar tabela {i}: {str(e)}")
+            
+            # Procurar divs que possam conter resultados de roleta
+            divs_potenciais = soup.find_all('div', class_=lambda c: c and any(termo in c.lower() for termo in 
+                                            ['result', 'resultado', 'number', 'roulette', 'ruleta', 'history', 'historico']))
+            
+            for i, div in enumerate(divs_potenciais):
+                try:
+                    texto = div.text.strip()
+                    numeros = re.findall(r'\b([0-9]|[1-2][0-9]|3[0-6])\b', texto)
+                    
+                    if numeros:
+                        nome_roleta = f"Roleta-Div-{i}"
+                        id_roleta = f"roleta-{hash(nome_roleta) % 100000}"
+                        
+                        roletas_encontradas[nome_roleta] = {
+                            "id": id_roleta,
+                            "numeros": numeros,
+                            "ultima_atualizacao": datetime.now().isoformat()
+                        }
+                except Exception as e:
+                    logger.error(f"Erro ao processar div {i}: {str(e)}")
+            
         return roletas_encontradas
     
     except Exception as e:
@@ -287,9 +366,11 @@ def extrair_roletas_do_json(json_data):
                         # Extrair números
                         numeros = []
                         for campo in ['recentResults', 'results', 'pastResults', 'lastNumbers']:
-                            if campo in jogo and jogo[campo] and isinstance(jogo[campo], list):
-                                numeros = [str(n) for n in jogo[campo]]
-                                break
+                            if campo in jogo and jogo[campo]:
+                                nums = jogo[campo]
+                                if isinstance(nums, list):
+                                    numeros = [str(n) for n in nums]
+                                    break
                         
                         if numeros:
                             roletas_encontradas[nome_roleta] = {
@@ -343,9 +424,11 @@ def extrair_roletas_do_json(json_data):
                     # Extrair números
                     numeros = []
                     for campo in ['history', 'results', 'pastResults', 'numbers']:
-                        if campo in mesa and mesa[campo] and isinstance(mesa[campo], list):
-                            numeros = [str(n) for n in mesa[campo]]
-                            break
+                        if campo in mesa and mesa[campo]:
+                            nums = mesa[campo]
+                            if isinstance(nums, list):
+                                numeros = [str(n) for n in nums]
+                                break
                     
                     if numeros:
                         roletas_encontradas[nome_roleta] = {
@@ -478,6 +561,26 @@ def processar_dados_roletas(roletas_encontradas):
     
     return dados_completos
 
+def acessar_url_sem_redirecionamento(url, session):
+    """Tenta acessar a URL sem permitir redirecionamentos"""
+    try:
+        logger.info(f"Acessando URL direta sem redirecionamento: {url}")
+        response = session.get(url, allow_redirects=False, timeout=30)
+        
+        if response.status_code in [200, 301, 302]:
+            # Se for redirecionamento, capturar a URL para onde está redirecionando
+            if response.status_code in [301, 302] and 'Location' in response.headers:
+                logger.info(f"Detectado redirecionamento para: {response.headers['Location']}")
+            
+            # Retornar o conteúdo mesmo que seja um redirecionamento
+            return response.text, response.status_code
+        else:
+            logger.warning(f"Falha ao acessar URL sem redirecionamento: código {response.status_code}")
+            return None, response.status_code
+    except Exception as e:
+        logger.error(f"Erro ao acessar URL sem redirecionamento: {str(e)}")
+        return None, 0
+
 def scrape_roletas_http():
     """Função principal que realiza o scraping da página web do 888casino"""
     
@@ -500,35 +603,22 @@ def scrape_roletas_http():
             # Atualizar o User-Agent regularmente
             session.headers.update({'User-Agent': get_random_user_agent()})
             
-            # Acessar a URL específica
-            logger.info(f"Acessando URL principal: {CASINO_URL_PRIMARY}")
+            # Variáveis para controlar se encontramos dados
+            dados_encontrados = False
             
-            try:
-                response = session.get(CASINO_URL_PRIMARY, timeout=60)  # Timeout maior para permitir carregamento
+            # Tentar cada URL da lista
+            for url in CASINO_URLS:
+                # Primeiro, tentar acessar sem redirecionamento
+                html_content_direto, status_code_direto = acessar_url_sem_redirecionamento(url, session)
                 
-                if response.status_code == 200:
-                    logger.info(f"Sucesso: recebidos {len(response.text)} bytes de HTML")
+                if html_content_direto:
+                    logger.info(f"Obtido conteúdo direto da URL {url}")
                     
-                    # Extrair o conteúdo após redirecionamentos
-                    html_content = response.text
-                    url_final = response.url
-                    
-                    logger.info(f"URL final após redirecionamentos: {url_final}")
-                    
-                    # Salvar o HTML para debug (ocasionalmente)
-                    if ciclo % 10 == 1:
-                        try:
-                            with open("page_content.html", "w", encoding="utf-8") as f:
-                                f.write(html_content[:10000])  # Primeiros 10000 caracteres
-                            logger.info("Amostra de HTML salva em page_content.html")
-                        except Exception as e:
-                            logger.error(f"Erro ao salvar HTML: {str(e)}")
-                    
-                    # Analisar o HTML para extrair dados das roletas
-                    roletas_encontradas = analisar_html_para_roletas(html_content)
+                    # Tentar extrair dados do conteúdo direto
+                    roletas_encontradas = analisar_html_para_roletas(html_content_direto)
                     
                     if roletas_encontradas:
-                        logger.info(f"Encontradas {len(roletas_encontradas)} roletas na página")
+                        logger.info(f"Encontradas {len(roletas_encontradas)} roletas na página (acesso direto)")
                         
                         # Processar os dados das roletas
                         dados_completos = processar_dados_roletas(roletas_encontradas)
@@ -536,17 +626,62 @@ def scrape_roletas_http():
                         # Atualizar Supabase
                         atualizar_supabase(dados_completos)
                         
-                        # Resetar contador de falhas
-                        falhas_consecutivas = 0
+                        # Marcar que dados foram encontrados
+                        dados_encontrados = True
+                        break
+                
+                # Se não conseguiu dados no acesso direto, tentar com redirecionamento
+                logger.info(f"Acessando URL com redirecionamento: {url}")
+                try:
+                    response = session.get(url, timeout=60)  # Timeout maior para permitir carregamento
+                    
+                    if response.status_code == 200:
+                        logger.info(f"Sucesso: recebidos {len(response.text)} bytes de HTML")
+                        
+                        # Extrair o conteúdo após redirecionamentos
+                        html_content = response.text
+                        url_final = response.url
+                        
+                        logger.info(f"URL final após redirecionamentos: {url_final}")
+                        
+                        # Salvar o HTML para debug (ocasionalmente)
+                        if ciclo % 10 == 1:
+                            try:
+                                with open("page_content.html", "w", encoding="utf-8") as f:
+                                    f.write(html_content[:10000])  # Primeiros 10000 caracteres
+                                logger.info("Amostra de HTML salva em page_content.html")
+                            except Exception as e:
+                                logger.error(f"Erro ao salvar HTML: {str(e)}")
+                        
+                        # Analisar o HTML para extrair dados das roletas
+                        roletas_encontradas = analisar_html_para_roletas(html_content)
+                        
+                        if roletas_encontradas:
+                            logger.info(f"Encontradas {len(roletas_encontradas)} roletas na página")
+                            
+                            # Processar os dados das roletas
+                            dados_completos = processar_dados_roletas(roletas_encontradas)
+                            
+                            # Atualizar Supabase
+                            atualizar_supabase(dados_completos)
+                            
+                            # Marcar que dados foram encontrados
+                            dados_encontrados = True
+                            break
+                        else:
+                            logger.warning(f"Nenhuma roleta encontrada na página de {url_final}")
                     else:
-                        logger.warning("Nenhuma roleta encontrada na página")
-                        falhas_consecutivas += 1
-                else:
-                    logger.warning(f"Falha ao acessar URL: código {response.status_code}")
-                    falhas_consecutivas += 1
+                        logger.warning(f"Falha ao acessar URL {url}: código {response.status_code}")
+                
+                except Exception as e:
+                    logger.error(f"Erro ao acessar URL {url}: {str(e)}")
             
-            except Exception as e:
-                logger.error(f"Erro ao acessar URL: {str(e)}")
+            # Verificar se encontrou dados em alguma URL
+            if dados_encontrados:
+                # Resetar contador de falhas
+                falhas_consecutivas = 0
+            else:
+                logger.warning("Nenhuma roleta encontrada em nenhuma das URLs")
                 falhas_consecutivas += 1
             
             # Se houver muitas falhas consecutivas, usar dados simulados
