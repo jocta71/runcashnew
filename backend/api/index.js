@@ -161,6 +161,11 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'healthy' });
 });
 
+// Endpoint GET para o webhook (para verificação do Stripe)
+app.get('/api/webhook', (req, res) => {
+  res.json({ status: 'Webhook endpoint ativo. Use POST para eventos do Stripe.' });
+});
+
 // Rota para criar uma sessão de checkout do Stripe
 app.post('/api/create-checkout-session', async (req, res) => {
   try {
