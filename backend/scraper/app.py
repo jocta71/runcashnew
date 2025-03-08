@@ -337,11 +337,11 @@ def atualizar_supabase(dados_roletas):
 def extrair_dados_api():
     """
     Método alternativo para extração de dados usando requisições HTTP diretas
-    Compatível com Railway (sem Selenium) - SEM SIMULAÇÃO
+    Compatível com Railway (sem Selenium) - APENAS DADOS REAIS
     """
     global numeros_roletas, analisadores_mesas, executando
     
-    # URLs para tentar extrair dados diretamente
+    # URLs para tentar extrair dados diretamente via scraping
     urls = [
         "https://es.888casino.com/live-casino/#filters=live-roulette",
         "https://www.888casino.es/live-casino/#filters=live-roulette",
@@ -349,13 +349,20 @@ def extrair_dados_api():
         "https://www.888casino.pt/live-casino/#filters=live-roulette"
     ]
     
-    # URLs de APIs diretas que podem conter dados de roleta
+    # APIs diretas (maior chance de sucesso)
     api_urls = [
         "https://www.888casino.com/api/casino/lobby/games/live",
         "https://www.888casino.com/api/games/live?category=roulette",
         "https://es.888casino.com/api/games/live?category=roulette",
         "https://api.888.com/v1/casino/games/live?type=roulette",
         "https://content.888casino.com/roulette/latest"
+    ]
+    
+    # Mais APIs alternativas para tentar
+    mais_api_urls = [
+        "https://www.888casino.es/api/casino/games/live",
+        "https://casino.888.com/api/games/live/roulette",
+        "https://casino.888.com/api/casino/games/live/latest"
     ]
     
     headers = {
@@ -377,15 +384,6 @@ def extrair_dados_api():
     last_update_time = time.time()
     session = requests.Session()
     
-    # Lista de roletas padrão para usar como fallback para obtenção de dados históricos
-    roletas_padrao = [
-        "888 Ruleta En Vivo",
-        "Ruleta Lightning",  
-        "Ruleta Speed 888",
-        "Mega Fire Blaze Ruleta En Vivo",
-        "Grand Ruleta"
-    ]
-    
     # Mapeamento de nomes de roletas por idioma (para normalização)
     mapeamento_nomes = {
         "888 Live Roulette": "888 Ruleta En Vivo",
@@ -396,15 +394,16 @@ def extrair_dados_api():
     }
     
     cycle_count = 0
+    last_success_time = time.time()
     
     while executando:
         try:
             dados_extraidos = False
             cycle_count += 1
-            logger.info(f"Ciclo de extração {cycle_count} - Tentando obter dados REAIS (Railway SEM simulação)")
+            logger.info(f"Ciclo de extração {cycle_count} - Tentando obter APENAS dados REAIS (sem simulação)")
             
             # PASSO 1: Tentar obter dados das APIs diretas primeiro (maior chance de sucesso)
-            for api_url in api_urls:
+            for api_url in api_urls + mais_api_urls:
                 try:
                     logger.info(f"Tentando API direta: {api_url}")
                     response = session.get(api_url, headers=json_headers, timeout=15)
@@ -490,6 +489,7 @@ def extrair_dados_api():
                             
                             if roletas_encontradas > 0:
                                 logger.info(f"Total de {roletas_encontradas} roletas extraídas com sucesso da API")
+                                last_success_time = time.time()
                                 # Se tivermos sucesso com esta API, podemos passar para a próxima etapa
                                 break
                                 
@@ -501,149 +501,138 @@ def extrair_dados_api():
                 except Exception as e:
                     logger.error(f"Erro ao acessar API {api_url}: {str(e)}")
             
-            # Se ainda não temos dados, tentar webscraping normal (menos chance de sucesso)
+            # PASSO 2: Se não conseguimos dados das APIs, tentar webscraping direto
             if not dados_extraidos:
-                logger.info("APIs diretas falharam. Tentando webscraping...")
-                # Código existente para tentar webscraping...
+                logger.info("APIs diretas falharam. Tentando webscraping direto...")
                 
-                # PASSO 2: Tentar obter dados suplementares do Supabase
+                for url in urls:
+                    try:
+                        logger.info(f"Tentando webscraping de: {url}")
+                        response = session.get(url, headers=headers, timeout=30)
+                        
+                        if response.status_code == 200:
+                            logger.info(f"Página carregada com sucesso: {url}")
+                            
+                            # Usar BeautifulSoup para extrair dados
+                            soup = BeautifulSoup(response.text, 'html.parser')
+                            
+                            # Procurar elementos da roleta com vários seletores possíveis
+                            roleta_items = soup.select('.cy-live-casino-grid-item, .game-tile, .casino-game, .roulette-game, .live-game')
+                            
+                            if roleta_items:
+                                logger.info(f"Encontrados {len(roleta_items)} elementos de roleta")
+                                
+                                for item in roleta_items:
+                                    try:
+                                        # Tentar extrair o título
+                                        titulo_element = item.select_one('.cy-live-casino-grid-item-title, .game-title, .game-name, h3, h4')
+                                        if not titulo_element:
+                                            continue
+                                        
+                                        titulo = titulo_element.text.strip()
+                                        if not titulo:
+                                            continue
+                                        
+                                        # Tentar extrair números
+                                        numeros_elements = item.select('.cy-live-casino-grid-item-infobar-draws span, .result-number, .history-number, .roulette-number')
+                                        numeros_atuais = []
+                                        
+                                        if numeros_elements:
+                                            for num_el in numeros_elements:
+                                                num_text = num_el.text.strip()
+                                                if num_text.isdigit():
+                                                    numeros_atuais.append(int(num_text))
+                                        
+                                        # Tentar método alternativo se não encontrou
+                                        if not numeros_atuais:
+                                            history_text = item.select_one('.history, .previous-results, .recent-numbers')
+                                            if history_text:
+                                                numeros_atuais = [int(n) for n in re.findall(r'\d+', history_text.text) if int(n) <= 36]
+                                        
+                                        if numeros_atuais:
+                                            logger.info(f"Extraídos números para {titulo}: {numeros_atuais}")
+                                            processar_roleta_com_numeros(titulo, numeros_atuais)
+                                            dados_extraidos = True
+                                            last_success_time = time.time()
+                                    except Exception as e:
+                                        logger.error(f"Erro ao processar elemento de roleta: {str(e)}")
+                            else:
+                                logger.warning(f"Nenhum elemento de roleta encontrado na página: {url}")
+                        else:
+                            logger.warning(f"Falha ao carregar página {url}: Status {response.status_code}")
+                    except Exception as e:
+                        logger.error(f"Erro durante webscraping de {url}: {str(e)}")
+            
+            # PASSO 3: Se não conseguimos dados novos, buscar dados existentes do Supabase
+            # (isso não é simulação, apenas busca dados reais anteriores)
+            if not dados_extraidos:
+                logger.info("Tentando obter dados existentes do Supabase...")
+                
                 try:
-                    logger.info("Tentando obter dados históricos do Supabase para complementar")
                     result = supabase.table("roletas").select("*").execute()
                     
                     if result.data and len(result.data) > 0:
-                        logger.info(f"Obtidos {len(result.data)} registros do Supabase")
+                        logger.info(f"Obtidos {len(result.data)} registros existentes do Supabase")
                         
                         for roleta in result.data:
                             nome_roleta = roleta.get("nome", "")
-                            numeros_historicos = roleta.get("numeros", [])
+                            numeros = roleta.get("numeros", [])
                             
-                            if nome_roleta and numeros_historicos and len(numeros_historicos) > 0:
-                                # Gerar um novo número com base em tendências estatísticas dos números anteriores
-                                ultimos_numeros = numeros_historicos[:5]  # Últimos 5 números
+                            if nome_roleta and numeros and len(numeros) > 0:
+                                logger.info(f"Usando dados existentes para {nome_roleta}: {numeros[:5]}...")
                                 
-                                # Mantém consistência baseada no timestamp para não ficar gerando números aleatórios
-                                # a cada ciclo, mas ainda assim ter alguma variação entre roletas
-                                seed = int((time.time() / 60) % 100)  # Muda a cada minuto
-                                weighted_seed = (seed + hash(nome_roleta)) % 37
-                                
-                                # Pega o novo número baseado no último número + seed ponderado
-                                base = ultimos_numeros[0] if ultimos_numeros else weighted_seed
-                                novo_numero = (base + weighted_seed) % 37
-                                
-                                # Inserir este novo número no início do histórico
-                                novos_numeros = [novo_numero] + numeros_historicos
-                                
-                                # Processar como se fosse um número real
-                                logger.info(f"Novo número para {nome_roleta} (baseado em histórico): {novo_numero}")
-                                
-                                # Processar o número
-                                if nome_roleta not in analisadores_mesas:
-                                    analisadores_mesas[nome_roleta] = StrategyAnalyzer()
-                                
-                                analisadores_mesas[nome_roleta].process_number(novo_numero)
-                                
+                                # Não estamos gerando novos números, apenas usando os que já existem
                                 if nome_roleta not in numeros_roletas:
                                     numeros_roletas[nome_roleta] = {
-                                        "numeros": [],
-                                        "ultima_atualizacao": "",
+                                        "numeros": numeros,
+                                        "ultima_atualizacao": roleta.get("updated_at", datetime.now().isoformat()),
                                         "estrategia": {},
                                         "id": roleta.get("id", f"roleta-{hash(nome_roleta) % 100000}")
                                     }
-                                
-                                # Atualizar números
-                                numeros_roletas[nome_roleta]["numeros"] = novos_numeros[:20]  # Limitar a 20
-                                
-                                # Atualizar timestamp e estratégia
-                                timestamp_atual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                numeros_roletas[nome_roleta].update({
-                                    "ultima_atualizacao": timestamp_atual,
-                                    "estrategia": analisadores_mesas[nome_roleta].get_status()
-                                })
-                                
-                                dados_extraidos = True
-                        
+                                    
+                                    # Inicializar analisador de estratégia com os números existentes
+                                    if nome_roleta not in analisadores_mesas:
+                                        analisadores_mesas[nome_roleta] = StrategyAnalyzer()
+                                        
+                                        # Processar todos os números existentes para reconstruir o estado
+                                        # do analisador (sem gerar novos números)
+                                        for num in numeros:
+                                            analisadores_mesas[nome_roleta].process_number(num)
+                                    
+                                    # Atualizar estratégia
+                                    numeros_roletas[nome_roleta]["estrategia"] = analisadores_mesas[nome_roleta].get_status()
+                                    dados_extraidos = True
+                                    
                         if dados_extraidos:
-                            logger.info("Dados históricos do Supabase utilizados com sucesso")
+                            logger.info("Usando dados existentes do Supabase até conseguir extrair novos dados reais")
                     else:
-                        logger.warning("Nenhum dado histórico encontrado no Supabase")
-                        
+                        logger.warning("Nenhum dado encontrado no Supabase")
                 except Exception as e:
                     logger.error(f"Erro ao obter dados do Supabase: {str(e)}")
-                
-                # PASSO 3: Se ainda não temos dados, usar roletas padrão com números estatísticos
-                if not dados_extraidos:
-                    logger.info("Usando abordagem estatística para roletas padrão")
-                    
-                    for nome_roleta in roletas_padrao:
-                        # Criar analisador para mesa se não existir
-                        if nome_roleta not in analisadores_mesas:
-                            analisadores_mesas[nome_roleta] = StrategyAnalyzer()
-                            logger.info(f"Novo analisador criado para mesa: {nome_roleta}")
-                        
-                        # Criar identificador consistente
-                        id_roleta = f"roleta-{hash(nome_roleta) % 100000}"
-                        
-                        # Obter últimos números conhecidos, se existirem
-                        numeros_anteriores = numeros_roletas.get(nome_roleta, {}).get("numeros", [])
-                        
-                        # Gerar um novo número estatisticamente plausível
-                        # Usar timestamp atual para seed - consistente entre execuções no mesmo minuto
-                        timestamp_base = int(time.time() / 60)  # Muda a cada minuto
-                        
-                        # Hash combinado do nome da roleta e timestamp fornece variação entre roletas
-                        # mas consistência dentro do mesmo minuto
-                        hash_combinado = hash(f"{nome_roleta}_{timestamp_base}")
-                        novo_numero = hash_combinado % 37  # Números de 0 a 36
-                        
-                        # Se já temos números anteriores, verificar para não repetir o último
-                        if numeros_anteriores and novo_numero == numeros_anteriores[0]:
-                            novo_numero = (novo_numero + 1) % 37
-                        
-                        # Processar número no analisador
-                        analisadores_mesas[nome_roleta].process_number(novo_numero)
-                        
-                        # Inicializar estrutura de dados se necessário
-                        if nome_roleta not in numeros_roletas:
-                            numeros_roletas[nome_roleta] = {
-                                "numeros": [],
-                                "ultima_atualizacao": "",
-                                "estrategia": {},
-                                "id": id_roleta
-                            }
-                        
-                        # Atualizar números - adicionar no início
-                        numeros_existentes = numeros_roletas[nome_roleta].get("numeros", [])
-                        numeros_roletas[nome_roleta]["numeros"] = [novo_numero] + numeros_existentes
-                        
-                        # Limitar o tamanho da lista
-                        numeros_roletas[nome_roleta]["numeros"] = numeros_roletas[nome_roleta]["numeros"][:20]
-                        
-                        # Atualizar timestamp e estratégia
-                        timestamp_atual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        numeros_roletas[nome_roleta].update({
-                            "ultima_atualizacao": timestamp_atual,
-                            "estrategia": analisadores_mesas[nome_roleta].get_status()
-                        })
-                        
-                        logger.info(f"Novo número para {nome_roleta}: {novo_numero}")
-                    
-                    dados_extraidos = True
             
-            # Atualizar o Supabase periodicamente
-            current_time = time.time()
-            if current_time - last_update_time > 30:  # Atualizar a cada 30 segundos
-                atualizar_supabase(numeros_roletas)
-                last_update_time = current_time
+            # Se conseguimos extrair dados reais, atualizar o Supabase
+            if dados_extraidos:
+                current_time = time.time()
+                if current_time - last_update_time > 30:  # Atualizar a cada 30 segundos
+                    atualizar_supabase(numeros_roletas)
+                    last_update_time = current_time
+                    logger.info("Dados atualizados no Supabase")
+            else:
+                # Se estamos há muito tempo sem conseguir dados, registrar um alerta
+                current_time = time.time()
+                minutes_since_last_success = (current_time - last_success_time) / 60
+                if minutes_since_last_success > 5:  # Alerta após 5 minutos sem dados
+                    logger.error(f"ALERTA: Não foi possível obter dados reais por {int(minutes_since_last_success)} minutos")
+                    logger.error("Por favor, verifique sua conexão ou se o site mudou seu layout/API")
             
             # Esperar antes da próxima tentativa
-            tempo_espera = 3  # Aguardar 3 segundos entre ciclos
+            tempo_espera = 5  # Aguardar 5 segundos entre ciclos
             logger.info(f"Ciclo {cycle_count} completo. Próximo ciclo em {tempo_espera} segundos.")
             time.sleep(tempo_espera)
             
         except Exception as e:
             logger.error(f"Erro geral na extração: {str(e)}")
-            time.sleep(5)  # Aguardar 5 segundos em caso de erro
+            time.sleep(10)  # Aguardar 10 segundos em caso de erro geral
 
 def processar_roleta_com_numeros(nome_roleta, numeros):
     """Função auxiliar para processar uma roleta com números obtidos"""
