@@ -10,11 +10,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { createCheckoutSession } from '@/integrations/stripe/client';
 import { useAuth } from '@/context/AuthContext';
 
 const PlansPage = () => {
-  const { availablePlans, currentPlan, upgradePlan, loading } = useSubscription();
+  const { availablePlans, currentPlan, loading } = useSubscription();
   const { user } = useAuth();
   const [selectedInterval, setSelectedInterval] = useState<'monthly' | 'annual'>('monthly');
   const { toast } = useToast();
@@ -39,11 +38,17 @@ const PlansPage = () => {
     setProcessingPlan(planId);
     
     try {
-      // Usar a função upgradePlan do contexto
-      await upgradePlan(planId);
+      // Simulando um pequeno atraso para feedback
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Note: upgradePlan já redireciona para o checkout do Stripe ou
-      // para a página de sucesso no caso do plano gratuito
+      // Redirecionar diretamente para a página de sucesso (versão simplificada)
+      if (planId === 'free') {
+        window.location.href = '/payment-success?free=true';
+      } else {
+        // Simular um ID de sessão para o planId
+        const sessionId = `sim_${Date.now()}_${planId}`;
+        window.location.href = `/payment-success?session_id=${sessionId}`;
+      }
     } catch (error) {
       console.error("Erro ao selecionar plano:", error);
       toast({

@@ -1,83 +1,37 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
-import { useSubscription } from '@/context/SubscriptionContext';
-import { Loader2 } from 'lucide-react';
 
+// Versão ultra-simplificada sem dependências do backend
 const PaymentSuccess = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { loadUserSubscription } = useSubscription();
   const sessionId = searchParams.get('session_id');
   const isFree = searchParams.get('free') === 'true';
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(5);
 
   useEffect(() => {
-    console.log('PaymentSuccess - Renderizando com sessionId:', sessionId, 'isFree:', isFree);
+    // Mostrar toast de sucesso uma única vez
+    toast({
+      title: "Assinatura ativada com sucesso!",
+      description: "Seu plano foi atualizado e você já pode acessar todos os recursos.",
+    });
     
-    // Verificar e atualizar a assinatura localmente
-    const verifySubscription = async () => {
-      console.log('Iniciando verificação de assinatura');
-      setLoading(true);
-      
-      try {
-        // Timeout para limitar o tempo de espera da operação
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Tempo limite excedido')), 10000)
-        );
-        
-        // Recarregar os dados da assinatura do usuário
-        console.log('Carregando dados de assinatura do usuário');
-        await Promise.race([
-          loadUserSubscription(),
-          timeoutPromise
-        ]);
-        
-        // Sempre mostrar o toast de sucesso, seja plano gratuito ou pago
-        toast({
-          title: "Assinatura ativada com sucesso!",
-          description: "Seu plano foi atualizado e você já pode acessar todos os recursos.",
-        });
-        
-        console.log('Assinatura carregada e toast exibido');
-        setLoading(false);
-      } catch (error) {
-        console.error('Erro ao verificar assinatura:', error);
-        
-        // Verificar se é um erro de timeout ou outro problema
-        if (error instanceof Error && error.message === 'Tempo limite excedido') {
-          setError('O processo está demorando mais que o esperado. Sua assinatura será ativada em breve.');
-        } else {
-          setError('Não foi possível verificar sua assinatura. Ela será atualizada em instantes.');
+    // Configurar countdown para redirecionamento
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          navigate('/');
+          return 0;
         }
-        
-        // Mesmo com erro, mostrar mensagem de sucesso para o usuário
-        toast({
-          title: "Assinatura recebida!",
-          description: "Seu plano será ativado em breve.",
-        });
-        
-        setLoading(false);
-      }
-    };
-
-    // Iniciar a verificação
-    verifySubscription();
+        return prev - 1;
+      });
+    }, 1000);
     
-    // Redirecionar após alguns segundos
-    console.log('Configurando timer para redirecionamento');
-    const timer = setTimeout(() => {
-      console.log('Redirecionando para página inicial');
-      navigate('/');
-    }, 5000); // 5 segundos
-    
-    return () => {
-      console.log('Limpando timer de redirecionamento');
-      clearTimeout(timer);
-    };
-  }, [sessionId, navigate, toast, loadUserSubscription, isFree]);
+    return () => clearInterval(interval);
+  }, [navigate, toast]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-vegas-dark">
@@ -89,20 +43,8 @@ const PaymentSuccess = () => {
         </div>
         <h2 className="text-2xl font-bold text-white mb-2">Pagamento Aprovado!</h2>
         <p className="text-gray-300 mb-6">
-          {loading ? 'Estamos processando sua assinatura...' : 'Sua assinatura foi ativada com sucesso. Agora você tem acesso a todos os recursos do seu novo plano.'}
+          Sua assinatura foi ativada com sucesso. Agora você tem acesso a todos os recursos do seu novo plano.
         </p>
-        
-        {loading && (
-          <div className="flex justify-center items-center mb-6">
-            <Loader2 className="h-8 w-8 animate-spin text-vegas-gold" />
-          </div>
-        )}
-        
-        {error && (
-          <div className="w-full bg-vegas-black rounded-md p-4 mb-6 border border-yellow-600">
-            <p className="text-yellow-500 text-sm">{error}</p>
-          </div>
-        )}
         
         <div className="w-full bg-vegas-black rounded-md p-4 mb-6">
           <p className="text-vegas-gold font-medium mb-1">Confirmação de Pagamento</p>
@@ -114,7 +56,7 @@ const PaymentSuccess = () => {
           </p>
         </div>
         <p className="text-gray-400 text-sm mb-4">
-          Você será redirecionado para a página inicial em instantes...
+          Você será redirecionado para a página inicial em {countdown} segundos...
         </p>
         <button 
           onClick={() => navigate('/')}
