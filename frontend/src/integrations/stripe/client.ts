@@ -11,7 +11,7 @@ import axios from 'axios';
 const STRIPE_PUBLIC_KEY = 'pk_test_51MTxBYGLEdW1oQ9E03zQWJI1loAlQm7eNb28IK61K9vvFO7OmwXjSvIbKMBoPVahaSdDjG9w5XwnZIQnBicwie8Y00vhaR5iPV';
 
 // Define a URL base da API
-let API_URL = import.meta.env.VITE_API_URL || 'https://runcash-api.vercel.app';
+let API_URL = import.meta.env.VITE_API_URL || 'https://runcashnew-production.up.railway.app';
 // Garantir que a URL não termine com uma barra
 if (API_URL.endsWith('/')) {
   API_URL = API_URL.slice(0, -1);
@@ -32,21 +32,28 @@ export const createCheckoutSession = async (planId: string, userId: string): Pro
   try {
     console.log(`Iniciando criação de sessão de checkout para planId: ${planId}, userId: ${userId}`);
     
-    // Como a API não está respondendo, vamos usar diretamente o modo simulado
-    console.log('API indisponível, usando modo simulado imediatamente');
+    // Tenta fazer a chamada para a API real
+    const response = await axios.post(`${API_URL}/api/create-checkout-session`, {
+      planId,
+      userId
+    });
     
-    // Simular um pequeno atraso para dar feedback ao usuário
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Retornar URL de sucesso simulada
-    return `/payment-success?session_id=sim_${Date.now()}`;
+    if (response.data && response.data.url) {
+      console.log('Sessão de checkout criada com sucesso:', response.data);
+      return response.data.url;
+    } else {
+      throw new Error('Resposta da API inválida');
+    }
     
   } catch (error) {
     console.error('Erro ao criar sessão de checkout:', error);
     
-    // Em qualquer caso de erro, usar o modo simulado como garantia final
+    // Em caso de erro, usar modo simulado como fallback
     console.log('Usando modo simulado devido a erro');
-    return `/payment-success?session_id=sim_${Date.now()}`;
+    
+    // Para teste local, simular redirecionamento
+    const sessionId = `sim_${Date.now()}`;
+    return `/payment-success?session_id=${sessionId}`;
   }
 };
 

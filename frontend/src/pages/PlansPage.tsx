@@ -18,8 +18,9 @@ const PlansPage = () => {
   const { user } = useAuth();
   const [selectedInterval, setSelectedInterval] = useState<'monthly' | 'annual'>('monthly');
   const { toast } = useToast();
+  const [processingPlan, setProcessingPlan] = useState<string | null>(null);
   
-  const handleSelectPlan = (planId: string) => {
+  const handleSelectPlan = async (planId: string) => {
     // Se já for o plano atual, apenas mostrar mensagem
     if (currentPlan?.id === planId) {
       toast({
@@ -29,17 +30,29 @@ const PlansPage = () => {
       return;
     }
     
-    // Mostrar toast
+    // Mostrar toast de processamento
     toast({
-      title: "Plano selecionado!",
-      description: "Redirecionando para ativação..."
+      title: "Processando...",
+      description: "Preparando sua assinatura"
     });
     
-    // Redirecionamento simples e direto
-    if (planId === 'free') {
-      window.location.href = '/payment-success?free=true';
-    } else {
-      window.location.href = `/payment-success?session_id=sim_${Date.now()}`;
+    setProcessingPlan(planId);
+    
+    try {
+      // Usar a função upgradePlan do contexto
+      await upgradePlan(planId);
+      
+      // Note: upgradePlan já redireciona para o checkout do Stripe ou
+      // para a página de sucesso no caso do plano gratuito
+    } catch (error) {
+      console.error("Erro ao selecionar plano:", error);
+      toast({
+        title: "Erro ao processar solicitação",
+        description: "Ocorreu um erro ao selecionar o plano. Tente novamente mais tarde.",
+        variant: "destructive"
+      });
+    } finally {
+      setProcessingPlan(null);
     }
   };
   
@@ -145,9 +158,18 @@ const PlansPage = () => {
                         : ''
                   }`}
                   onClick={() => handleSelectPlan(plan.id)}
-                  disabled={isCurrentPlan || loading}
+                  disabled={isCurrentPlan || loading || processingPlan !== null}
                 >
-                  {isCurrentPlan ? 'Plano Atual' : 'Selecionar Plano'}
+                  {isCurrentPlan ? (
+                    'Plano Atual'
+                  ) : processingPlan === plan.id ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Processando...
+                    </>
+                  ) : (
+                    'Selecionar Plano'
+                  )}
                 </Button>
               </div>
               
