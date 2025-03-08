@@ -336,102 +336,222 @@ def atualizar_supabase(dados_roletas):
 
 def extrair_dados_api():
     """
-    Método alternativo para extração de dados usando API
-    Compatível com Railway (sem Selenium)
+    Método alternativo para extração de dados usando requisições HTTP diretas
+    Compatível com Railway (sem Selenium) - SEM SIMULAÇÃO
     """
     global numeros_roletas, analisadores_mesas, executando
     
-    # Lista de roletas comuns do 888casino para simular extração
-    roletas_comuns = [
-        "Ruleta Speed 888",
-        "Ruleta Lightning",
-        "888 Ruleta En Vivo",
-        "Mega Fire Blaze Ruleta En Vivo",
-        "Grand Ruleta"
+    # URLs para tentar extrair dados
+    urls = [
+        "https://es.888casino.com/live-casino/#filters=live-roulette",
+        "https://www.888casino.es/live-casino/#filters=live-roulette",
+        "https://www.888casino.com/live-casino/#filters=live-roulette",
+        "https://www.888casino.pt/live-casino/#filters=live-roulette"
     ]
     
+    headers = {
+        'User-Agent': get_random_user_agent(),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Cache-Control': 'max-age=0',
+    }
+    
     last_update_time = time.time()
+    session = requests.Session()
     
     while executando:
         try:
-            logger.info("Extraindo dados via API (modo compatível com Railway)")
+            logger.info("Extraindo dados via requisições HTTP (modo Railway SEM simulação)")
+            dados_extraidos = False
             
-            # A cada ciclo, tentar obter dados existentes do Supabase
-            try:
-                result = supabase.table("roletas").select("*").execute()
-                roletas_existentes = {}
-                
-                if result.data:
-                    roletas_existentes = {item["nome"]: item for item in result.data}
-                    logger.info(f"Dados de {len(roletas_existentes)} roletas carregados do Supabase")
-            except Exception as e:
-                logger.error(f"Erro ao obter dados do Supabase: {str(e)}")
-                roletas_existentes = {}
+            # Tentar cada URL
+            for url in urls:
+                try:
+                    response = session.get(url, headers=headers, timeout=30)
+                    
+                    if response.status_code == 200:
+                        logger.info(f"Sucesso ao acessar URL: {url}")
+                        
+                        # Usar BeautifulSoup para extrair dados
+                        soup = BeautifulSoup(response.text, 'html.parser')
+                        
+                        # Procurar elementos da roleta - tenta vários seletores comuns
+                        roleta_items = soup.select('.cy-live-casino-grid-item, .game-tile, .casino-game, .roulette-game, .live-game')
+                        
+                        if roleta_items:
+                            logger.info(f"Encontrados {len(roleta_items)} elementos de roleta")
+                            
+                            for item in roleta_items:
+                                try:
+                                    # Tentar extrair o título/nome da roleta
+                                    titulo_element = item.select_one('.cy-live-casino-grid-item-title, .game-title, .game-name, h3, h4')
+                                    if not titulo_element:
+                                        continue
+                                        
+                                    titulo = titulo_element.text.strip()
+                                    if not titulo:
+                                        continue
+                                    
+                                    # Tentar extrair números da roleta
+                                    numeros_elements = item.select('.cy-live-casino-grid-item-infobar-draws span, .result-number, .history-number, .roulette-number')
+                                    numeros_atuais = []
+                                    
+                                    # Se encontrou elementos específicos
+                                    if numeros_elements:
+                                        for num_el in numeros_elements:
+                                            num_text = num_el.text.strip()
+                                            if num_text.isdigit():
+                                                numeros_atuais.append(int(num_text))
+                                    
+                                    # Se não encontrou, procurar no texto completo
+                                    if not numeros_atuais:
+                                        history_text = item.select_one('.history, .previous-results, .recent-numbers')
+                                        if history_text:
+                                            # Extrair todos os números do texto
+                                            import re
+                                            numeros_atuais = [int(n) for n in re.findall(r'\d+', history_text.text) if int(n) <= 36]
+                                    
+                                    # Verificar se encontrou números
+                                    if numeros_atuais:
+                                        logger.info(f"Extraídos números para {titulo}: {numeros_atuais}")
+                                        dados_extraidos = True
+                                        
+                                        # Criar analisador para mesa se não existir
+                                        if titulo not in analisadores_mesas:
+                                            analisadores_mesas[titulo] = StrategyAnalyzer()
+                                            logger.info(f"Novo analisador criado para mesa: {titulo}")
+                                        
+                                        # Obter último número
+                                        ultimo_numero = numeros_atuais[0]
+                                        
+                                        # Verificar se é um número novo
+                                        numeros_anteriores = numeros_roletas.get(titulo, {}).get("numeros", [])
+                                        if not numeros_anteriores or ultimo_numero != numeros_anteriores[0]:
+                                            logger.info(f"Novo número detectado para {titulo}: {ultimo_numero}")
+                                            
+                                            # Processar número no analisador
+                                            analisadores_mesas[titulo].process_number(ultimo_numero)
+                                            
+                                            # Inicializar estrutura de dados se necessário
+                                            if titulo not in numeros_roletas:
+                                                numeros_roletas[titulo] = {
+                                                    "numeros": [],
+                                                    "ultima_atualizacao": "",
+                                                    "estrategia": {},
+                                                    "id": f"roleta-{hash(titulo) % 100000}"
+                                                }
+                                            
+                                            # Atualizar números
+                                            numeros_existentes = set(numeros_roletas[titulo]["numeros"])
+                                            novos_numeros = [n for n in numeros_atuais if n not in numeros_existentes]
+                                            numeros_roletas[titulo]["numeros"] = (novos_numeros + numeros_roletas[titulo]["numeros"])[:20]
+                                            
+                                            # Atualizar metadados
+                                            timestamp_atual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                            numeros_roletas[titulo].update({
+                                                "ultima_atualizacao": timestamp_atual,
+                                                "estrategia": analisadores_mesas[titulo].get_status()
+                                            })
+                                    else:
+                                        logger.warning(f"Não foram encontrados números para a roleta: {titulo}")
+                                except Exception as e:
+                                    logger.error(f"Erro ao processar item de roleta: {str(e)}")
+                        else:
+                            logger.warning(f"Nenhum elemento de roleta encontrado na página: {url}")
+                    else:
+                        logger.warning(f"Falha ao acessar {url}: Status {response.status_code}")
+                        
+                except Exception as e:
+                    logger.error(f"Erro ao acessar {url}: {str(e)}")
             
-            # Processar cada roleta
-            for nome_roleta in roletas_comuns:
-                # Verificar se a roleta já existe no Supabase
-                if nome_roleta in roletas_existentes:
-                    # Obter números existentes
-                    numeros_existentes = roletas_existentes[nome_roleta].get("numeros", [])
-                    id_roleta = roletas_existentes[nome_roleta].get("id", f"roleta-{hash(nome_roleta) % 100000}")
-                else:
-                    # Criar nova entrada
-                    numeros_existentes = []
-                    id_roleta = f"roleta-{hash(nome_roleta) % 100000}"
+            # Se não conseguiu extrair dados reais de nenhuma URL, tentar abordagem diferente
+            if not dados_extraidos:
+                logger.error("FALHA na extração de dados reais. Tentando abordagem alternativa...")
+                # Tentar obter dados de um endpoint alternativo
+                try:
+                    alt_url = "https://888casino.com/api/games/live"
+                    alt_response = session.get(alt_url, headers=headers, timeout=15)
+                    
+                    if alt_response.status_code == 200:
+                        try:
+                            json_data = alt_response.json()
+                            logger.info("Obtidos dados JSON do endpoint alternativo")
+                            
+                            # Tentar extrair roletas e seus números
+                            success = False
+                            if 'games' in json_data:
+                                for game in json_data['games']:
+                                    if 'gameType' in game and 'roulette' in game['gameType'].lower():
+                                        nome_roleta = game.get('name', '')
+                                        if not nome_roleta:
+                                            continue
+                                            
+                                        numeros = []
+                                        history = game.get('history', [])
+                                        if history:
+                                            try:
+                                                numeros = [int(n) for n in history if n.isdigit() and int(n) <= 36]
+                                            except:
+                                                pass
+                                        
+                                        if numeros:
+                                            logger.info(f"Obtidos números para {nome_roleta}: {numeros}")
+                                            success = True
+                                            
+                                            # Processar igual à primeira abordagem
+                                            if nome_roleta not in analisadores_mesas:
+                                                analisadores_mesas[nome_roleta] = StrategyAnalyzer()
+                                            
+                                            ultimo_numero = numeros[0]
+                                            analisadores_mesas[nome_roleta].process_number(ultimo_numero)
+                                            
+                                            if nome_roleta not in numeros_roletas:
+                                                numeros_roletas[nome_roleta] = {
+                                                    "numeros": [],
+                                                    "ultima_atualizacao": "",
+                                                    "estrategia": {},
+                                                    "id": f"roleta-{hash(nome_roleta) % 100000}"
+                                                }
+                                            
+                                            # Atualizar dados
+                                            numeros_existentes = set(numeros_roletas[nome_roleta]["numeros"])
+                                            novos_numeros = [n for n in numeros if n not in numeros_existentes]
+                                            numeros_roletas[nome_roleta]["numeros"] = (novos_numeros + numeros_roletas[nome_roleta]["numeros"])[:20]
+                                            
+                                            timestamp_atual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                            numeros_roletas[nome_roleta].update({
+                                                "ultima_atualizacao": timestamp_atual,
+                                                "estrategia": analisadores_mesas[nome_roleta].get_status()
+                                            })
+                                
+                            if success:
+                                dados_extraidos = True
+                            
+                        except ValueError:
+                            logger.error("Resposta do endpoint alternativo não é JSON válido")
+                except Exception as e:
+                    logger.error(f"Erro ao acessar endpoint alternativo: {str(e)}")
                 
-                # Gerar um número aleatório mas com semelhança à sequências reais
-                # Para simular padrões realistas, usamos uma lógica baseada no tempo
-                seed = int(time.time() * 1000) % 37
-                novo_numero = (seed * hash(nome_roleta)) % 37
-                
-                # Verificar se já temos um analisador para esta roleta
-                if nome_roleta not in analisadores_mesas:
-                    analisadores_mesas[nome_roleta] = StrategyAnalyzer()
-                    logger.info(f"Novo analisador criado para mesa: {nome_roleta}")
-                
-                # Processar o novo número no analisador
-                analisadores_mesas[nome_roleta].process_number(novo_numero)
-                
-                # Construir a estrutura de dados
-                if nome_roleta not in numeros_roletas:
-                    numeros_roletas[nome_roleta] = {
-                        "numeros": [],
-                        "ultima_atualizacao": "",
-                        "estrategia": {},
-                        "id": id_roleta
-                    }
-                
-                # Adicionar o novo número no início da lista
-                numeros_roletas[nome_roleta]["numeros"] = [novo_numero] + numeros_roletas[nome_roleta]["numeros"]
-                
-                # Limitar o tamanho da lista
-                numeros_roletas[nome_roleta]["numeros"] = numeros_roletas[nome_roleta]["numeros"][:20]
-                
-                # Atualizar timestamp e estratégia
-                timestamp_atual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                numeros_roletas[nome_roleta].update({
-                    "ultima_atualizacao": timestamp_atual,
-                    "estrategia": analisadores_mesas[nome_roleta].get_status()
-                })
-                
-                logger.info(f"Novo número para {nome_roleta}: {novo_numero}")
+            # Atualizar o Supabase quando tiver dados extraídos
+            if dados_extraidos:
+                current_time = time.time()
+                if current_time - last_update_time > 30:  # Atualizar a cada 30 segundos
+                    atualizar_supabase(numeros_roletas)
+                    last_update_time = current_time
+                    logger.info("Dados REAIS enviados para o Supabase")
+            else:
+                logger.error("FALHA TOTAL: Não foi possível extrair dados reais. Aguardando próxima tentativa.")
             
-            # Atualizar o Supabase a cada X segundos (não a cada ciclo)
-            current_time = time.time()
-            if current_time - last_update_time > 30:  # Atualizar a cada 30 segundos
-                # Enviar dados para o Supabase
-                atualizar_supabase(numeros_roletas)
-                last_update_time = current_time
-            
-            # Esperar alguns segundos antes da próxima atualização
-            tempo_espera = random.uniform(3.0, 5.0)
-            logger.info(f"Aguardando {tempo_espera:.2f} segundos para próxima extração")
+            # Esperar um tempo antes da próxima tentativa
+            tempo_espera = random.uniform(10.0, 15.0)  # Intervalo maior para não sobrecarregar os servidores
+            logger.info(f"Aguardando {tempo_espera:.2f} segundos para próxima tentativa de extração REAL")
             time.sleep(tempo_espera)
             
         except Exception as e:
-            logger.error(f"Erro na extração API: {str(e)}")
-            time.sleep(10)  # Aguardar um pouco antes de tentar novamente
+            logger.error(f"Erro geral na extração HTTP: {str(e)}")
+            time.sleep(30)  # Aguardar mais tempo em caso de erro geral
 
 def extrair_numeros():
     global driver, executando, numeros_roletas, analisadores_mesas
