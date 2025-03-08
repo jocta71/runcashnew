@@ -22,10 +22,12 @@ import { ChevronDown, User, UserCog, CreditCard, Wallet, LogOut, Lock, Mail, Edi
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const ProfileDropdown = () => {
   const { user, signOut } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isDepositOpen, setIsDepositOpen] = useState(false);
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
@@ -37,6 +39,7 @@ const ProfileDropdown = () => {
       title: "Sessão encerrada",
       description: "Você foi desconectado com sucesso.",
     });
+    navigate('/auth');
   };
 
   return (
