@@ -150,7 +150,11 @@ def scrape_roletas_http():
                     logger.info(f"Tentando acessar: {url}")
                     response = session.get(url, timeout=30)
                     
-                    if response.status_code == 200 and "888casino" in response.url and "live-casino" in response.url:
+                    # Registrar a URL real após possíveis redirecionamentos
+                    logger.info(f"URL após redirecionamento: {response.url}")
+                    
+                    # Aceitar códigos 200 mesmo que a URL tenha mudado ligeiramente
+                    if response.status_code == 200 and "888casino" in response.url:
                         logger.info(f"Sucesso ao acessar: {response.url}")
                         html_content = response.text
                         current_url = response.url
@@ -185,11 +189,43 @@ def scrape_roletas_http():
                                 except json.JSONDecodeError:
                                     logger.warning("Erro ao decodificar JSON dos scripts")
                 
+                # Alternativa: Tentar outros seletores se os padrões conhecidos não funcionarem
+                if not roleta_elements:
+                    logger.info("Tentando seletores alternativos para elementos de roleta")
+                    alternative_selectors = [
+                        ".live-casino-grid-item", 
+                        ".roulette-item", 
+                        ".game-item",
+                        ".live-game-item",
+                        "[data-game-type='roulette']",
+                        ".casino-game-tile"
+                    ]
+                    
+                    for selector in alternative_selectors:
+                        alt_elements = soup.select(selector)
+                        if alt_elements:
+                            logger.info(f"Encontrados {len(alt_elements)} elementos usando seletor alternativo: {selector}")
+                            roleta_elements = alt_elements
+                            break
+                
+                # Salvar HTML para depuração se necessário
+                if not roleta_elements and ciclo % 10 == 1:  # A cada 10 ciclos
+                    try:
+                        debug_path = "debug_html.txt"
+                        with open(debug_path, "w", encoding="utf-8") as f:
+                            f.write(html_content[:5000])  # Salvar os primeiros 5000 caracteres
+                        logger.info(f"HTML parcial salvo em {debug_path} para depuração")
+                    except Exception as e:
+                        logger.error(f"Erro ao salvar HTML para depuração: {str(e)}")
+                
                 # Processar cada elemento de roleta encontrado
                 for i, elemento in enumerate(roleta_elements):
                     try:
                         # Extrair o título da roleta
                         titulo_elem = elemento.select_one(".cy-live-casino-grid-item-title")
+                        if not titulo_elem:
+                            titulo_elem = elemento.select_one("h3, h4, .title, .game-title")
+                            
                         titulo_roleta = titulo_elem.text.strip() if titulo_elem else f"Roleta-{datetime.now().strftime('%H%M%S')}-{i}"
                         
                         logger.info(f"Processando roleta: {titulo_roleta}")
@@ -213,7 +249,7 @@ def scrape_roletas_http():
                         
                         # Se não encontrou números nos spans, tentar extrair do texto completo
                         if not numeros_atuais:
-                            infobar = elemento.select_one(".cy-live-casino-grid-item-infobar-draws")
+                            infobar = elemento.select_one(".cy-live-casino-grid-item-infobar-draws, .infobar, .draws, .results, .game-results")
                             if infobar:
                                 texto_completo = infobar.text.strip()
                                 matches = re.findall(r'\d+', texto_completo)
@@ -221,7 +257,7 @@ def scrape_roletas_http():
                         
                         # Tentar outros seletores comuns
                         if not numeros_atuais:
-                            for selector in ['.number', '.roulette-number', '.result', '[data-result]', '[data-number]']:
+                            for selector in ['.number', '.roulette-number', '.result', '[data-result]', '[data-number]', '.history', '.previous-numbers']:
                                 elementos_numero = elemento.select(selector)
                                 for elem in elementos_numero:
                                     texto = elem.text.strip()
@@ -311,9 +347,78 @@ def scrape_roletas_http():
                                 # Processar os dados da API - será específico para cada API
                                 if 'data' in json_data and 'rouletteTables' in json_data.get('data', {}):
                                     logger.info("Dados de roleta encontrados na API")
-                                    # Implementar lógica para extrair números de roleta da resposta da API
+                                    roulette_tables = json_data['data']['rouletteTables']
+                                    
+                                    # Processar cada roleta recebida da API
+                                    for table in roulette_tables:
+                                        try:
+                                            table_name = table.get('name', f"Roleta-API-{datetime.now().strftime('%H%M%S')}")
+                                            logger.info(f"Processando roleta da API: {table_name}")
+                                            
+                                            # Criar ID para a roleta
+                                            id_roleta = f"roleta-{hash(table_name) % 100000}"
+                                            
+                                            # Verificar se está na lista de permitidas
+                                            if not roleta_permitida_por_id(id_roleta):
+                                                logger.info(f"Roleta {table_name} da API não está na lista de permitidas. Pulando.")
+                                                continue
+                                            
+                                            # Extrair números (específico para o formato de API do 888casino)
+                                            recent_results = table.get('recentResults', [])
+                                            if recent_results:
+                                                numeros_atuais = [str(num) for num in recent_results]
+                                                
+                                                logger.info(f"Números extraídos da API para {table_name}: {numeros_atuais}")
+                                                
+                                                if numeros_atuais:
+                                                    # Processar os números como nas roletas normais
+                                                    ultimo_numero = numeros_atuais[0]
+                                                    numero_anterior = ultimos_numeros.get(table_name)
+                                                    
+                                                    if not numero_anterior or ultimo_numero != numero_anterior:
+                                                        logger.info(f"NOVO NÚMERO (API) para {table_name}: {ultimo_numero}")
+                                                        
+                                                        # Processar o número como nas roletas normais
+                                                        ultimos_numeros[table_name] = ultimo_numero
+                                                        
+                                                        if table_name not in analisadores_mesas:
+                                                            analisadores_mesas[table_name] = StrategyAnalyzer(table_name)
+                                                        
+                                                        if analisadores_mesas[table_name].add_numbers([ultimo_numero]):
+                                                            logger.info(f"Novo número adicionado para {table_name}: {ultimo_numero}")
+                                                        
+                                                        if table_name not in dados_roletas:
+                                                            dados_roletas[table_name] = {
+                                                                "numeros": [],
+                                                                "ultima_atualizacao": "",
+                                                                "id": id_roleta
+                                                            }
+                                                        
+                                                        dados_roletas[table_name]["numeros"] = numeros_atuais + [
+                                                            n for n in dados_roletas[table_name].get("numeros", [])
+                                                            if n not in numeros_atuais
+                                                        ]
+                                                        
+                                                        dados_roletas[table_name]["numeros"] = dados_roletas[table_name]["numeros"][:20]
+                                                        
+                                                        dados_roletas[table_name].update({
+                                                            "ultima_atualizacao": datetime.now().isoformat(),
+                                                            "estrategia": analisadores_mesas[table_name].get_data()
+                                                        })
+                                                        
+                                                        update_data = {table_name: dados_roletas[table_name]}
+                                                        atualizar_supabase(update_data)
+                                        except Exception as e:
+                                            logger.error(f"Erro ao processar roleta da API: {str(e)}")
                                 else:
                                     logger.warning("Estrutura de API desconhecida")
+                                    # Salvando a resposta para análise
+                                    try:
+                                        with open("api_response.json", "w") as f:
+                                            json.dump(json_data, f, indent=2)
+                                        logger.info("Resposta da API salva em api_response.json para análise")
+                                    except Exception as e:
+                                        logger.error(f"Erro ao salvar resposta da API: {str(e)}")
                             except Exception as e:
                                 logger.error(f"Erro ao processar dados da API: {str(e)}")
                             
