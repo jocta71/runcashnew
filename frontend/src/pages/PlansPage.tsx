@@ -11,6 +11,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useAuth } from '@/context/AuthContext';
+import { createCheckoutSession } from '@/integrations/stripe/client';
 
 const PlansPage = () => {
   const { availablePlans, currentPlan, loading } = useSubscription();
@@ -29,6 +30,15 @@ const PlansPage = () => {
       return;
     }
     
+    if (!user) {
+      toast({
+        title: "Login necessário",
+        description: "Você precisa estar logado para assinar um plano.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     // Mostrar toast de processamento
     toast({
       title: "Processando...",
@@ -38,17 +48,11 @@ const PlansPage = () => {
     setProcessingPlan(planId);
     
     try {
-      // Simulando um pequeno atraso para feedback
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Chamar a função que cria a sessão de checkout
+      const checkoutUrl = await createCheckoutSession(planId, user.id);
       
-      // Redirecionar diretamente para a página de sucesso (versão simplificada)
-      if (planId === 'free') {
-        window.location.href = '/payment-success?free=true';
-      } else {
-        // Simular um ID de sessão para o planId
-        const sessionId = `sim_${Date.now()}_${planId}`;
-        window.location.href = `/payment-success?session_id=${sessionId}`;
-      }
+      // Redirecionar para o checkout ou página de sucesso
+      window.location.href = checkoutUrl;
     } catch (error) {
       console.error("Erro ao selecionar plano:", error);
       toast({
