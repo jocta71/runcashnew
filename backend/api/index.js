@@ -173,9 +173,9 @@ app.post('/api/create-checkout-session', async (req, res) => {
     // Buscar informações do plano no banco de dados ou usar um mapeamento fixo
     const planPriceMap = {
       'free': { priceId: null, amount: 0 },
-      'basic': { priceId: 'price_basic', amount: 1990 }, // R$ 19,90
-      'pro': { priceId: 'price_pro', amount: 4990 }, // R$ 49,90
-      'premium': { priceId: 'price_premium', amount: 9990 }, // R$ 99,90
+      'basic': { priceId: 'price_1MTxCnGLEdW1oQ9EXXXXXXXx', amount: 1990 }, // R$ 19,90
+      'pro': { priceId: 'price_1MTxDDGLEdW1oQ9EXXXXXXXx', amount: 4990 }, // R$ 49,90
+      'premium': { priceId: 'price_1MTxDXGLEdW1oQ9EXXXXXXXx', amount: 9990 }, // R$ 99,90
     };
     
     const planInfo = planPriceMap[planId];
@@ -233,18 +233,11 @@ app.post('/api/create-checkout-session', async (req, res) => {
     }
     
     // Para planos pagos, criar uma sessão de checkout do Stripe
-    // Em um ambiente real, você teria IDs de preço reais do Stripe
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
         {
-          price_data: {
-            currency: 'brl',
-            product_data: {
-              name: `Plano ${planId.charAt(0).toUpperCase() + planId.slice(1)}`,
-            },
-            unit_amount: planInfo.amount, // Em centavos
-          },
+          price: planInfo.priceId, // Usar o ID do preço real do Stripe
           quantity: 1,
         },
       ],

@@ -7,8 +7,8 @@
 
 import axios from 'axios';
 
-// Chave do Stripe (apenas para referência, não usada na simulação)
-const STRIPE_PUBLIC_KEY = 'pk_test_51OxDFnBp4viBSzHIYME6FZtpbx2Vr1KkSTuRGYcm4lnCFf8CzKbcWDe5RMmqHENvp5uDQYCYsEVMsQnqt7KjWHh700dJnw61y6';
+// Chave publicável do Stripe (usada para referência)
+const STRIPE_PUBLIC_KEY = 'pk_live_51MTxBYGLEdW1oQ9E7pX9cXQqOMopw2XgRVI6gNRDLG9VU2poXeox6O8CvdIhwjwHULAOVccHNcLlZkuE7CRt3oBj00w80prp31';
 
 // Define a URL base da API
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
