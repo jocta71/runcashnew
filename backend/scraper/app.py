@@ -104,11 +104,27 @@ def scrape_api_apenas():
                 "Sec-Fetch-Mode": "navigate",
                 "Sec-Fetch-Site": "none",
                 "Sec-Fetch-User": "?1",
-                "Cache-Control": "max-age=0"
+                "Cache-Control": "max-age=0",
+                "Cookie": ""  # Deixar vazio para aceitar todos os cookies de sessão
             }
             
+            # Técnica mais agressiva: fazer primeiro uma requisição para obter cookies de sessão
             try:
-                response = requests.get(url, headers=headers_expandidos, timeout=15)
+                # Primeira requisição para obter cookies
+                session = requests.Session()
+                logger.info("Fazendo requisição inicial para obter cookies...")
+                initial_response = session.get(url, headers=headers_expandidos, timeout=15)
+                
+                # Esperar um pouco para simular comportamento humano
+                time.sleep(2)
+                
+                # Verificar se há formulários de login ou aceitação de cookies
+                if "login" in initial_response.text.lower() or "cookie" in initial_response.text.lower():
+                    logger.info("Detectada possível página de login ou aceitação de cookies")
+                
+                # Segunda requisição usando a mesma sessão (com cookies)
+                logger.info("Fazendo segunda requisição com cookies...")
+                response = session.get(url, headers=headers_expandidos, timeout=15)
                 
                 logger.info(f"Status da resposta: {response.status_code}")
                 if response.status_code != 200:
@@ -129,11 +145,60 @@ def scrape_api_apenas():
                 # Log dos primeiros 100 caracteres do HTML para diagnóstico
                 logger.info(f"Início do HTML: {soup.text[:100]}...")
                 
-                # Localizar os elementos das roletas
+                # Técnicas adicionais de extração
+                
+                # Método 1: Buscar dados nos scripts JS (onde costumam estar os dados dinâmicos)
+                logger.info("Buscando dados em scripts JS...")
+                scripts = soup.find_all('script')
+                logger.info(f"Encontrados {len(scripts)} blocos de script")
+                
                 roletas_encontradas = {}
                 
-                # Vamos tentar diferentes seletores para encontrar elementos de roletas
-                elementos_roleta = soup.select('.roulette-table, .live-roulette, .game-container, [class*="roulette"], [class*="live-casino"], [class*="game-item"]')
+                for i, script in enumerate(scripts):
+                    script_content = script.string
+                    if not script_content:
+                        continue
+                    
+                    # Procurar por padrões de dados de roleta nos scripts
+                    # Exemplos: "numbers":["12","7","3",...], "roulette_data":{"numbers":[...]}
+                    for pattern in [
+                        r'"numbers":\s*\[(.*?)\]',
+                        r'"history":\s*\[(.*?)\]',
+                        r'"results":\s*\[(.*?)\]',
+                        r'"roulette_data":\s*{(.*?)}',
+                        r'"table_(\d+)":\s*{(.*?)}'
+                    ]:
+                        matches = re.findall(pattern, script_content)
+                        if matches:
+                            logger.info(f"Encontrado padrão {pattern} no script {i+1}")
+                            
+                            for match_idx, match in enumerate(matches):
+                                # Se for uma tupla (com grupos de captura), pegar o segundo elemento
+                                if isinstance(match, tuple) and len(match) > 1:
+                                    data_str = match[1]
+                                else:
+                                    data_str = match
+                                
+                                # Extrair números
+                                num_matches = re.findall(r'(\d+)', data_str)
+                                if num_matches:
+                                    # Limitar para números de roleta (0-36)
+                                    numeros = [num for num in num_matches if 0 <= int(num) <= 36][:20]
+                                    
+                                    if numeros:
+                                        table_id = f"roleta-js-{i}-{match_idx}"
+                                        table_name = f"Roleta {i+1}-{match_idx+1}"
+                                        
+                                        roletas_encontradas[table_name] = {
+                                            "id": table_id,
+                                            "numeros": numeros
+                                        }
+                                        
+                                        logger.info(f"Encontrada roleta via script: {table_name} com números: {numeros[:5]}...")
+                
+                # Método 2: Busca convencional por elementos HTML
+                logger.info("Buscando elementos HTML convencionais...")
+                elementos_roleta = soup.select('.roulette-table, .live-roulette, .game-container, [class*="roulette"], [class*="live-casino"], [class*="game-item"], [class*="result"], table, .table')
                 
                 logger.info(f"Encontrados {len(elementos_roleta)} possíveis elementos de roleta")
                 
@@ -143,15 +208,15 @@ def scrape_api_apenas():
                         logger.info(f"Analisando elemento {i+1}: classes={elem.get('class', [])}")
                         
                         # Tentar extrair o título da roleta
-                        titulo_elem = elem.select_one('.game-title, .table-name, h3, [class*="title"], [class*="name"]')
-                        titulo = titulo_elem.text.strip() if titulo_elem else f"Roleta {i+1}"
+                        titulo_elem = elem.select_one('.game-title, .table-name, h3, [class*="title"], [class*="name"], caption')
+                        titulo = titulo_elem.text.strip() if titulo_elem else f"Roleta HTML {i+1}"
                         
                         # Tentar extrair o ID da roleta
                         id_elem = elem.get('id') or elem.get('data-id') or elem.get('data-table-id')
-                        id_roleta = id_elem or f"roleta-{i+1}"
+                        id_roleta = id_elem or f"roleta-html-{i+1}"
                         
                         # Tentar extrair os números recentes
-                        numeros_elem = elem.select('.number, .recent-number, .history-number, [class*="number"], [class*="history"], [class*="result"]')
+                        numeros_elem = elem.select('.number, .recent-number, .history-number, [class*="number"], [class*="history"], [class*="result"], td, .cell')
                         numeros = []
                         
                         for num_elem in numeros_elem:
@@ -160,7 +225,10 @@ def scrape_api_apenas():
                                 # Converter para número (removendo qualquer texto adicional)
                                 num_match = re.search(r'\d+', num_text)
                                 if num_match:
-                                    numeros.append(num_match.group())
+                                    num = num_match.group()
+                                    # Verificar se é um número de roleta válido (0-36)
+                                    if 0 <= int(num) <= 36:
+                                        numeros.append(num)
                             except Exception as e:
                                 logger.error(f"Erro ao extrair número: {str(e)}")
                         
@@ -170,10 +238,55 @@ def scrape_api_apenas():
                                 "id": id_roleta,
                                 "numeros": numeros
                             }
-                            logger.info(f"Encontrada roleta: {titulo} (ID: {id_roleta}) com {len(numeros)} números")
+                            logger.info(f"Encontrada roleta via HTML: {titulo} (ID: {id_roleta}) com {len(numeros)} números")
                         
                     except Exception as e:
                         logger.error(f"Erro ao processar elemento de roleta: {str(e)}")
+                
+                # Método 3: Buscar iframes que podem conter as roletas
+                iframes = soup.find_all('iframe')
+                logger.info(f"Encontrados {len(iframes)} iframes que podem conter roletas")
+                
+                for i, iframe in enumerate(iframes):
+                    iframe_src = iframe.get('src')
+                    if not iframe_src:
+                        continue
+                    
+                    logger.info(f"Verificando iframe {i+1}: {iframe_src}")
+                    
+                    try:
+                        # Tentar acessar o conteúdo do iframe
+                        iframe_response = session.get(iframe_src, headers=headers_expandidos, timeout=10)
+                        if iframe_response.status_code == 200:
+                            iframe_soup = BeautifulSoup(iframe_response.text, 'html.parser')
+                            
+                            # Procurar por números no iframe
+                            num_elements = iframe_soup.select('[class*="number"], [class*="result"], td')
+                            numeros = []
+                            
+                            for num_elem in num_elements:
+                                try:
+                                    num_text = num_elem.text.strip()
+                                    num_match = re.search(r'\d+', num_text)
+                                    if num_match:
+                                        num = num_match.group()
+                                        if 0 <= int(num) <= 36:
+                                            numeros.append(num)
+                                except Exception:
+                                    pass
+                            
+                            if numeros:
+                                iframe_id = f"roleta-iframe-{i+1}"
+                                iframe_name = f"Roleta Iframe {i+1}"
+                                
+                                roletas_encontradas[iframe_name] = {
+                                    "id": iframe_id,
+                                    "numeros": numeros
+                                }
+                                
+                                logger.info(f"Encontrada roleta via iframe: {iframe_name} com números: {numeros}")
+                    except Exception as e:
+                        logger.error(f"Erro ao processar iframe {i+1}: {str(e)}")
                 
                 return roletas_encontradas
                 
@@ -185,117 +298,21 @@ def scrape_api_apenas():
             logger.error(f"Erro ao extrair dados da página: {str(e)}")
             return {}
     
-    # Função para gerar dados simulados quando não conseguimos acessar o site real
-    def gerar_dados_simulados():
-        logger.info("Gerando dados simulados para teste")
-        
-        # Criar uma sequência de números mais realista para roletas
-        # Roletas reais tendem a ter sequências com números mais variados
-        def gerar_sequencia_realista():
-            numeros = []
-            # Último número (mais recente)
-            numeros.append(str(random.randint(0, 36)))
-            
-            # Anteriores seguindo padrões semi-realistas
-            # Uma roleta real tem algumas características como:
-            # - Raramente tem o mesmo número duas vezes seguidas
-            # - Tende a alternar entre números altos e baixos, vermelhos e pretos
-            anterior = int(numeros[0])
-            
-            for _ in range(15):  # Histórico de 15 números
-                # Evitar o mesmo número consecutivo
-                novo_num = random.randint(0, 36)
-                while novo_num == anterior:
-                    novo_num = random.randint(0, 36)
-                    
-                numeros.append(str(novo_num))
-                anterior = novo_num
-            
-            return numeros
-        
-        # Criar algumas roletas comuns
-        dados_simulados = {
-            "Roleta Brasileira": {
-                "id": "roleta-br-1",
-                "numeros": gerar_sequencia_realista()
-            },
-            "Roleta Europeia": {
-                "id": "roleta-eu-1",
-                "numeros": gerar_sequencia_realista()
-            },
-            "Roleta Americana": {
-                "id": "roleta-us-1",
-                "numeros": gerar_sequencia_realista()
-            },
-            "Lightning Roulette": {
-                "id": "roleta-light-1",
-                "numeros": gerar_sequencia_realista()
-            }
-        }
-        
-        return dados_simulados
-    
-    # Contador de tentativas falhas
-    falhas_consecutivas = 0
-    max_falhas_antes_simulacao = 1  # Reduzido para 1, já que sabemos que o conteúdo é dinâmico
-    
     # Loop contínuo para monitoramento em tempo real
     ciclo = 1
-    ultimo_ciclo_simulacao = 0  # Para controlar quando geramos novos números simulados
-    dados_roletas_simuladas = {}  # Para manter os dados simulados entre ciclos
     
     while True:
         logger.info(f"Ciclo de verificação HTTP {ciclo}")
         
-        # Se estamos usando dados simulados e já passou tempo suficiente, gerar um novo número
-        if dados_roletas_simuladas and ciclo - ultimo_ciclo_simulacao >= 10:
-            logger.info("Gerando novo número simulado para as roletas")
-            
-            for nome_roleta, dados in dados_roletas_simuladas.items():
-                # Gerar novo número diferente do último
-                ultimo = int(dados["numeros"][0]) if dados["numeros"] else -1
-                novo = random.randint(0, 36)
-                # Evitar repetição
-                while novo == ultimo:
-                    novo = random.randint(0, 36)
-                
-                # Inserir o novo número no início da lista
-                dados["numeros"].insert(0, str(novo))
-                # Manter apenas os últimos 16 números
-                dados["numeros"] = dados["numeros"][:16]
-            
-            # Atualizar o último ciclo de simulação
-            ultimo_ciclo_simulacao = ciclo
-            # Usar estes dados atualizados
-            dados_mesas = dados_roletas_simuladas.copy()
-        else:
-            # Extrair dados da página
-            dados_mesas = extrair_dados_da_pagina()
+        # Extrair dados da página
+        dados_mesas = extrair_dados_da_pagina()
         
-        # Se não conseguiu obter dados, tentar usar dados simulados após várias falhas
+        # Se não conseguiu obter dados, tentar novamente
         if not dados_mesas:
-            falhas_consecutivas += 1
-            logger.warning(f"Não foi possível obter dados da página neste ciclo (falha {falhas_consecutivas}/{max_falhas_antes_simulacao})")
-            
-            if falhas_consecutivas >= max_falhas_antes_simulacao:
-                logger.warning(f"Após {falhas_consecutivas} falhas consecutivas, usando dados simulados temporariamente")
-                dados_mesas = gerar_dados_simulados()
-                # Guardar estes dados para atualizações futuras
-                dados_roletas_simuladas = dados_mesas.copy()
-                # Registrar este ciclo para controle de atualizações futuras
-                ultimo_ciclo_simulacao = ciclo
-                # Resetar o contador quando usamos dados simulados
-                falhas_consecutivas = 0
-            else:
-                # Adicionar um tempo de espera maior em caso de falha
-                time.sleep(VERIFICACAO_INTERVALO * 2)
-                ciclo += 1
-                continue
-        else:
-            # Se obtivermos dados com sucesso, resetar o contador de falhas
-            falhas_consecutivas = 0
-            # E limpar os dados simulados
-            dados_roletas_simuladas = {}
+            logger.warning(f"Não foi possível obter dados da página neste ciclo. Tentando novamente em breve.")
+            time.sleep(VERIFICACAO_INTERVALO * 2)
+            ciclo += 1
+            continue
         
         # Dicionário para armazenar os dados atualizados
         dados_atualizados = {}
