@@ -6,6 +6,10 @@ const API_BASE_URL = 'https://sandbox.asaas.com/api/v3';
 const DEFAULT_API_KEY = '$aact_hmlg_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OjNjMjMwZTZiLTYwNzYtNGMwYS05NjA3LWU2NjYyMDMxZTNlOTo6JGFhY2hfNmYzNDFjZDktZmUwMy00MzdmLWE1ODQtNDA0MjcxMThjZjI0';
 
 module.exports = async (req, res) => {
+  console.log('asaas-create-customer endpoint chamado com método:', req.method);
+  console.log('URL completa:', req.url);
+  console.log('Headers da requisição:', JSON.stringify(req.headers));
+
   // Configurar CORS para aceitar qualquer origem
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,11 +18,13 @@ module.exports = async (req, res) => {
 
   // Responder a requisições preflight OPTIONS imediatamente
   if (req.method === 'OPTIONS') {
+    console.log('Requisição OPTIONS recebida, retornando 200');
     return res.status(200).end();
   }
 
   // Apenas aceitar método POST
   if (req.method !== 'POST') {
+    console.error('Método não permitido:', req.method);
     return res.status(405).json({ error: 'Method Not Allowed', method: req.method });
   }
 
