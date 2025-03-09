@@ -83,14 +83,15 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
 
   const fetchRouletteNumbers = useCallback(async () => {
     try {
-      console.log(`Verificando números para roleta: ${name}`);
+      console.log(`[${new Date().toLocaleTimeString()}] Buscando números para roleta: ${name}`);
       
       const response = await fetch(
         `https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roletas?nome=eq.${encodeURIComponent(name)}&select=numeros`,
         {
           headers: {
             'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ',
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store' // Evitar cache para sempre pegar dados novos
           }
         }
       );
@@ -100,46 +101,57 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       }
       
       const data = await response.json();
+      console.log(`[${new Date().toLocaleTimeString()}] Dados recebidos para ${name}:`, data);
       
       if (data && data.length > 0 && Array.isArray(data[0].numeros)) {
         const numerosFiltrados = data[0].numeros
           .map((num: any) => typeof num === 'string' ? parseInt(num, 10) : Number(num))
           .filter((num: number) => !isNaN(num) && num >= 0 && num <= 36);
         
+        console.log(`[${new Date().toLocaleTimeString()}] Números filtrados para ${name}:`, numerosFiltrados);
+        
         if (numerosFiltrados.length > 0) {
-          // Verifica se há algum número novo comparando apenas o último número
-          const ultimoNumeroNoBanco = numerosFiltrados[numerosFiltrados.length - 1];
-          
-          if (lastNumbers.length === 0 || ultimoNumeroNoBanco !== lastNumbers[lastNumbers.length - 1]) {
-            console.log(`Novo número detectado para ${name}: ${ultimoNumeroNoBanco}`);
-            // Apenas adicionamos o novo número ao estado
-            if (lastNumbers.length === 0) {
-              setLastNumbers(numerosFiltrados);
-            } else {
-              // Adicionamos apenas o novo número
-              setLastNumbers(prev => [...prev, ultimoNumeroNoBanco]);
-            }
-            setIsLoading(false); // Remove o indicador de carregamento após atualizar
-          } else {
-            console.log(`Nenhum número novo para ${name}`);
-          }
+          // SEMPRE atualizar com os números recebidos do banco
+          console.log(`[${new Date().toLocaleTimeString()}] Atualizando números para ${name} (${numerosFiltrados.length} números)`);
+          setLastNumbers(numerosFiltrados);
+        } else if (lastNumbers.length === 0) {
+          // Apenas se não houver números atualmente exibidos, usar dados padrão
+          console.log(`[${new Date().toLocaleTimeString()}] Sem números do banco, usando dados padrão para ${name}`);
+          setLastNumbers(initialLastNumbers);
         }
+      } else if (lastNumbers.length === 0) {
+        console.log(`[${new Date().toLocaleTimeString()}] Dados inválidos para ${name}, usando dados padrão`);
+        setLastNumbers(initialLastNumbers);
       }
     } catch (error) {
-      console.error(`Erro ao buscar números para ${name}:`, error);
+      console.error(`[${new Date().toLocaleTimeString()}] Erro ao buscar números para ${name}:`, error);
+      if (lastNumbers.length === 0) {
+        setLastNumbers(initialLastNumbers);
+      }
+    } finally {
+      setIsLoading(false);
     }
-  }, [name, lastNumbers]);
+  }, [name, initialLastNumbers, lastNumbers]);
 
   useEffect(() => {
     if (dataSeeded) {
-      // Busca inicial
+      // Busca inicial imediata
       fetchRouletteNumbers();
       
-      // Configurar polling para atualizar a cada 20 segundos (menos frequente)
-      const intervalId = setInterval(fetchRouletteNumbers, 20000);
+      // Configurar polling para atualizar a cada 10 segundos (mais frequente para ver os números mais rápido)
+      const intervalId = setInterval(fetchRouletteNumbers, 10000);
       
-      // Limpar intervalo quando o componente for desmontado
-      return () => clearInterval(intervalId);
+      // Forçar uma segunda atualização após 2 segundos
+      const quickRefreshTimeout = setTimeout(() => {
+        console.log("Forçando atualização rápida para garantir exibição dos números");
+        fetchRouletteNumbers();
+      }, 2000);
+      
+      // Limpar intervalo e timeout quando o componente for desmontado
+      return () => {
+        clearInterval(intervalId);
+        clearTimeout(quickRefreshTimeout);
+      };
     }
   }, [dataSeeded, fetchRouletteNumbers]);
 
