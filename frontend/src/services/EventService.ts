@@ -30,8 +30,24 @@ class EventService {
   private reconnectTimeout: number | null = null;
   private backoffTime: number = 1000; // Tempo inicial de backoff em ms
 
-  // URL do endpoint SSE - ajustar conforme necessário
-  private serverUrl: string = 'http://localhost:5000/events';
+  // URL do endpoint SSE com detecção automática do ambiente
+  private getServerUrl(): string {
+    // Em produção, usar o mesmo host que o frontend
+    const isProduction = window.location.hostname !== 'localhost' && 
+                         window.location.hostname !== '127.0.0.1';
+    
+    if (isProduction) {
+      // Usa o mesmo protocolo (http/https) e host do frontend
+      const protocol = window.location.protocol;
+      const host = window.location.host; // inclui hostname:port se aplicável
+      console.log(`Ambiente de produção detectado, usando ${protocol}//${host}/events`);
+      return `${protocol}//${host}/events`;
+    } else {
+      // Em desenvolvimento, usar localhost na porta 5000
+      console.log('Ambiente de desenvolvimento detectado, usando http://localhost:5000/events');
+      return 'http://localhost:5000/events';
+    }
+  }
 
   private constructor() {
     this.connect();
@@ -52,8 +68,9 @@ class EventService {
     }
 
     try {
-      console.log(`Conectando ao servidor de eventos: ${this.serverUrl}`);
-      this.eventSource = new EventSource(this.serverUrl);
+      const serverUrl = this.getServerUrl();
+      console.log(`Conectando ao servidor de eventos: ${serverUrl}`);
+      this.eventSource = new EventSource(serverUrl);
 
       this.eventSource.onopen = () => {
         console.log('Conexão SSE estabelecida');
