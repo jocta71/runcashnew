@@ -30,17 +30,28 @@ class EventService {
   private reconnectTimeout: number | null = null;
   private backoffTime: number = 1000; // Tempo inicial de backoff em ms
 
-  // URL do endpoint SSE com detecção automática do ambiente
+  // URL do endpoint SSE com prioridade para variáveis de ambiente
   private getServerUrl(): string {
-    // Em produção, usar o mesmo host que o frontend
+    // 1. Verificar se existe uma variável de ambiente configurada (prioridade máxima)
+    const envServerUrl = import.meta.env.VITE_SSE_SERVER_URL;
+    if (envServerUrl) {
+      console.log(`Usando URL do servidor de eventos da variável de ambiente: ${envServerUrl}`);
+      return envServerUrl;
+    }
+    
+    // 2. Detecção automática baseada no ambiente
     const isProduction = window.location.hostname !== 'localhost' && 
                          window.location.hostname !== '127.0.0.1';
     
     if (isProduction) {
-      // Usa o mesmo protocolo (http/https) e host do frontend
+      // No ambiente de produção, tente primeiro usar a mesma origem que o frontend
+      // Isso funciona se o backend estiver no mesmo domínio
       const protocol = window.location.protocol;
-      const host = window.location.host; // inclui hostname:port se aplicável
-      console.log(`Ambiente de produção detectado, usando ${protocol}//${host}/events`);
+      const host = window.location.host;
+      
+      console.log(`Ambiente de produção detectado. Tentando usar ${protocol}//${host}/events`);
+      console.log('IMPORTANTE: Se o frontend está na Vercel e o backend está em outro lugar, configure VITE_SSE_SERVER_URL nas variáveis de ambiente');
+      
       return `${protocol}//${host}/events`;
     } else {
       // Em desenvolvimento, usar localhost na porta 5000
