@@ -91,7 +91,7 @@ export const fetchAvailableRoulettesFromNumbers = async (): Promise<string[]> =>
 // Modificar a função fetchAllRoulettes para usar as roletas disponíveis na tabela de números
 export const fetchAllRoulettes = async (): Promise<RouletteData[]> => {
   try {
-    console.log('Buscando todas as roletas baseado nos dados do Supabase...');
+    console.log('[DEBUG] Buscando todas as roletas baseado nos dados do Supabase...');
     
     // 1. Primeiro obter os nomes das roletas disponíveis na tabela roleta_numeros
     const availableRouletteNames = await fetchAvailableRoulettesFromNumbers();
@@ -126,7 +126,7 @@ export const fetchAllRoulettes = async (): Promise<RouletteData[]> => {
     const fixedIds = ["2010016", "2380335", "2010065", "2010096", "2010017", "2010098"];
     
     // 3. Para cada roleta disponível, criar um objeto RouletteData
-    const rouletteData: RouletteData[] = await Promise.all(
+    const rouletteDataArray = await Promise.all(
       availableRouletteNames.map(async (roletaNome, index) => {
         // 3.1 Buscar os números desta roleta
         const numbers = await fetchRouletteLatestNumbersByName(roletaNome, 20);
@@ -159,8 +159,38 @@ export const fetchAllRoulettes = async (): Promise<RouletteData[]> => {
       })
     );
     
-    console.log(`Gerados ${rouletteData.length} objetos de roleta com base nos números disponíveis.`);
-    return rouletteData;
+    // NOVO: Consolidar roletas com o mesmo nome para evitar duplicação
+    const uniqueRoulettes = new Map<string, RouletteData>();
+    
+    for (const roulette of rouletteDataArray) {
+      if (!uniqueRoulettes.has(roulette.nome)) {
+        // Se é a primeira roleta com este nome, adiciona ao mapa
+        uniqueRoulettes.set(roulette.nome, roulette);
+      } else {
+        // Se já existe uma roleta com este nome, combina os números
+        const existingRoulette = uniqueRoulettes.get(roulette.nome)!;
+        
+        // Combinar números sem duplicar
+        const combinedNumbers = [...existingRoulette.numeros];
+        for (const num of roulette.numeros) {
+          if (!combinedNumbers.includes(num)) {
+            combinedNumbers.push(num);
+          }
+        }
+        
+        // Atualizar a roleta existente com números combinados
+        uniqueRoulettes.set(roulette.nome, {
+          ...existingRoulette,
+          numeros: combinedNumbers.slice(0, 20) // Manter no máximo 20 números
+        });
+      }
+    }
+    
+    // Converter o mapa de volta para array
+    const consolidatedRoulettes = Array.from(uniqueRoulettes.values());
+    console.log(`[INFO] Consolidadas ${rouletteDataArray.length} roletas em ${consolidatedRoulettes.length} roletas únicas`);
+    
+    return consolidatedRoulettes;
     
   } catch (error) {
     console.error('Erro ao buscar roletas:', error);
