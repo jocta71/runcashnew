@@ -1,103 +1,32 @@
 /**
- * Configuração dinâmica de roletas permitidas para exibição no frontend
+ * Lista de IDs de roletas permitidas para extração pelo scraper (app.py)
+ * Estas roletas serão as únicas que o scraper poderá extrair números
+ * Especifique IDs exatos para controlar quais roletas são monitoradas
  */
-
-// Configuração do Supabase
-const SUPABASE_URL = "https://evzqzghxuttctbxgohpx.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ";
-
-// Lista inicial de roletas IDs permitidas (usada como fallback)
-export const ROLETAS_PERMITIDAS_INICIAL = [
+export const ROLETAS_PERMITIDAS = [
   "2010016",  // Immersive Roulette
   "2380335",  // Brazilian Mega Roulette
   "2010065",  // Bucharest Auto-Roulette
   "2010096",  // Speed Auto Roulette
   "2010017",  // Auto-Roulette
   "2010098",  // Auto-Roulette VIP
+  
+  // IMPORTANTE: Remove o coringa "*" para garantir que apenas roletas específicas sejam permitidas
+  // Para permitir todas as roletas, descomente a linha abaixo
+  // "*"
 ];
-
-// Lista dinâmica que será preenchida em tempo de execução
-let roletasPermitidas: string[] = [...ROLETAS_PERMITIDAS_INICIAL];
-let roletasNomePermitidas: string[] = [];
-let listaAtualizada = false;
-
-/**
- * Busca as roletas disponíveis do Supabase e atualiza a lista de permitidas
- * @returns Promise com a lista de roletas permitidas
- */
-export const atualizarRoletasPermitidas = async (): Promise<string[]> => {
-  try {
-    console.log('[AllowedRoulettes] Buscando roletas disponíveis no Supabase...');
-    
-    // Buscar diretamente do Supabase com seleção distinta dos nomes de roletas
-    const response = await fetch(
-      `${SUPABASE_URL}/rest/v1/roleta_numeros?select=roleta_nome,roleta_id&order=roleta_nome`,
-      {
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache, no-store',
-          'Prefer': 'distinct=true'
-        }
-      }
-    );
-    
-    if (!response.ok) {
-      throw new Error(`Erro ao buscar roletas disponíveis: ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    console.log(`[AllowedRoulettes] Encontradas ${data.length} roletas únicas na tabela roleta_numeros.`);
-    
-    // Extrair IDs e nomes das roletas
-    const uniqueIds = new Set<string>();
-    const uniqueNames = new Set<string>();
-    
-    data.forEach(item => {
-      if (item.roleta_id) uniqueIds.add(item.roleta_id);
-      if (item.roleta_nome) uniqueNames.add(item.roleta_nome);
-    });
-    
-    // Atualizar as listas dinâmicas
-    roletasPermitidas = [...uniqueIds];
-    roletasNomePermitidas = [...uniqueNames];
-    listaAtualizada = true;
-    
-    console.log('[AllowedRoulettes] Lista de roletas permitidas atualizada:', roletasPermitidas);
-    console.log('[AllowedRoulettes] Nomes de roletas permitidas:', roletasNomePermitidas);
-    
-    return roletasPermitidas;
-  } catch (error) {
-    console.error('[AllowedRoulettes] Erro ao buscar roletas disponíveis:', error);
-    return ROLETAS_PERMITIDAS_INICIAL;
-  }
-};
 
 /**
  * Verifica se uma roleta está na lista de roletas permitidas
- * @param rouletteId ID ou nome da roleta a ser verificada
+ * @param rouletteId ID da roleta a ser verificada
  * @returns boolean indicando se a roleta está permitida
  */
 export const isRouletteAllowed = (rouletteId: string): boolean => {
-  // Se a lista ainda não foi atualizada, atualize-a
-  if (!listaAtualizada) {
-    // Iniciar atualização assíncrona
-    atualizarRoletasPermitidas().catch(console.error);
-    // Enquanto isso, use a lista inicial
-    return ROLETAS_PERMITIDAS_INICIAL.includes(rouletteId);
-  }
-  
-  // Verificar se o ID está na lista de IDs permitidos
-  if (roletasPermitidas.includes(rouletteId)) {
+  // Se "*" estiver na lista, todas as roletas são permitidas
+  if (ROLETAS_PERMITIDAS.includes("*")) {
     return true;
   }
-  
-  // Verificar se o ID é na verdade um nome e está na lista de nomes permitidos
-  if (roletasNomePermitidas.includes(rouletteId)) {
-    return true;
-  }
-  
-  return false;
+  return ROLETAS_PERMITIDAS.includes(rouletteId);
 };
 
 /**
@@ -105,23 +34,32 @@ export const isRouletteAllowed = (rouletteId: string): boolean => {
  * @param roulettes Array de roletas
  * @returns Array filtrado contendo apenas roletas permitidas
  */
-export const filterAllowedRoulettes = <T extends { id: string; nome?: string }>(roulettes: T[]): T[] => {
-  // Se a lista não foi atualizada, tente atualizá-la
-  if (!listaAtualizada) {
-    atualizarRoletasPermitidas().catch(console.error);
+export const filterAllowedRoulettes = <T extends { id: string }>(roulettes: T[]): T[] => {
+  // Se "*" estiver na lista, retorne todas as roletas sem filtrar
+  if (ROLETAS_PERMITIDAS.includes("*")) {
+    return roulettes;
   }
-  
-  return roulettes.filter(roulette => {
-    // Verificar pelo ID
-    if (isRouletteAllowed(roulette.id)) {
-      return true;
-    }
-    
-    // Verificar pelo nome, se disponível
-    if (roulette.nome && isRouletteAllowed(roulette.nome)) {
-      return true;
-    }
-    
-    return false;
-  });
-}; 
+  return roulettes.filter(roulette => isRouletteAllowed(roulette.id));
+};
+
+/**
+ * Exporta a lista de IDs como string formatada para variável de ambiente
+ * Use este valor para configurar a variável ALLOWED_ROULETTES no backend
+ */
+export const getAllowedRoulettesEnvValue = (): string => {
+  // Remove "*" se estiver presente, pois não é um ID válido para o backend
+  const validIds = ROLETAS_PERMITIDAS.filter(id => id !== "*");
+  return validIds.join(",");
+};
+
+/**
+ * Instruções para configurar as roletas permitidas no scraper (app.py)
+ * 
+ * 1. Copie o valor retornado por getAllowedRoulettesEnvValue()
+ * 2. Configure a variável de ambiente ALLOWED_ROULETTES no backend
+ *    - No arquivo .env do backend: ALLOWED_ROULETTES=2010016,2380335,2010065,2010096,2010017,2010098
+ *    - Ou em plataformas como Heroku/Railway: adicione a variável com o mesmo valor
+ * 
+ * Isto garantirá que o scraper (app.py) e o frontend estejam sincronizados
+ * quanto às roletas permitidas para extração e exibição.
+ */ 

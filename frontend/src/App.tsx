@@ -11,6 +11,7 @@ import PaymentCanceled from "./pages/PaymentCanceled";
 import PlansPage from "./pages/PlansPage";
 import ProfilePage from "./pages/ProfilePage";
 import SeedPage from "./pages/SeedPage";
+import ConfigSync from "./pages/ConfigSync";
 import { AuthProvider } from "./context/AuthContext";
 import { SubscriptionProvider } from "./context/SubscriptionContext";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -36,6 +37,9 @@ const App = () => (
               
               {/* Página para popular números das roletas */}
               <Route path="/seed-numbers" element={<SeedPage />} />
+              
+              {/* Página para configuração e sincronização das roletas permitidas */}
+              <Route path="/config-sync" element={<ConfigSync />} />
               
               {/* Rotas protegidas - apenas para usuários autenticados */}
               <Route path="/" element={
