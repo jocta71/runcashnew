@@ -171,7 +171,8 @@ export const fetchAllRoulettes = async (): Promise<RouletteData[]> => {
 // Nova função para buscar números mais recentes por nome da roleta
 export const fetchRouletteLatestNumbersByName = async (roletaNome: string, limit = 10): Promise<number[]> => {
   try {
-    console.log(`Buscando os ${limit} últimos números da roleta '${roletaNome}' do Supabase...`);
+    console.log(`[DEPURAÇÃO] Buscando números para roleta '${roletaNome}'...`);
+    console.log(`[DEPURAÇÃO] URL: ${SUPABASE_URL}/rest/v1/roleta_numeros?roleta_nome=eq.${encodeURIComponent(roletaNome)}`);
     
     // Buscar diretamente do Supabase usando o nome da roleta
     const response = await fetch(
@@ -186,22 +187,38 @@ export const fetchRouletteLatestNumbersByName = async (roletaNome: string, limit
     );
     
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[ERRO] Falha ao buscar números para roleta '${roletaNome}': ${response.status} ${response.statusText}`, errorText);
       throw new Error(`Erro ao buscar números da roleta '${roletaNome}': ${response.statusText}`);
     }
     
     const data = await response.json();
-    console.log(`Encontrados ${data.length} números no Supabase para a roleta '${roletaNome}'`);
+    console.log(`[DEPURAÇÃO] Resposta do Supabase para roleta '${roletaNome}':`, data);
     
-    if (Array.isArray(data) && data.length > 0) {
-      // Extrair apenas os números (o mais recente primeiro)
-      const numbers = data.map(item => Number(item.numero));
-      console.log(`Números extraídos para '${roletaNome}':`, numbers);
+    if (!Array.isArray(data)) {
+      console.error(`[ERRO] Resposta não é um array para roleta '${roletaNome}':`, data);
+      return [];
+    }
+    
+    console.log(`[DEPURAÇÃO] Encontrados ${data.length} registros para roleta '${roletaNome}'`);
+    
+    if (data.length > 0) {
+      // Extrair apenas os números e garantir que são do tipo number
+      const numbers = data.map(item => {
+        // Converter para número
+        const num = typeof item.numero === 'string' ? parseInt(item.numero, 10) : Number(item.numero);
+        console.log(`[DEPURAÇÃO] Convertendo número '${item.numero}' para ${num} (${typeof num})`);
+        return num;
+      });
+      
+      console.log(`[DEPURAÇÃO] Números extraídos para '${roletaNome}':`, numbers);
       return numbers;
     }
     
+    console.warn(`[AVISO] Nenhum número encontrado para roleta '${roletaNome}'`);
     return [];
   } catch (error) {
-    console.error(`Erro ao buscar números para roleta '${roletaNome}':`, error);
+    console.error(`[ERRO] Exceção ao buscar números para roleta '${roletaNome}':`, error);
     return [];
   }
 };

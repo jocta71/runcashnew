@@ -37,43 +37,70 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
   const [usingSupabaseData, setUsingSupabaseData] = useState(false);
 
   useEffect(() => {
-    console.log(`[${name}] RouletteCard inicializado com números iniciais:`, initialLastNumbers);
+    console.log(`[DEPURAÇÃO][${name}] Inicializando componente RouletteCard`);
     
     const checkAndSeedData = async () => {
       try {
-        console.log(`[${name}] Verificando dados no Supabase...`);
+        console.log(`[DEPURAÇÃO][${name}] Buscando dados no Supabase...`);
         setIsLoading(true);
         
         // Buscar números diretamente do Supabase pela função específica para busca por nome
+        console.log(`[DEPURAÇÃO][${name}] Chamando fetchRouletteLatestNumbersByName...`);
         const numbers = await fetchRouletteLatestNumbersByName(name, 20);
         
+        console.log(`[DEPURAÇÃO][${name}] Números recebidos:`, numbers);
+        
         if (numbers && numbers.length > 0) {
-          console.log(`[${name}] Números obtidos diretamente do Supabase:`, numbers);
+          console.log(`[DEPURAÇÃO][${name}] ${numbers.length} números encontrados:`, numbers);
           setLastNumbers(numbers);
           setUsingSupabaseData(true);
           setDataSeeded(true);
+          
+          // Exibir alerta para cada roleta que tem dados
+          console.log(`[DEPURAÇÃO][${name}] Números carregados com sucesso!`);
+          
           toast({
-            title: `Dados Carregados: ${name}`,
-            description: `${numbers.length} números encontrados no Supabase`,
+            title: `Dados carregados: ${name}`,
+            description: `${numbers.length} números encontrados: ${numbers.slice(0, 3).join(', ')}...`,
             variant: 'default',
           });
         } else {
-          console.log(`[${name}] Nenhum número encontrado no Supabase, usando dados iniciais provisórios`);
+          console.log(`[DEPURAÇÃO][${name}] Nenhum número encontrado no Supabase`);
+          
           // Usar os dados iniciais como fallback apenas se realmente não houver dados no Supabase
           if (initialLastNumbers && initialLastNumbers.length > 0) {
+            console.log(`[DEPURAÇÃO][${name}] Usando dados iniciais:`, initialLastNumbers);
             setLastNumbers(initialLastNumbers);
+          } else {
+            console.log(`[DEPURAÇÃO][${name}] Nenhum dado inicial disponível. Usando array vazio.`);
+            setLastNumbers([]);
           }
+          
           setUsingSupabaseData(false);
           setDataSeeded(true);
+          
+          toast({
+            title: `Sem dados: ${name}`,
+            description: 'Nenhum número encontrado no Supabase',
+            variant: 'destructive',
+          });
         }
       } catch (error) {
-        console.error(`[${name}] Erro ao verificar dados:`, error);
+        console.error(`[ERRO][${name}] Erro ao buscar dados:`, error);
+        
         // Usar os dados iniciais como fallback em caso de erro
         if (initialLastNumbers && initialLastNumbers.length > 0) {
           setLastNumbers(initialLastNumbers);
         }
+        
         setUsingSupabaseData(false);
         setDataSeeded(true);
+        
+        toast({
+          title: `Erro: ${name}`,
+          description: `Erro ao buscar dados: ${error}`,
+          variant: 'destructive',
+        });
       } finally {
         setIsLoading(false);
       }
@@ -89,14 +116,16 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
 
   const fetchRouletteNumbers = useCallback(async () => {
     try {
-      console.log(`[${name}] [${new Date().toLocaleTimeString()}] Buscando números do Supabase...`);
+      console.log(`[DEPURAÇÃO][${name}] Atualizando números do Supabase...`);
       setIsLoading(true);
       
       // Usar a função específica para buscar números pelo nome da roleta
       const numbers = await fetchRouletteLatestNumbersByName(name, 20);
       
+      console.log(`[DEPURAÇÃO][${name}] Números atualizados recebidos:`, numbers);
+      
       if (Array.isArray(numbers) && numbers.length > 0) {
-        console.log(`[${name}] Números obtidos do Supabase (${numbers.length}):`, numbers);
+        console.log(`[DEPURAÇÃO][${name}] ${numbers.length} números encontrados na atualização`);
         
         // Detectar se há um novo número em comparação com o estado atual
         const isNewNumber = lastNumbers.length > 0 && numbers[0] !== lastNumbers[0];
@@ -116,11 +145,11 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
           });
         }
       } else {
-        console.log(`[${name}] Nenhum número encontrado no Supabase`);
+        console.log(`[DEPURAÇÃO][${name}] Nenhum número encontrado na atualização`);
         setUsingSupabaseData(false);
       }
     } catch (error) {
-      console.error(`[${name}] Erro ao buscar números:`, error);
+      console.error(`[ERRO][${name}] Erro ao buscar números:`, error);
       setUsingSupabaseData(false);
     } finally {
       setIsLoading(false);

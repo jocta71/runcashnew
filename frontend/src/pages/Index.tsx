@@ -363,6 +363,72 @@ const Index = () => {
     }).slice(0, 3);
   }, [roulettes]);
 
+  // Função para depurar diretamente os dados do Supabase
+  const debugSupabaseData = async () => {
+    try {
+      console.log("[DEPURAÇÃO] Iniciando consulta direta ao Supabase...");
+      
+      const SUPABASE_URL = "https://evzqzghxuttctbxgohpx.supabase.co";
+      const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ";
+      
+      // 1. Verificar tabelas disponíveis
+      console.log("[DEPURAÇÃO] Consultando tabela roleta_numeros...");
+      
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/roleta_numeros?limit=10`,
+        {
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Content-Type': 'application/json',
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`Erro ao consultar Supabase: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log("[DEPURAÇÃO] Dados obtidos do Supabase:", data);
+      
+      // Exibir toast com os resultados
+      if (Array.isArray(data) && data.length > 0) {
+        toast({
+          title: "Dados encontrados!",
+          description: `Encontrados ${data.length} registros na tabela roleta_numeros`,
+          variant: "default"
+        });
+        
+        // Extrair nomes de roletas únicos
+        const roletaNames = [...new Set(data.map(item => item.roleta_nome))];
+        console.log("[DEPURAÇÃO] Nomes de roletas encontrados:", roletaNames);
+        
+        // Mostrar detalhes de alguns registros
+        data.slice(0, 5).forEach((record, index) => {
+          console.log(`[DEPURAÇÃO] Registro ${index + 1}:`, { 
+            roleta_nome: record.roleta_nome,
+            roleta_id: record.roleta_id,
+            numero: record.numero,
+            created_at: record.created_at
+          });
+        });
+      } else {
+        toast({
+          title: "Nenhum dado encontrado",
+          description: "A tabela roleta_numeros parece estar vazia",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("[ERRO] Falha na depuração do Supabase:", error);
+      toast({
+        title: "Erro de Depuração",
+        description: String(error),
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen flex bg-vegas-black">
       {/* Desktop Sidebar */}
@@ -499,6 +565,16 @@ const Index = () => {
           Atualizando dados do Supabase...
         </div>
       )}
+      
+      {/* Botão de depuração - posicione onde for mais conveniente */}
+      <div className="fixed bottom-4 right-4 z-50">
+        <Button
+          onClick={debugSupabaseData}
+          className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md"
+        >
+          Depurar Supabase
+        </Button>
+      </div>
     </div>
   );
 };
