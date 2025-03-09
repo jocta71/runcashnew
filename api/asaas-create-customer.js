@@ -3,7 +3,7 @@ const axios = require('axios');
 
 // URL de teste do Asaas - usando ambiente de homologação
 const API_BASE_URL = 'https://sandbox.asaas.com/api/v3';
-const DEFAULT_API_KEY = '$aact_hmlg_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OjNjMjMwZTZiLTYwNzYtNGMwYS05NjA3LWU2NjYyMDMxZTNlOTo6JGFhY2hfNmYzNDFjZDktZmUwMy00MzdmLWE1ODQtNDA0MjcxMThjZjI0';
+const DEFAULT_API_KEY = '$aact_hmlg_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OmRhNjc3NWMzLWRmMzQtNDc1NS05ZTY2LWMzNGFjYWQ1NzRiZTo6JGFhY2hfNTMwM2FiNDAtZGY4My00NTBhLWJkNmMtMDAxZTVjNWE4MGE1';
 
 /**
  * Handler da função serverless para criar clientes no Asaas
