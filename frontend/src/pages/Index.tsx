@@ -419,11 +419,24 @@ const Index = () => {
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-vegas-gold"></div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mt-2 md:mt-6">
-              {filteredRoulettes.map((roulette, index) => (
-                <RouletteCard key={index} {...roulette} />
-              ))}
-            </div>
+            <>
+              <div className="mb-6 bg-gradient-to-r from-vegas-gold to-yellow-500 p-4 rounded-lg">
+                <h3 className="text-black font-bold mb-2">Atualize para o Plano Premium</h3>
+                <p className="text-black/80 mb-3">Acesse estatísticas em tempo real e muito mais!</p>
+                <button 
+                  className="bg-black text-white px-4 py-2 rounded-md text-sm"
+                  onClick={() => navigate('/planos')}
+                >
+                  Ver Planos
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mt-2 md:mt-6">
+                {filteredRoulettes.map((roulette, index) => (
+                  <RouletteCard key={index} {...roulette} />
+                ))}
+              </div>
+            </>
           )}
           
           {/* Mobile Footer Space (to avoid content being hidden behind fixed elements) */}
@@ -436,17 +449,6 @@ const Index = () => {
       
       {/* Mobile Chat (drawer) */}
       <ChatUI isOpen={chatOpen} onClose={() => setChatOpen(false)} isMobile={true} />
-      
-      <div className="bg-gradient-to-r from-vegas-gold to-yellow-500 p-4 rounded-lg mb-6">
-        <h3 className="text-black font-bold mb-2">Atualize para o Plano Premium</h3>
-        <p className="text-black/80 mb-3">Acesse estatísticas em tempo real e muito mais!</p>
-        <button 
-          className="bg-black text-white px-4 py-2 rounded-md text-sm"
-          onClick={() => navigate('/planos')}
-        >
-          Ver Planos
-        </button>
-      </div>
     </div>
   );
 };
