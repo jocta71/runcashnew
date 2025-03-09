@@ -1,69 +1,71 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useToast } from '@/hooks/use-toast';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { CheckCircle, Clock } from 'lucide-react';
 
-// Versão ultra-simplificada sem dependências do backend
 const PaymentSuccess = () => {
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const sessionId = searchParams.get('session_id');
-  const isFree = searchParams.get('free') === 'true';
-  const [countdown, setCountdown] = useState(5);
-
+  const [isFree, setIsFree] = useState(false);
+  
   useEffect(() => {
-    // Mostrar toast de sucesso uma única vez
-    toast({
-      title: "Assinatura ativada com sucesso!",
-      description: "Seu plano foi atualizado e você já pode acessar todos os recursos.",
-    });
+    // Verificar se é um plano gratuito através da URL
+    const params = new URLSearchParams(location.search);
+    setIsFree(params.get('free') === 'true');
     
-    // Configurar countdown para redirecionamento
-    const interval = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          navigate('/');
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    
-    return () => clearInterval(interval);
-  }, [navigate, toast]);
-
+    // Redirecionar para a página inicial após 10 segundos para planos gratuitos
+    if (params.get('free') === 'true') {
+      const timer = setTimeout(() => {
+        navigate('/');
+      }, 10000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [location, navigate]);
+  
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-vegas-dark">
-      <div className="bg-vegas-darkgray p-8 rounded-lg shadow-lg max-w-md w-full text-center">
-        <div className="w-20 h-20 bg-green-500 rounded-full mx-auto mb-6 flex items-center justify-center">
-          <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-        <h2 className="text-2xl font-bold text-white mb-2">Pagamento Aprovado!</h2>
-        <p className="text-gray-300 mb-6">
-          Sua assinatura foi ativada com sucesso. Agora você tem acesso a todos os recursos do seu novo plano.
-        </p>
+    <div className="container mx-auto py-16 px-4 flex flex-col items-center">
+      <div className="max-w-2xl w-full text-center p-8 bg-gray-800 rounded-lg shadow-lg">
+        {isFree ? (
+          <>
+            <CheckCircle className="mx-auto h-16 w-16 text-green-500 mb-6" />
+            <h1 className="text-3xl font-bold mb-4">Plano Gratuito Ativado!</h1>
+            <p className="text-xl text-gray-300 mb-8">
+              Sua assinatura do plano gratuito foi ativada com sucesso.
+              Você já pode começar a usar todos os recursos incluídos.
+            </p>
+            <p className="text-gray-400 mb-8">
+              Você será redirecionado para a página inicial em alguns segundos...
+            </p>
+          </>
+        ) : (
+          <>
+            <Clock className="mx-auto h-16 w-16 text-vegas-gold mb-6" />
+            <h1 className="text-3xl font-bold mb-4">Estamos processando seu pagamento!</h1>
+            <p className="text-xl text-gray-300 mb-4">
+              O QR Code do PIX foi gerado e está aguardando seu pagamento.
+            </p>
+            <div className="bg-gray-700 p-4 rounded-md mb-8">
+              <p className="text-gray-300">
+                Assim que o pagamento for confirmado, sua assinatura será ativada automaticamente.
+                Este processo geralmente leva apenas alguns minutos.
+              </p>
+            </div>
+            <p className="text-gray-400 mb-4">
+              Verifique no seu aplicativo de banco se o pagamento PIX foi concluído com sucesso.
+            </p>
+            <p className="text-gray-400 mb-8">
+              Se você fechou a janela de pagamento, pode acessar seu perfil a qualquer momento para visualizar ou gerenciar sua assinatura.
+            </p>
+          </>
+        )}
         
-        <div className="w-full bg-vegas-black rounded-md p-4 mb-6">
-          <p className="text-vegas-gold font-medium mb-1">Confirmação de Pagamento</p>
-          <p className="text-gray-400 text-sm">
-            {isFree 
-              ? "Plano gratuito ativado" 
-              : `ID da transação: ${sessionId?.substring(0, 12)}...`
-            }
-          </p>
-        </div>
-        <p className="text-gray-400 text-sm mb-4">
-          Você será redirecionado para a página inicial em {countdown} segundos...
-        </p>
-        <button 
+        <Button 
+          className="bg-vegas-gold hover:bg-yellow-600 text-black font-medium"
           onClick={() => navigate('/')}
-          className="bg-vegas-gold hover:bg-vegas-gold/80 text-black font-medium py-2 px-6 rounded-md w-full"
         >
           Voltar para a página inicial
-        </button>
+        </Button>
       </div>
     </div>
   );

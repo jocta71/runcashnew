@@ -12,6 +12,7 @@
     { "source": "/api/asaas-create-customer", "destination": "/api/asaas-create-customer.js" },
     { "source": "/api/asaas-create-subscription", "destination": "/api/asaas-create-subscription.js" },
     { "source": "/api/asaas-webhook", "destination": "/api/asaas-webhook.js" },
+    { "source": "/api/get-subscription", "destination": "/api/get-subscription.js" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
