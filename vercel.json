@@ -13,6 +13,11 @@
     { "source": "/api/asaas-create-subscription", "destination": "/api/asaas-create-subscription.js" },
     { "source": "/api/asaas-webhook", "destination": "/api/asaas-webhook.js" },
     { "source": "/api/get-subscription", "destination": "/api/get-subscription.js" },
+    { "source": "/planos", "destination": "/index.html" },
+    { "source": "/profile", "destination": "/index.html" },
+    { "source": "/payment-success", "destination": "/index.html" },
+    { "source": "/payment-canceled", "destination": "/index.html" },
+    { "source": "/auth", "destination": "/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
