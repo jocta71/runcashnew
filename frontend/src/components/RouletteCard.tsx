@@ -82,6 +82,11 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     checkAndSeedData();
   }, [initialLastNumbers]);
 
+  const verificarEstrategia = (numero: number) => {
+    // Placeholder para verificação de estratégia
+    console.log(`Verificando estratégia para número: ${numero}`);
+  };
+
   const fetchRouletteNumbers = useCallback(async () => {
     try {
       console.log(`[${new Date().toLocaleTimeString()}] Buscando números para roleta: ${name}`);
@@ -92,7 +97,8 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
         {
           headers: {
             'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ',
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store'
           }
         }
       );
@@ -109,33 +115,67 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       const roletaId = idData[0].id;
       console.log(`[${new Date().toLocaleTimeString()}] ID da roleta ${name}: ${roletaId}`);
       
-      // Agora buscamos os últimos números usando a nova função
-      const numbers = await fetchRouletteLatestNumbers(roletaId, 20);
-      console.log(`[${new Date().toLocaleTimeString()}] Números obtidos para ${name}:`, numbers);
+      // Buscamos os últimos números diretamente do Supabase
+      const supabaseUrl = "https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roleta_numeros";
+      const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ";
       
-      if (numbers && numbers.length > 0) {
+      const response = await fetch(
+        `${supabaseUrl}?roleta_id=eq.${roletaId}&select=numero,created_at&order=created_at.desc&limit=20`,
+        {
+          headers: {
+            'apikey': supabaseKey,
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store'
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`Erro ao buscar números da roleta: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log(`[${new Date().toLocaleTimeString()}] Dados obtidos do Supabase:`, data);
+      
+      if (Array.isArray(data) && data.length > 0) {
+        // Extrair apenas os números na ordem correta (mais recente primeiro)
+        const numbers = data.map(item => item.numero);
+        console.log(`[${new Date().toLocaleTimeString()}] Números extraídos do Supabase:`, numbers);
+        
         setLastNumbers(numbers);
+        
         // Detectar se há um novo número
         if (lastNumbers.length > 0 && numbers[0] !== lastNumbers[0]) {
           setPreviousLastNumber(lastNumbers[0]);
           // Verificar estratégia com o novo número
           verificarEstrategia(numbers[0]);
         }
+
+        // Notificar o usuário que os números foram atualizados
+        if (numbers.length > 0 && !isLoading) {
+          toast({
+            title: "Números Atualizados",
+            description: `Último número: ${numbers[0]}`,
+            variant: "default",
+          });
+        }
+      } else {
+        console.log(`[${new Date().toLocaleTimeString()}] Nenhum número encontrado no Supabase para a roleta ${name}`);
       }
     } catch (error) {
       console.error(`Erro ao buscar números da roleta ${name}:`, error);
     } finally {
       setIsLoading(false);
     }
-  }, [name, lastNumbers]);
+  }, [name, lastNumbers, isLoading]);
 
   useEffect(() => {
     if (dataSeeded) {
       // Busca inicial imediata
       fetchRouletteNumbers();
       
-      // Configurar polling para atualizar a cada 10 segundos (mais frequente para ver os números mais rápido)
-      const intervalId = setInterval(fetchRouletteNumbers, 10000);
+      // Configurar polling para atualizar a cada 5 segundos
+      const intervalId = setInterval(fetchRouletteNumbers, 5000);
       
       // Forçar uma segunda atualização após 2 segundos
       const quickRefreshTimeout = setTimeout(() => {
@@ -241,6 +281,34 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">{name}</h3>
         <TrendingUp size={20} className="text-[#00ff00]" />
+      </div>
+      
+      {/* Exibição dos números do Supabase */}
+      <div className="mb-3">
+        <h4 className="text-xs font-medium text-[#00ff00] mb-1.5 flex items-center">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00] mr-1.5"></span>
+          Últimos Números do Supabase
+        </h4>
+        {isLoading ? (
+          <div className="flex justify-center items-center h-10 text-gray-400">
+            Carregando números...
+          </div>
+        ) : lastNumbers.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5 my-2">
+            {lastNumbers.slice(0, 15).map((num, idx) => (
+              <div
+                key={`supabase-num-${idx}`}
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${getRouletteNumberColor(num)}`}
+              >
+                {num}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex justify-center items-center h-10 text-gray-400 text-sm">
+            Aguardando números do Supabase...
+          </div>
+        )}
       </div>
       
       {memoizedNumbers}
