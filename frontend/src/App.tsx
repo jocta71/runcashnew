@@ -10,6 +10,7 @@ import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentCanceled from "./pages/PaymentCanceled";
 import PlansPage from "./pages/PlansPage";
 import ProfilePage from "./pages/ProfilePage";
+import SeedPage from "./pages/SeedPage";
 import { AuthProvider } from "./context/AuthContext";
 import { SubscriptionProvider } from "./context/SubscriptionContext";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -32,6 +33,9 @@ const App = () => (
                   <AuthPage />
                 </AuthRoute>
               } />
+              
+              {/* Página para popular números das roletas */}
+              <Route path="/seed-numbers" element={<SeedPage />} />
               
               {/* Rotas protegidas - apenas para usuários autenticados */}
               <Route path="/" element={
