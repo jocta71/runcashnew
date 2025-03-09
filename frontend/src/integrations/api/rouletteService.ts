@@ -176,7 +176,7 @@ export const fetchRouletteLatestNumbersByName = async (roletaNome: string, limit
     
     // Buscar diretamente do Supabase usando o nome da roleta
     const response = await fetch(
-      `${SUPABASE_URL}/rest/v1/roleta_numeros?roleta_nome=eq.${encodeURIComponent(roletaNome)}&select=numero,created_at&order=created_at.desc&limit=${limit}`,
+      `${SUPABASE_URL}/rest/v1/roleta_numeros?roleta_nome=eq.${encodeURIComponent(roletaNome)}&select=id,created_at,roleta_id,roleta_nome,numero&order=created_at.desc&limit=${limit}`,
       {
         headers: {
           'apikey': SUPABASE_KEY,
