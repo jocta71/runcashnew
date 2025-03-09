@@ -8,7 +8,12 @@ import ChatUI from '@/components/ChatUI';
 import { Button } from '@/components/ui/button';
 import AnimatedInsights from '@/components/AnimatedInsights';
 import ProfileDropdown from '@/components/ProfileDropdown';
-import { fetchAllRoulettes, fetchRouletteLatestNumbers } from '@/integrations/api/rouletteService';
+import { 
+  fetchAllRoulettes, 
+  fetchRouletteLatestNumbers, 
+  fetchRouletteLatestNumbersByName,
+  fetchAvailableRoulettesFromNumbers
+} from '@/integrations/api/rouletteService';
 import { filterAllowedRoulettes } from '@/config/allowedRoulettes';
 import { toast } from '@/components/ui/use-toast';
 
@@ -244,87 +249,93 @@ const Index = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const navigate = useNavigate();
-  const [roulettes, setRoulettes] = useState<Roulette[]>(mockRoulettes);
+  const [roulettes, setRoulettes] = useState<Roulette[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
   
   // Função para buscar roletas do banco de dados
   const fetchRoulettes = async () => {
     try {
-      if (!loaded) {
-        setIsLoading(true);
-      }
+      setIsLoading(true);
       
-      console.log('Buscando roletas diretamente do Supabase...');
-      const data = await fetchAllRoulettes();
-      console.log('Dados recebidos do Supabase:', data);
+      console.log('Buscando roletas disponíveis no Supabase...');
+      // Primeiro buscar todas as roletas disponíveis na tabela roleta_numeros
+      const availableRouletteNames = await fetchAvailableRoulettesFromNumbers();
+      console.log('Roletas encontradas no Supabase:', availableRouletteNames);
       
-      // Filtrar apenas as roletas permitidas
-      const allowedData = filterAllowedRoulettes(data);
-      console.log('Roletas permitidas:', allowedData);
-      
-      // Para cada roleta, buscar os últimos números da nova tabela
-      const formattedDataPromises = allowedData.map(async (item) => {
-        // Buscar os últimos 20 números para cada roleta da nova tabela
-        const lastNumbers = await fetchRouletteLatestNumbers(item.id, 20);
-        console.log(`Números obtidos para ${item.nome}:`, lastNumbers);
+      if (availableRouletteNames.length > 0) {
+        // Se temos roletas do Supabase, usamos elas
+        console.log('Carregando dados das roletas do Supabase...');
+        const data = await fetchAllRoulettes();
         
-        return {
-          name: item.nome,
-          lastNumbers: lastNumbers.length > 0 ? lastNumbers : (Array.isArray(item.numeros) ? item.numeros : []),
-          wins: item.vitorias || 0,
-          losses: item.derrotas || 0,
-          trend: generateTrendFromWinRate(item.vitorias, item.derrotas),
-          suggestion: item.sugestao_display || '',
-          status: item.estado_estrategia || 'NEUTRAL'
-        };
-      });
-      
-      const formattedData = await Promise.all(formattedDataPromises);
-      console.log('Dados formatados com números do Supabase:', formattedData);
-      
-      if (formattedData.length > 0) {
-        // Notifica o usuário que os dados foram carregados do Supabase
-        toast({
-          title: 'Dados Atualizados',
-          description: `${formattedData.length} roletas carregadas do Supabase`,
-          variant: 'default',
+        // Filtrar apenas as roletas permitidas
+        const allowedData = filterAllowedRoulettes(data);
+        console.log('Roletas permitidas após filtro:', allowedData);
+        
+        // Para cada roleta, buscar os últimos números
+        const formattedDataPromises = allowedData.map(async (item) => {
+          // Buscar os últimos 20 números para cada roleta
+          const lastNumbers = await fetchRouletteLatestNumbersByName(item.nome, 20);
+          console.log(`Números obtidos para ${item.nome}:`, lastNumbers);
+          
+          return {
+            name: item.nome,
+            lastNumbers: lastNumbers.length > 0 ? lastNumbers : (Array.isArray(item.numeros) ? item.numeros : []),
+            wins: item.vitorias || 0,
+            losses: item.derrotas || 0,
+            trend: generateTrendFromWinRate(item.vitorias, item.derrotas),
+            suggestion: item.sugestao_display || '',
+            status: item.estado_estrategia || 'NEUTRAL'
+          };
         });
         
-        if (loaded && roulettes.length > 0) {
-          setRoulettes(prevRoulettes => {
-            return prevRoulettes.map(existingRoulette => {
-              const updatedData = formattedData.find(r => r.name === existingRoulette.name);
-              return updatedData || existingRoulette;
-            });
+        const formattedData = await Promise.all(formattedDataPromises);
+        console.log('Dados formatados com números do Supabase:', formattedData);
+        
+        if (formattedData.length > 0) {
+          setRoulettes(formattedData);
+          setLoaded(true);
+          
+          toast({
+            title: 'Dados Carregados',
+            description: `${formattedData.length} roletas carregadas do Supabase`,
+            variant: 'default',
           });
         } else {
-          setRoulettes(formattedData);
-        }
-        setLoaded(true);
-      } else {
-        console.log('Nenhuma roleta encontrada no Supabase, usando dados simulados');
-        if (!loaded) {
+          // Se não temos dados formatados (improvável nesse ponto), usamos o mock
+          console.log('Nenhum dado formatado disponível, usando mock data');
           setRoulettes(mockRoulettes);
           setLoaded(true);
+          
           toast({
             title: 'Usando Dados Simulados',
-            description: 'Não foram encontradas roletas no Supabase. Usando dados locais.',
+            description: 'Não foram encontrados dados completos no Supabase.',
             variant: 'default',
           });
         }
+      } else {
+        // Se não há roletas no Supabase, usamos o mock data
+        console.log('Nenhuma roleta encontrada no Supabase, usando dados simulados');
+        setRoulettes(mockRoulettes);
+        setLoaded(true);
+        
+        toast({
+          title: 'Usando Dados Simulados',
+          description: 'Não foram encontradas roletas no Supabase. Usando dados locais.',
+          variant: 'default',
+        });
       }
     } catch (error) {
       console.error('Erro ao buscar roletas do Supabase:', error);
-      if (!loaded) {
-        setRoulettes(mockRoulettes);
-        setLoaded(true);
-        toast({
-          title: 'Erro de Conexão',
-          description: 'Não foi possível conectar ao Supabase. Usando dados locais.',
-          variant: 'destructive',
-        });
-      }
+      // Em caso de erro, usamos o mock data
+      setRoulettes(mockRoulettes);
+      setLoaded(true);
+      
+      toast({
+        title: 'Erro de Conexão',
+        description: 'Não foi possível conectar ao Supabase. Usando dados locais.',
+        variant: 'destructive',
+      });
     } finally {
       setIsLoading(false);
     }
@@ -338,16 +349,9 @@ const Index = () => {
     // Configurar polling para atualizar a cada 30 segundos (mais frequente para dados em tempo real)
     const intervalId = setInterval(fetchRoulettes, 30000);
     
-    // Forçar uma segunda atualização após 5 segundos para garantir que os dados mais recentes sejam mostrados
-    const quickRefreshTimeout = setTimeout(() => {
-      console.log('Atualizando dados novamente para garantir exibição dos números mais recentes...');
-      fetchRoulettes();
-    }, 5000);
-    
-    // Limpar intervalo e timeout quando o componente for desmontado
+    // Limpar intervalo quando o componente for desmontado
     return () => {
       clearInterval(intervalId);
-      clearTimeout(quickRefreshTimeout);
     };
   }, []);
   
