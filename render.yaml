@@ -1,0 +1,29 @@
+services:
+  # Serviço web para o backend Flask
+  - type: web
+    name: runcash-backend
+    env: python
+    plan: free # Mudar para starter se precisar de mais recursos
+    buildCommand: pip install -r backend/scraper/requirements.txt
+    startCommand: cd backend/scraper && gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
+    envVars:
+      - key: SUPABASE_URL
+        value: "https://evzqzghxuttctbxgohpx.supabase.co"
+      - key: SUPABASE_KEY
+        sync: false # Valor sensível, configure manualmente no dashboard
+      - key: ALLOWED_ROULETTES
+        value: "*"
+      - key: RENDER
+        value: "true"
+      - key: DISABLE_SCRAPER
+        value: "false" # Defina como "true" se o scraper não funcionar devido às limitações do selenium no Render
+      - key: PRODUCTION
+        value: "true"
+      - key: SCRAPE_INTERVAL_MINUTES
+        value: "5"
+      - key: MAX_CICLOS
+        value: "0"
+
+# Configurações extras
+healthCheckPath: /health
+numInstances: 1 

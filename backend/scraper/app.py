@@ -20,19 +20,53 @@ from flask import Flask, Response, request, jsonify
 from flask_cors import CORS
 import threading
 import queue
+import sys
 
 from config import CASINO_URL, SUPABASE_URL, SUPABASE_KEY, roleta_permitida_por_id, SCRAPE_INTERVAL_MINUTES, logger, MAX_CICLOS
 from strategy_analyzer import StrategyAnalyzer
 
+# Verificar se estamos em ambiente de produção (Render, etc.)
+IS_PRODUCTION = os.environ.get('RENDER', False) or os.environ.get('PRODUCTION', False)
+
 # Criar a aplicação Flask
 app = Flask(__name__)
-# Configurar CORS para permitir requisições de qualquer origem
-CORS(app, resources={r"/*": {"origins": "*"}})
 
-# Endpoint de health check para o Fly.io
-@app.route('/health')
-def health_check():
-    return jsonify({"status": "ok", "timestamp": datetime.now().isoformat()})
+# Configurar CORS - permitir requisições de qualquer origem em produção,
+# ou apenas do localhost em desenvolvimento
+if IS_PRODUCTION:
+    # Em produção, permitir requisições apenas do domínio do frontend na Vercel
+    # e outros domínios permitidos
+    cors_origins = [
+        "https://runcashnew.vercel.app",       # URL do seu frontend na Vercel
+        "https://runcashnew-git-master-jocta71.vercel.app",
+        "https://www.runcashnew.com",          # Se você tiver um domínio personalizado
+        "http://localhost:5173",               # Para desenvolvimento local
+        "http://localhost:3000"                # Alternativa para desenvolvimento
+    ]
+    CORS(app, resources={
+        r"/*": {"origins": cors_origins, "supports_credentials": True}
+    })
+    logger.info(f"CORS configurado para origens específicas: {cors_origins}")
+else:
+    # Em desenvolvimento, permitir todas as origens
+    CORS(app)
+    logger.info("CORS configurado para permitir todas as origens (modo desenvolvimento)")
+
+# Inicialização do cliente Supabase
+# Garantir que a URL do Supabase esteja corretamente formatada
+supabase_url = SUPABASE_URL
+if supabase_url.startswith('@'):
+    supabase_url = supabase_url[1:]
+if not supabase_url.startswith('http'):
+    supabase_url = f"https://{supabase_url}"
+
+try:
+    supabase = create_client(supabase_url, SUPABASE_KEY)
+    logger.info(f"Cliente Supabase inicializado com sucesso: {supabase_url}")
+except Exception as e:
+    logger.error(f"Erro ao inicializar cliente Supabase: {str(e)}")
+    logger.error(f"URL: {supabase_url}")
+    logger.error(f"Key: {SUPABASE_KEY[:10]}...")
 
 # Criando a classe EventManager para gerenciar eventos SSE
 class EventManager:
@@ -68,15 +102,6 @@ event_manager = EventManager()
 @app.route('/events')
 def sse():
     """Endpoint SSE para transmitir eventos de novos números de roletas em tempo real"""
-    # Adicionar headers CORS específicos para SSE
-    headers = {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type',
-    }
-    
     def generate():
         client_queue = queue.Queue()
         event_manager.register_client(client_queue)
@@ -97,29 +122,48 @@ def sse():
             # Cliente desconectou
             event_manager.unregister_client(client_queue)
     
-    return Response(generate(), mimetype='text/event-stream', headers=headers)
+    return Response(generate(), mimetype='text/event-stream', 
+                   headers={'Cache-Control': 'no-cache', 'Connection': 'keep-alive'})
 
-# Inicialização do cliente Supabase
-# Garantir que a URL do Supabase esteja corretamente formatada
-supabase_url = SUPABASE_URL
-if supabase_url.startswith('@'):
-    supabase_url = supabase_url[1:]
-if not supabase_url.startswith('http'):
-    supabase_url = f"https://{supabase_url}"
+# Endpoint de verificação de saúde para o Render
+@app.route('/health')
+def health_check():
+    return jsonify({
+        "status": "ok",
+        "timestamp": datetime.now().isoformat(),
+        "service": "runcash-backend",
+        "environment": "production" if IS_PRODUCTION else "development",
+        "scraper_running": hasattr(sys, 'scraper_thread_running') and sys.scraper_thread_running
+    })
 
-try:
-    supabase = create_client(supabase_url, SUPABASE_KEY)
-    logger.info(f"Cliente Supabase inicializado com sucesso: {supabase_url}")
-except Exception as e:
-    logger.error(f"Erro ao inicializar cliente Supabase: {str(e)}")
-    logger.error(f"URL: {supabase_url}")
-    logger.error(f"Key: {SUPABASE_KEY[:10]}...")
+# Endpoint para ver as roletas ativas atualmente
+@app.route('/api/roletas')
+def listar_roletas():
+    try:
+        response = supabase.table("roleta_numeros").select("roleta_nome").execute()
+        roletas = []
+        if response.data:
+            # Extrair nomes únicos de roletas
+            nomes = set([item['roleta_nome'] for item in response.data])
+            roletas = list(nomes)
+        
+        return jsonify({
+            "status": "success",
+            "count": len(roletas),
+            "roletas": roletas
+        })
+    except Exception as e:
+        logger.error(f"Erro ao listar roletas: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 # Dicionário global para manter os analisadores de cada mesa
 analisadores_mesas = {}
 
 def configurar_driver():
-    """Configura o driver do Selenium com as opções apropriadas para o Heroku"""
+    """Configura o driver do Selenium com opções para ambiente de cloud"""
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--disable-dev-shm-usage")
@@ -127,16 +171,40 @@ def configurar_driver():
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
     
-    # Configurações específicas para o ambiente de contêiner no Fly.io
-    chrome_options.binary_location = os.environ.get("CHROME_BIN", "/usr/bin/google-chrome")
+    # Configurações adicionais específicas para o Render
+    if IS_PRODUCTION:
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-setuid-sandbox")
+        chrome_options.add_argument("--remote-debugging-port=9222")
+        chrome_options.add_argument("--single-process")
+        
+        # Tentar usar o driver do Chrome instalado no ambiente
+        try:
+            # No Render, o Chrome pode estar em um local específico
+            service = Service("/usr/bin/chromium-browser")
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            logger.info("Driver do Chrome inicializado com caminho explícito em produção")
+            return driver
+        except Exception as e:
+            logger.warning(f"Erro ao inicializar Chrome com caminho explícito: {str(e)}")
+            logger.info("Tentando método alternativo...")
     
+    # Método padrão para desenvolvimento local ou fallback
     try:
-        driver = webdriver.Chrome(options=chrome_options)
-        logger.info("Driver do Chrome configurado com sucesso")
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        logger.info("Driver do Chrome inicializado com ChromeDriverManager")
         return driver
     except Exception as e:
-        logger.error(f"Erro ao configurar driver do Chrome: {str(e)}")
-        raise
+        logger.error(f"Erro ao configurar o driver com ChromeDriverManager: {str(e)}")
+        # Tentar ainda outro método em último caso
+        try:
+            driver = webdriver.Chrome(options=chrome_options)
+            logger.info("Driver do Chrome inicializado com método de fallback")
+            return driver
+        except Exception as final_e:
+            logger.critical(f"Falha em todos os métodos de inicialização do Chrome: {str(final_e)}")
+            raise
 
 def extrair_numeros_js(driver, elemento_roleta):
     """
@@ -438,34 +506,34 @@ def main():
             logger.info("Tabela roleta_numeros verificada com sucesso")
         except Exception as e:
             logger.error(f"Erro ao verificar tabela roleta_numeros: {str(e)}")
-            logger.error("A tabela roleta_numeros pode não existir. Verifique a configuração do banco de dados.")
+            logger.warning("A tabela pode não existir ou há um problema de conexão")
+        
+        # Se estivermos em produção e em ambiente cloud como o Render, 
+        # pode ser necessário desabilitar o scraping com Selenium
+        if IS_PRODUCTION and os.environ.get('DISABLE_SCRAPER') == 'true':
+            logger.warning("Scraper desabilitado em ambiente de produção por configuração")
             return
-        
-        logger.info("Iniciando scraper de roletas...")
-        
-        # Agendar o scraping conforme o intervalo configurado
-        logger.info(f"Agendando scraping a cada {SCRAPE_INTERVAL_MINUTES} minutos")
-        schedule.every(SCRAPE_INTERVAL_MINUTES).minutes.do(scrape_roletas)
-        
-        # Executar imediatamente uma vez
+            
+        # Iniciar o scraping
         scrape_roletas()
         
-        # Loop principal para manter o agendamento
-        while True:
-            schedule.run_pending()
-            time.sleep(1)
-    
-    except KeyboardInterrupt:
-        logger.info("Scraper interrompido pelo usuário")
     except Exception as e:
-        logger.error(f"Erro no scraper: {str(e)}")
+        logger.error(f"Erro na função principal: {str(e)}")
 
 if __name__ == "__main__":
-    # Iniciar o scraper em um thread separado
-    scraper_thread = threading.Thread(target=main)
-    scraper_thread.daemon = True
-    scraper_thread.start()
+    # Marcar a thread do scraper como iniciada
+    sys.scraper_thread_running = False
+    
+    # Iniciar o scraper em um thread separado se não estiver em ambiente de desenvolvimento
+    if not os.environ.get('FLASK_ENV') == 'development' and not os.environ.get('DISABLE_SCRAPER') == 'true':
+        scraper_thread = threading.Thread(target=main)
+        scraper_thread.daemon = True
+        scraper_thread.start()
+        sys.scraper_thread_running = True
+        logger.info("Scraper iniciado em thread separada")
+    else:
+        logger.info("Scraper não iniciado automaticamente (modo desenvolvimento ou desabilitado)")
     
     # Iniciar o servidor Flask
-    port = int(os.environ.get('PORT', 8080))
+    port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
