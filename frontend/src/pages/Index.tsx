@@ -14,7 +14,7 @@ import {
   fetchRouletteLatestNumbersByName,
   fetchAvailableRoulettesFromNumbers
 } from '@/integrations/api/rouletteService';
-import { filterAllowedRoulettes } from '@/config/allowedRoulettes';
+import { filterAllowedRoulettes, atualizarRoletasPermitidas } from '@/config/allowedRoulettes';
 import { toast } from '@/components/ui/use-toast';
 
 interface ChatMessage {
@@ -160,16 +160,30 @@ const Index = () => {
   
   // Efeito para carregar dados quando o componente montar
   useEffect(() => {
-    // Busca imediata quando o componente monta
-    fetchRoulettes();
-    
-    // Configurar polling para atualizar a cada 30 segundos (mais frequente para dados em tempo real)
-    const intervalId = setInterval(fetchRoulettes, 30000);
-    
-    // Limpar intervalo quando o componente for desmontado
-    return () => {
-      clearInterval(intervalId);
-    };
+    // Primeiro atualizar a lista de roletas permitidas do Supabase
+    console.log('[DEBUG] Atualizando lista de roletas permitidas...');
+    atualizarRoletasPermitidas().then(() => {
+      console.log('[DEBUG] Lista de roletas permitidas atualizada, buscando dados...');
+      // Depois buscar os dados das roletas
+      fetchRoulettes();
+      
+      // Configurar polling para atualizar a cada 30 segundos (mais frequente para dados em tempo real)
+      const intervalId = setInterval(fetchRoulettes, 30000);
+      
+      // Limpar intervalo quando o componente for desmontado
+      return () => {
+        clearInterval(intervalId);
+      };
+    }).catch(error => {
+      console.error('[DEBUG] Erro ao atualizar lista de roletas permitidas:', error);
+      // Mesmo se falhar, tenta buscar roletas com a lista padrão
+      fetchRoulettes();
+      
+      const intervalId = setInterval(fetchRoulettes, 30000);
+      return () => {
+        clearInterval(intervalId);
+      };
+    });
   }, []);
   
   const filteredRoulettes = roulettes.filter(roulette => 
