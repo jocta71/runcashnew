@@ -1,4 +1,3 @@
-
 import {
   Dialog,
   DialogContent,
@@ -23,6 +22,8 @@ import {
   Cell,
   Legend,
 } from "recharts";
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface RouletteStatsModalProps {
   open: boolean;
@@ -34,7 +35,44 @@ interface RouletteStatsModalProps {
   trend: { value: number }[];
 }
 
-// Simulate historical data - in a real app this would come from an API
+// Função para buscar números do banco para uma roleta específica
+const fetchRouletteHistoricalNumbers = async (rouletteName: string) => {
+  try {
+    const response = await fetch(
+      `https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roletas?nome=eq.${encodeURIComponent(rouletteName)}&select=numeros`,
+      {
+        headers: {
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ',
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error('Falha ao buscar dados históricos');
+    }
+    
+    const data = await response.json();
+    
+    if (data && data.length > 0 && Array.isArray(data[0].numeros)) {
+      console.log('Dados históricos encontrados:', data[0].numeros.length);
+      
+      // Converter para números inteiros e filtrar valores inválidos
+      const validNumbers = data[0].numeros
+        .map((num: any) => typeof num === 'string' ? parseInt(num, 10) : Number(num))
+        .filter((num: number) => !isNaN(num) && num >= 0 && num <= 36);
+      
+      return validNumbers;
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('Erro ao buscar números históricos:', error);
+    return [];
+  }
+};
+
+// Fallback para quando não há dados suficientes
 const generateHistoricalNumbers = () => {
   const numbers = [];
   for (let i = 0; i < 120; i++) {
@@ -52,16 +90,18 @@ const generateFrequencyData = (numbers: number[]) => {
     frequency[i] = 0;
   }
   
-  // Count occurrences
+  // Count frequency of each number
   numbers.forEach(num => {
-    frequency[num] += 1;
+    if (frequency[num] !== undefined) {
+      frequency[num]++;
+    }
   });
   
-  // Convert to array for recharts
-  return Object.entries(frequency).map(([number, count]) => ({
-    number: Number(number),
-    frequency: count,
-  }));
+  // Convert to array format needed for charts
+  return Object.keys(frequency).map(key => ({
+    number: parseInt(key),
+    frequency: frequency[parseInt(key)]
+  })).sort((a, b) => a.number - b.number);
 };
 
 // Calculate hot and cold numbers
@@ -118,7 +158,37 @@ const RouletteStatsModal = ({
   losses, 
   trend 
 }: RouletteStatsModalProps) => {
-  const historicalNumbers = generateHistoricalNumbers();
+  const [historicalNumbers, setHistoricalNumbers] = useState<number[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  useEffect(() => {
+    const loadHistoricalData = async () => {
+      if (open) {
+        setIsLoading(true);
+        
+        try {
+          console.log(`Buscando histórico para ${name}...`);
+          const numbers = await fetchRouletteHistoricalNumbers(name);
+          
+          if (numbers && numbers.length > 20) {
+            console.log(`Encontrados ${numbers.length} números históricos para ${name}`);
+            setHistoricalNumbers(numbers);
+          } else {
+            console.log(`Histórico insuficiente para ${name}, usando dados gerados`);
+            setHistoricalNumbers(generateHistoricalNumbers());
+          }
+        } catch (error) {
+          console.error('Erro ao carregar dados históricos:', error);
+          setHistoricalNumbers(generateHistoricalNumbers());
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+    
+    loadHistoricalData();
+  }, [open, name]);
+  
   const frequencyData = generateFrequencyData(historicalNumbers);
   const { hot, cold } = getHotColdNumbers(frequencyData);
   const pieData = generateGroupDistribution(historicalNumbers);
@@ -133,7 +203,11 @@ const RouletteStatsModal = ({
             <BarChart className="mr-2" /> Estatísticas da {name}
           </DialogTitle>
           <DialogDescription className="text-sm">
-            Análise detalhada dos últimos 120 números e tendências
+            {isLoading ? (
+              "Carregando dados históricos..."
+            ) : (
+              `Análise detalhada dos últimos ${historicalNumbers.length} números e tendências`
+            )}
           </DialogDescription>
         </DialogHeader>
         

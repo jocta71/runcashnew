@@ -107,7 +107,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
             validNumbers = data[0].numeros
               .map(num => typeof num === 'string' ? parseInt(num, 10) : num)
               .filter(num => !isNaN(num))
-              .slice(0, 5);
+              .slice(0, 20);
           }
           
           console.log(`Números processados para ${name}:`, validNumbers);

@@ -227,9 +227,16 @@ class StrategyAnalyzer:
         Retorna os dados da roleta para salvar no Supabase
         """
         status = self.get_status()
+        
+        # Certifique-se de que todos os números (até 1000) estão sendo retornados
+        historical_numbers = self.history[-1000:] if self.history else []
+        
+        # Log para depuração
+        print(f"Retornando {len(historical_numbers)} números históricos para {self.titulo_roleta}")
+        
         return {
             "titulo": self.titulo_roleta,
-            "numeros": self.history[-1000:] if self.history else [],  # Últimos 1000 números (era 20)
+            "numeros": historical_numbers,  # Retorna até 1000 números
             "status": status["estado"],
             "numero_gatilho": status["numero_gatilho"],
             "terminais_gatilho": status["terminais_gatilho"],
@@ -248,7 +255,7 @@ class StrategyAnalyzer:
                 "terminais_gatilho_anterior": status["terminais_gatilho_anterior"],
                 "vitorias": status["vitorias"],
                 "derrotas": status["derrotas"],
-                "sugestao_display": self._gerar_sugestao_display(status)
+                "sugestao_display": status.get("sugestao_display", "")
             }
         }
         
