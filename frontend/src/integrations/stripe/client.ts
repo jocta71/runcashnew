@@ -1,5 +1,5 @@
 /**
- * Cliente Stripe - Chamando APIs serverless do Vercel
+ * Cliente Stripe - Versão com link para API simplificada
  */
 
 import axios from 'axios';
@@ -13,16 +13,13 @@ export const createCheckoutSession = async (planId: string, userId: string): Pro
   try {
     console.log(`Iniciando criação de sessão de checkout para planId: ${planId}, userId: ${userId}`);
     
-    // Adicionando logs de debug para verificar problemas
-    console.log('Enviando requisição para:', `${window.location.origin}/api/create-checkout-session`);
-    
-    // API na pasta /api do projeto
-    const response = await axios.post('/api/create-checkout-session', {
+    // Teste direto com o novo endpoint simplificado
+    const response = await axios.post('/api/create-checkout', {
       planId,
       userId
     });
     
-    console.log('Resposta recebida da API:', response);
+    console.log('Resposta completa da API:', response);
     
     if (response.data && response.data.url) {
       console.log('URL do checkout:', response.data.url);
@@ -36,7 +33,6 @@ export const createCheckoutSession = async (planId: string, userId: string): Pro
     console.error('Erro ao criar sessão de checkout:', error);
     
     if (error instanceof Error) {
-      // Mostramos mais detalhes sobre o erro
       console.error('Detalhes do erro:', error.message);
       if ('response' in error && error.response) {
         // @ts-ignore - Propriedades de axios Error
@@ -45,13 +41,14 @@ export const createCheckoutSession = async (planId: string, userId: string): Pro
     }
     
     // Em caso de erro, usar modo simulado como fallback
-    console.log('Usando modo simulado devido a erro');
+    console.log('ATENÇÃO: Usando modo simulado devido a erro na API');
     
     // Para teste local, simular redirecionamento
     if (planId === 'free') {
       return '/payment-success?free=true';
     } else {
       const sessionId = `sim_${Date.now()}_${planId}`;
+      console.log('ID de sessão simulado criado:', sessionId);
       return `/payment-success?session_id=${sessionId}`;
     }
   }
