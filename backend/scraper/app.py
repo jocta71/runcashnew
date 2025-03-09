@@ -275,21 +275,26 @@ def scrape_roletas(driver=None):
             elementos_roletas = driver_interno.find_elements(By.CSS_SELECTOR, ".cy-live-casino-grid-item")
             logger.info(f"Encontradas {len(elementos_roletas)} roletas na página")
             
+            # Lista para armazenar roletas permitidas encontradas neste ciclo
+            roletas_encontradas = []
+            
             # Processar cada roleta
             for elemento_roleta in elementos_roletas:
                 try:
-                    # Extrair título da roleta
-                    titulo_elemento = elemento_roleta.find_element(By.CSS_SELECTOR, ".cy-live-casino-grid-item-title")
-                    titulo_roleta = titulo_elemento.text.strip()
-                    
-                    # Extrair ID da roleta
+                    # Extrair ID da roleta primeiro para filtrar rapidamente
                     id_roleta = extrair_id_roleta(elemento_roleta)
                     
                     # Verificar se a roleta está na lista de permitidas
                     if not roleta_permitida_por_id(id_roleta):
+                        logger.debug(f"Roleta com ID {id_roleta} ignorada (não está na lista de permitidas)")
                         continue
                     
-                    logger.info(f"Processando roleta: {titulo_roleta} (ID: {id_roleta})")
+                    # Extrair título da roleta apenas para roletas permitidas
+                    titulo_elemento = elemento_roleta.find_element(By.CSS_SELECTOR, ".cy-live-casino-grid-item-title")
+                    titulo_roleta = titulo_elemento.text.strip()
+                    
+                    roletas_encontradas.append(f"{titulo_roleta} (ID: {id_roleta})")
+                    logger.info(f"Processando roleta permitida: {titulo_roleta} (ID: {id_roleta})")
                     
                     # Inicializar analisador para a roleta se não existir
                     if titulo_roleta not in analisadores_mesas:
@@ -317,6 +322,14 @@ def scrape_roletas(driver=None):
                 
                 except Exception as e:
                     logger.error(f"Erro ao processar roleta: {str(e)}")
+            
+            # Registrar as roletas permitidas encontradas neste ciclo
+            if roletas_encontradas:
+                logger.info(f"Roletas permitidas encontradas neste ciclo: {len(roletas_encontradas)}")
+                for roleta in roletas_encontradas:
+                    logger.info(f"  - {roleta}")
+            else:
+                logger.warning("Nenhuma roleta permitida encontrada neste ciclo")
             
             # Pausa entre ciclos (entre 2 e 3 segundos)
             pausa = random.uniform(2, 3)

@@ -39,10 +39,27 @@ if CASINO_URL.startswith('='):
 
 # Função para verificar se uma roleta é permitida
 def roleta_permitida_por_id(id_roleta):
+    # Lista de IDs conhecidos (sincronizada com frontend/src/config/allowedRoulettes.ts)
+    roletas_conhecidas = [
+        "2010016",  # Immersive Roulette
+        "2380335",  # Brazilian Mega Roulette
+        "2010065",  # Bucharest Auto-Roulette
+        "2010096",  # Speed Auto Roulette
+        "2010017",  # Auto-Roulette
+        "2010098",  # Auto-Roulette VIP
+    ]
+    
+    # Obter lista de roletas permitidas da variável de ambiente
     roletas_permitidas = os.getenv('ALLOWED_ROULETTES', '')
     
-    # Se a variável não estiver definida ou estiver vazia, permitir todas
+    # Se a variável não estiver definida, usar a lista de roletas conhecidas
     if not roletas_permitidas:
+        logger.info(f"Usando lista interna de roletas conhecidas: {roletas_conhecidas}")
+        return id_roleta in roletas_conhecidas
+    
+    # Se a variável tiver o valor "*", permitir todas as roletas
+    if roletas_permitidas == "*":
+        logger.info("Modo permissivo: todas as roletas são permitidas")
         return True
     
     # Dividir a string por vírgulas para obter a lista de roletas permitidas
