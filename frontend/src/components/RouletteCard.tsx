@@ -28,68 +28,69 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
   const [isBlurred, setIsBlurred] = useState(false);
   const [currentStrategy, setCurrentStrategy] = useState(strategies[0]);
   const [selectedGroup, setSelectedGroup] = useState<string>("grupo-123");
-  const [lastNumbers, setLastNumbers] = useState<number[]>(initialLastNumbers);
+  const [lastNumbers, setLastNumbers] = useState<number[]>([]);
   const [previousLastNumber, setPreviousLastNumber] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [dataSeeded, setDataSeeded] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
+  // Novo estado para rastrear se os números vêm do Supabase
+  const [usingSupabaseData, setUsingSupabaseData] = useState(false);
 
   useEffect(() => {
+    console.log("Componente RouletteCard inicializado para roleta:", name);
+    
     const checkAndSeedData = async () => {
       try {
-        console.log("Verificando dados no Supabase...");
+        console.log(`[${name}] Verificando dados no Supabase...`);
+        setIsLoading(true);
         
         const response = await fetch(
           'https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roletas?select=count',
           {
             headers: {
               'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ',
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store'
             }
           }
         );
         
         if (!response.ok) {
-          console.error('Erro ao verificar a tabela roletas');
-          setLastNumbers(initialLastNumbers);
+          console.error(`[${name}] Erro ao verificar a tabela roletas:`, response.statusText);
           setDataSeeded(true);
           return;
         }
         
         const data = await response.json();
-        console.log('Resposta da verificação da tabela:', data);
+        console.log(`[${name}] Resposta da verificação da tabela:`, data);
         
         if (!data || data.length === 0) {
-          console.log('Nenhum dado encontrado, usando dados locais');
-          setLastNumbers(initialLastNumbers);
+          console.log(`[${name}] Nenhum dado encontrado, aguardando dados do Supabase...`);
           setDataSeeded(true);
-          toast({
-            title: 'Usando Dados Locais',
-            description: 'Conecte um raspador para dados em tempo real',
-            variant: 'default',
-          });
         } else {
-          console.log('Dados existentes no banco, tentando carregar');
+          console.log(`[${name}] Dados existentes no banco, buscando números...`);
           setDataSeeded(true);
         }
       } catch (error) {
-        console.error('Erro ao verificar dados:', error);
-        setLastNumbers(initialLastNumbers);
+        console.error(`[${name}] Erro ao verificar dados:`, error);
         setDataSeeded(true);
+      } finally {
+        setIsLoading(false);
       }
     };
 
     checkAndSeedData();
-  }, [initialLastNumbers]);
+    // Não usar initialLastNumbers como dependência para evitar atualizações indesejadas
+  }, [name]);
 
   const verificarEstrategia = (numero: number) => {
     // Placeholder para verificação de estratégia
-    console.log(`Verificando estratégia para número: ${numero}`);
+    console.log(`[${name}] Verificando estratégia para número: ${numero}`);
   };
 
   const fetchRouletteNumbers = useCallback(async () => {
     try {
-      console.log(`[${new Date().toLocaleTimeString()}] Buscando números para roleta: ${name}`);
+      console.log(`[${name}] [${new Date().toLocaleTimeString()}] Buscando números do Supabase...`);
       setIsLoading(true);
       
       // Primeiro tentamos buscar o ID da roleta
@@ -105,22 +106,20 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       );
       
       if (!idResponse.ok) {
-        console.error(`Erro ao buscar ID da roleta: ${idResponse.statusText}`);
-        setLastNumbers(initialLastNumbers);
+        console.error(`[${name}] Erro ao buscar ID da roleta: ${idResponse.statusText}`);
         setIsLoading(false);
         return;
       }
       
       const idData = await idResponse.json();
       if (!idData || idData.length === 0) {
-        console.error(`Roleta não encontrada: ${name}`);
-        setLastNumbers(initialLastNumbers);
+        console.error(`[${name}] Roleta não encontrada no Supabase`);
         setIsLoading(false);
         return;
       }
       
       const roletaId = idData[0].id;
-      console.log(`[${new Date().toLocaleTimeString()}] ID da roleta ${name}: ${roletaId}`);
+      console.log(`[${name}] ID da roleta: ${roletaId}`);
       
       // Buscamos os últimos números diretamente do Supabase
       const supabaseUrl = "https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roleta_numeros";
@@ -138,19 +137,18 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       );
       
       if (!response.ok) {
-        console.error(`Erro ao buscar números da roleta: ${response.statusText}`);
-        setLastNumbers(initialLastNumbers);
+        console.error(`[${name}] Erro ao buscar números da roleta: ${response.statusText}`);
         setIsLoading(false);
         return;
       }
       
       const data = await response.json();
-      console.log(`[${new Date().toLocaleTimeString()}] Dados obtidos do Supabase:`, data);
+      console.log(`[${name}] Dados obtidos do Supabase (${data.length} registros):`, data);
       
       if (Array.isArray(data) && data.length > 0) {
         // Extrair apenas os números na ordem correta (mais recente primeiro)
         const numbers = data.map(item => item.numero);
-        console.log(`[${new Date().toLocaleTimeString()}] Números extraídos do Supabase:`, numbers);
+        console.log(`[${name}] Números extraídos do Supabase:`, numbers);
         
         // Converter para números inteiros
         const validNumbers = numbers
@@ -158,48 +156,44 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
           .map(num => typeof num === 'string' ? parseInt(num, 10) : Number(num))
           .filter(num => !isNaN(num) && num >= 0 && num <= 36);
         
-        console.log(`[${new Date().toLocaleTimeString()}] Números validados:`, validNumbers);
+        console.log(`[${name}] Números validados do Supabase (${validNumbers.length}):`, validNumbers);
         
         if (validNumbers.length > 0) {
-          setLastNumbers(validNumbers);
+          // Detectar se há um novo número em comparação com o estado atual
+          const isNewNumber = lastNumbers.length > 0 && validNumbers[0] !== lastNumbers[0];
           
-          // Detectar se há um novo número
-          if (lastNumbers.length > 0 && validNumbers[0] !== lastNumbers[0]) {
+          // Atualizar o estado com os números do Supabase
+          setLastNumbers(validNumbers);
+          setUsingSupabaseData(true);
+          
+          if (isNewNumber) {
             setPreviousLastNumber(lastNumbers[0]);
-            // Verificar estratégia com o novo número
             verificarEstrategia(validNumbers[0]);
             
             // Notificar o usuário que os números foram atualizados
             toast({
               title: "Números Atualizados",
-              description: `Último número: ${validNumbers[0]}`,
+              description: `Último número: ${validNumbers[0]} (Supabase)`,
               variant: "default",
             });
           }
+          
+          console.log(`[${name}] Usando ${validNumbers.length} números do Supabase para exibição`);
         } else {
-          console.log(`[${new Date().toLocaleTimeString()}] Nenhum número válido encontrado`);
-          // Se não houver números válidos, usar os iniciais
-          if (initialLastNumbers.length > 0) {
-            setLastNumbers(initialLastNumbers);
-          }
+          console.log(`[${name}] Nenhum número válido encontrado no Supabase`);
+          setUsingSupabaseData(false);
         }
       } else {
-        console.log(`[${new Date().toLocaleTimeString()}] Nenhum número encontrado no Supabase para a roleta ${name}`);
-        // Se não houver dados, usar os iniciais
-        if (initialLastNumbers.length > 0) {
-          setLastNumbers(initialLastNumbers);
-        }
+        console.log(`[${name}] Nenhum número encontrado no Supabase para a roleta`);
+        setUsingSupabaseData(false);
       }
     } catch (error) {
-      console.error(`Erro ao buscar números da roleta ${name}:`, error);
-      // Em caso de erro, usar os números iniciais
-      if (initialLastNumbers.length > 0) {
-        setLastNumbers(initialLastNumbers);
-      }
+      console.error(`[${name}] Erro ao buscar números da roleta:`, error);
+      setUsingSupabaseData(false);
     } finally {
       setIsLoading(false);
     }
-  }, [name, lastNumbers, initialLastNumbers, isLoading]);
+  }, [name, lastNumbers]);
 
   useEffect(() => {
     if (dataSeeded) {
@@ -211,7 +205,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       
       // Forçar uma segunda atualização após 2 segundos
       const quickRefreshTimeout = setTimeout(() => {
-        console.log("Forçando atualização rápida para garantir exibição dos números");
+        console.log(`[${name}] Forçando atualização rápida para garantir exibição dos números`);
         fetchRouletteNumbers();
       }, 2000);
       
@@ -221,7 +215,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
         clearTimeout(quickRefreshTimeout);
       };
     }
-  }, [dataSeeded, fetchRouletteNumbers]);
+  }, [dataSeeded, fetchRouletteNumbers, name]);
 
   useEffect(() => {
     generateSuggestion();
@@ -312,7 +306,14 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     >
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">{name}</h3>
-        <TrendingUp size={20} className="text-[#00ff00]" />
+        <div className="flex items-center">
+          {usingSupabaseData ? (
+            <span className="text-xs mr-2 text-[#00ff00]">Dados do Supabase</span>
+          ) : (
+            <span className="text-xs mr-2 text-yellow-400">Aguardando Supabase</span>
+          )}
+          <TrendingUp size={20} className="text-[#00ff00]" />
+        </div>
       </div>
       
       {memoizedNumbers}
