@@ -162,69 +162,36 @@ export const fetchAllRoulettes = async (): Promise<RouletteData[]> => {
     // NOVO: Consolidar roletas com o mesmo nome para evitar duplicação
     const uniqueRoulettes = new Map<string, RouletteData>();
     
-    try {
-      // Se não houver roletas, não tente consolidar
-      if (rouletteDataArray.length === 0) {
-        console.warn('[ALERTA] Nenhuma roleta para consolidar - retornando array vazio');
-        return [];
-      }
-
-      console.log(`[INFO] Iniciando consolidação de ${rouletteDataArray.length} roletas`);
-      
-      for (const roulette of rouletteDataArray) {
-        if (!roulette || !roulette.nome) {
-          console.warn('[ALERTA] Roleta sem nome encontrada, pulando.', roulette);
-          continue;
-        }
+    for (const roulette of rouletteDataArray) {
+      if (!uniqueRoulettes.has(roulette.nome)) {
+        // Se é a primeira roleta com este nome, adiciona ao mapa
+        uniqueRoulettes.set(roulette.nome, roulette);
+      } else {
+        // Se já existe uma roleta com este nome, combina os números
+        const existingRoulette = uniqueRoulettes.get(roulette.nome)!;
         
-        if (!uniqueRoulettes.has(roulette.nome)) {
-          // Se é a primeira roleta com este nome, adiciona ao mapa
-          console.log(`[INFO] Adicionando roleta: ${roulette.nome}`);
-          uniqueRoulettes.set(roulette.nome, roulette);
-        } else {
-          // Se já existe uma roleta com este nome, combina os números
-          console.log(`[INFO] Combinando números para roleta duplicada: ${roulette.nome}`);
-          const existingRoulette = uniqueRoulettes.get(roulette.nome)!;
-          
-          try {
-            // Combinar números sem duplicar
-            const combinedNumbers = [...existingRoulette.numeros];
-            if (Array.isArray(roulette.numeros)) {
-              for (const num of roulette.numeros) {
-                if (!combinedNumbers.includes(num)) {
-                  combinedNumbers.push(num);
-                }
-              }
-            }
-            
-            // Atualizar a roleta existente com números combinados
-            uniqueRoulettes.set(roulette.nome, {
-              ...existingRoulette,
-              numeros: combinedNumbers.slice(0, 20) // Manter no máximo 20 números
-            });
-          } catch (error) {
-            console.error(`[ERRO] Falha ao combinar números para ${roulette.nome}:`, error);
-            // Manter a roleta existente em caso de erro
+        // Combinar números sem duplicar
+        const combinedNumbers = [...existingRoulette.numeros];
+        for (const num of roulette.numeros) {
+          if (!combinedNumbers.includes(num)) {
+            combinedNumbers.push(num);
           }
         }
+        
+        // Atualizar a roleta existente com números combinados
+        uniqueRoulettes.set(roulette.nome, {
+          ...existingRoulette,
+          numeros: combinedNumbers.slice(0, 20) // Manter no máximo 20 números
+        });
       }
-      
-      // Converter o mapa de volta para array
-      const consolidatedRoulettes = Array.from(uniqueRoulettes.values());
-      console.log(`[INFO] Consolidadas ${rouletteDataArray.length} roletas em ${consolidatedRoulettes.length} roletas únicas`);
-      
-      // SEGURANÇA: Se a consolidação não retornou nenhuma roleta, retornar o array original
-      if (consolidatedRoulettes.length === 0 && rouletteDataArray.length > 0) {
-        console.warn('[ALERTA] Consolidação resultou em 0 roletas. Retornando array original.');
-        return rouletteDataArray;
-      }
-      
-      return consolidatedRoulettes;
-    } catch (error) {
-      console.error('[ERRO] Falha na consolidação de roletas:', error);
-      // Em caso de erro na consolidação, retornar o array original
-      return rouletteDataArray;
     }
+    
+    // Converter o mapa de volta para array
+    const consolidatedRoulettes = Array.from(uniqueRoulettes.values());
+    console.log(`[INFO] Consolidadas ${rouletteDataArray.length} roletas em ${consolidatedRoulettes.length} roletas únicas`);
+    
+    return consolidatedRoulettes;
+    
   } catch (error) {
     console.error('Erro ao buscar roletas:', error);
     
