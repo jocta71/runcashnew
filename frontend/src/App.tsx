@@ -10,6 +10,7 @@ import RouletteDetailsPage from "./pages/RouletteDetailsPage";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentCanceled from "./pages/PaymentCanceled";
 import PlansPage from "./pages/PlansPage";
+import ProfilePage from "./pages/ProfilePage";
 import { AuthProvider } from "./context/AuthContext";
 import { SubscriptionProvider } from "./context/SubscriptionContext";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -62,6 +63,13 @@ const App = () => (
               <Route path="/payment-canceled" element={
                 <ProtectedRoute>
                   <PaymentCanceled />
+                </ProtectedRoute>
+              } />
+              
+              {/* Rota de perfil do usuário */}
+              <Route path="/profile" element={
+                <ProtectedRoute>
+                  <ProfilePage />
                 </ProtectedRoute>
               } />
               
