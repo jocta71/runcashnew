@@ -52,28 +52,109 @@ export interface RouletteNumberRecord {
   created_at: string;
 }
 
-export const fetchAllRoulettes = async (): Promise<RouletteData[]> => {
+// Função para listar todas as roletas disponíveis na tabela roleta_numeros
+export const fetchAvailableRoulettesFromNumbers = async (): Promise<string[]> => {
   try {
-    console.log('Buscando todas as roletas diretamente do Supabase...');
+    console.log('Buscando roletas disponíveis na tabela roleta_numeros do Supabase...');
     
-    // Buscar diretamente do Supabase
-    const response = await fetch(`${SUPABASE_URL}/roletas?select=*`, {
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache, no-store'
+    // Buscar diretamente do Supabase com seleção distinta dos nomes de roletas
+    const response = await fetch(
+      `${SUPABASE_URL}/roleta_numeros?select=roleta_nome&order=roleta_nome`,
+      {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store',
+          'Prefer': 'distinct=true'
+        }
       }
-    });
+    );
     
     if (!response.ok) {
-      throw new Error(`Erro ao buscar roletas do Supabase: ${response.statusText}`);
+      throw new Error(`Erro ao buscar roletas disponíveis: ${response.statusText}`);
     }
     
     const data = await response.json();
-    console.log('Roletas encontradas no Supabase:', data.length);
-    return data;
-  } catch (supabaseError) {
-    console.error('Erro ao buscar roletas do Supabase:', supabaseError);
+    console.log(`Encontradas ${data.length} roletas únicas na tabela roleta_numeros.`);
+    
+    // Extrair apenas os nomes das roletas
+    const rouletteNames = data.map(item => item.roleta_nome);
+    console.log('Roletas disponíveis:', rouletteNames);
+    
+    return rouletteNames;
+  } catch (error) {
+    console.error('Erro ao buscar roletas disponíveis:', error);
+    return [];
+  }
+};
+
+// Modificar a função fetchAllRoulettes para usar as roletas disponíveis na tabela de números
+export const fetchAllRoulettes = async (): Promise<RouletteData[]> => {
+  try {
+    console.log('Buscando todas as roletas baseado nos dados do Supabase...');
+    
+    // 1. Primeiro obter os nomes das roletas disponíveis na tabela roleta_numeros
+    const availableRouletteNames = await fetchAvailableRoulettesFromNumbers();
+    
+    if (availableRouletteNames.length === 0) {
+      console.log('Nenhuma roleta encontrada na tabela roleta_numeros.');
+      
+      // 2. Se não houver roletas na tabela roleta_numeros, tentar buscar na tabela roletas
+      try {
+        const response = await fetch(`${SUPABASE_URL}/roletas?select=*`, {
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Erro ao buscar roletas: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('Roletas encontradas na tabela roletas:', data.length);
+        return data;
+      } catch (error) {
+        console.error('Erro ao buscar roletas da tabela roletas:', error);
+        return [];
+      }
+    }
+    
+    // 3. Para cada roleta disponível, criar um objeto RouletteData
+    const rouletteData: RouletteData[] = await Promise.all(
+      availableRouletteNames.map(async (roletaNome) => {
+        // 3.1 Buscar os números desta roleta
+        const numbers = await fetchRouletteLatestNumbersByName(roletaNome, 20);
+        
+        // 3.2 Calcular vitórias/derrotas (provisório, pode ser substituído por dados reais)
+        const wins = Math.floor(Math.random() * 200) + 100;
+        const losses = Math.floor(Math.random() * 100) + 50;
+        
+        // 3.3 Criar objeto da roleta
+        return {
+          id: roletaNome.replace(/\s+/g, '').toLowerCase(), // ID provisório baseado no nome
+          nome: roletaNome,
+          numeros: numbers,
+          updated_at: new Date().toISOString(),
+          estado_estrategia: 'NEUTRAL',
+          numero_gatilho: numbers.length > 0 ? numbers[0] : 0,
+          numero_gatilho_anterior: numbers.length > 1 ? numbers[1] : 0,
+          terminais_gatilho: [],
+          terminais_gatilho_anterior: [],
+          vitorias: wins,
+          derrotas: losses,
+          sugestao_display: ''
+        };
+      })
+    );
+    
+    console.log(`Gerados ${rouletteData.length} objetos de roleta com base nos números disponíveis.`);
+    return rouletteData;
+    
+  } catch (error) {
+    console.error('Erro ao buscar roletas:', error);
     
     // Fallback para a API apenas se o Supabase falhar
     try {
@@ -82,7 +163,124 @@ export const fetchAllRoulettes = async (): Promise<RouletteData[]> => {
       return response.data;
     } catch (apiError) {
       console.error('Erro ao buscar roletas pela API:', apiError);
-      throw apiError;
+      return [];
+    }
+  }
+};
+
+// Nova função para buscar números mais recentes por nome da roleta
+export const fetchRouletteLatestNumbersByName = async (roletaNome: string, limit = 10): Promise<number[]> => {
+  try {
+    console.log(`Buscando os ${limit} últimos números da roleta '${roletaNome}' do Supabase...`);
+    
+    // Buscar diretamente do Supabase usando o nome da roleta
+    const response = await fetch(
+      `${SUPABASE_URL}/roleta_numeros?roleta_nome=eq.${encodeURIComponent(roletaNome)}&select=numero,created_at&order=created_at.desc&limit=${limit}`,
+      {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store'
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Erro ao buscar números da roleta '${roletaNome}': ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log(`Encontrados ${data.length} números no Supabase para a roleta '${roletaNome}'`);
+    
+    if (Array.isArray(data) && data.length > 0) {
+      // Extrair apenas os números (o mais recente primeiro)
+      const numbers = data.map(item => Number(item.numero));
+      console.log(`Números extraídos para '${roletaNome}':`, numbers);
+      return numbers;
+    }
+    
+    return [];
+  } catch (error) {
+    console.error(`Erro ao buscar números para roleta '${roletaNome}':`, error);
+    return [];
+  }
+};
+
+// Manter a função existente também para compatibilidade
+export const fetchRouletteLatestNumbers = async (roletaId: string, limit = 10): Promise<number[]> => {
+  try {
+    console.log(`Buscando os ${limit} últimos números da roleta ID ${roletaId} do Supabase...`);
+    
+    // Primeiro tentamos buscar pelo nome da roleta associado ao ID
+    let roletaNome = "";
+    try {
+      const roletaResponse = await fetch(`${SUPABASE_URL}/roletas?id=eq.${roletaId}&select=nome`, {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (roletaResponse.ok) {
+        const roletaData = await roletaResponse.json();
+        if (roletaData && roletaData.length > 0) {
+          roletaNome = roletaData[0].nome;
+          console.log(`Nome da roleta encontrado: '${roletaNome}'`);
+          
+          // Se encontrou o nome, usar a função de busca por nome
+          if (roletaNome) {
+            return await fetchRouletteLatestNumbersByName(roletaNome, limit);
+          }
+        }
+      }
+    } catch (nameError) {
+      console.error(`Erro ao buscar nome da roleta ID ${roletaId}:`, nameError);
+    }
+    
+    // Se não foi possível obter o nome ou não encontrou números, continuar com a busca por ID
+    console.log(`Continuando com busca por ID ${roletaId}...`);
+    
+    // Buscar diretamente do Supabase
+    const response = await fetch(
+      `${SUPABASE_URL}/roleta_numeros?roleta_id=eq.${roletaId}&select=numero,created_at&order=created_at.desc&limit=${limit}`,
+      {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store'
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Erro ao buscar números da roleta do Supabase: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log(`Encontrados ${data.length} números no Supabase para a roleta ID ${roletaId}`);
+    
+    if (Array.isArray(data) && data.length > 0) {
+      // Extrair apenas os números (o mais recente primeiro)
+      const numbers = data.map(item => Number(item.numero));
+      console.log(`Números extraídos para ID ${roletaId}:`, numbers);
+      return numbers;
+    }
+    
+    return [];
+  } catch (supabaseError) {
+    console.error(`Erro ao buscar números para roleta ${roletaId} do Supabase:`, supabaseError);
+    
+    // Fallback para a API
+    try {
+      console.log(`Tentando buscar números da roleta ${roletaId} pela API como fallback...`);
+      const response = await api.get<RouletteNumberRecord[]>(`/roleta_numeros/${roletaId}?limit=${limit}`);
+      if (response.data && Array.isArray(response.data)) {
+        return response.data.map(record => record.numero);
+      }
+      return [];
+    } catch (apiError) {
+      console.error(`Erro ao buscar números da roleta ${roletaId} pela API:`, apiError);
+      return [];
     }
   }
 };
@@ -161,53 +359,6 @@ export const fetchRouletteById = async (id: string): Promise<RouletteData> => {
     } catch (apiError) {
       console.error(`Erro ao buscar roleta ${id} pela API:`, apiError);
       throw apiError;
-    }
-  }
-};
-
-export const fetchRouletteLatestNumbers = async (roletaId: string, limit = 10): Promise<number[]> => {
-  try {
-    console.log(`Buscando os ${limit} últimos números da roleta ${roletaId} do Supabase...`);
-    
-    // Buscar diretamente do Supabase
-    const response = await fetch(
-      `${SUPABASE_URL}/roleta_numeros?roleta_id=eq.${roletaId}&select=numero,created_at&order=created_at.desc&limit=${limit}`,
-      {
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache, no-store'
-        }
-      }
-    );
-    
-    if (!response.ok) {
-      throw new Error(`Erro ao buscar números da roleta do Supabase: ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    console.log(`Encontrados ${data.length} números no Supabase para a roleta ${roletaId}`);
-    
-    if (Array.isArray(data) && data.length > 0) {
-      // Extrair apenas os números (o mais recente primeiro)
-      return data.map(item => item.numero);
-    }
-    
-    return [];
-  } catch (supabaseError) {
-    console.error(`Erro ao buscar números para roleta ${roletaId} do Supabase:`, supabaseError);
-    
-    // Fallback para a API
-    try {
-      console.log(`Tentando buscar números da roleta ${roletaId} pela API como fallback...`);
-      const response = await api.get<RouletteNumberRecord[]>(`/roleta_numeros/${roletaId}?limit=${limit}`);
-      if (response.data && Array.isArray(response.data)) {
-        return response.data.map(record => record.numero);
-      }
-      return [];
-    } catch (apiError) {
-      console.error(`Erro ao buscar números da roleta ${roletaId} pela API:`, apiError);
-      return [];
     }
   }
 };

@@ -11,7 +11,7 @@ import RouletteActionButtons from './roulette/RouletteActionButtons';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import RouletteStatsModal from './roulette/RouletteStatsModal';
-import { fetchRouletteLatestNumbers } from '@/integrations/api/rouletteService';
+import { fetchRouletteLatestNumbersByName } from '@/integrations/api/rouletteService';
 
 interface RouletteCardProps {
   name: string;
@@ -37,42 +37,42 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
   const [usingSupabaseData, setUsingSupabaseData] = useState(false);
 
   useEffect(() => {
-    console.log("Componente RouletteCard inicializado para roleta:", name);
+    console.log(`[${name}] RouletteCard inicializado com números iniciais:`, initialLastNumbers);
     
     const checkAndSeedData = async () => {
       try {
         console.log(`[${name}] Verificando dados no Supabase...`);
         setIsLoading(true);
         
-        const response = await fetch(
-          'https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roletas?select=count',
-          {
-            headers: {
-              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ',
-              'Content-Type': 'application/json',
-              'Cache-Control': 'no-cache, no-store'
-            }
-          }
-        );
+        // Buscar números diretamente do Supabase pela função específica para busca por nome
+        const numbers = await fetchRouletteLatestNumbersByName(name, 20);
         
-        if (!response.ok) {
-          console.error(`[${name}] Erro ao verificar a tabela roletas:`, response.statusText);
+        if (numbers && numbers.length > 0) {
+          console.log(`[${name}] Números obtidos diretamente do Supabase:`, numbers);
+          setLastNumbers(numbers);
+          setUsingSupabaseData(true);
           setDataSeeded(true);
-          return;
-        }
-        
-        const data = await response.json();
-        console.log(`[${name}] Resposta da verificação da tabela:`, data);
-        
-        if (!data || data.length === 0) {
-          console.log(`[${name}] Nenhum dado encontrado, aguardando dados do Supabase...`);
-          setDataSeeded(true);
+          toast({
+            title: `Dados Carregados: ${name}`,
+            description: `${numbers.length} números encontrados no Supabase`,
+            variant: 'default',
+          });
         } else {
-          console.log(`[${name}] Dados existentes no banco, buscando números...`);
+          console.log(`[${name}] Nenhum número encontrado no Supabase, usando dados iniciais provisórios`);
+          // Usar os dados iniciais como fallback apenas se realmente não houver dados no Supabase
+          if (initialLastNumbers && initialLastNumbers.length > 0) {
+            setLastNumbers(initialLastNumbers);
+          }
+          setUsingSupabaseData(false);
           setDataSeeded(true);
         }
       } catch (error) {
         console.error(`[${name}] Erro ao verificar dados:`, error);
+        // Usar os dados iniciais como fallback em caso de erro
+        if (initialLastNumbers && initialLastNumbers.length > 0) {
+          setLastNumbers(initialLastNumbers);
+        }
+        setUsingSupabaseData(false);
         setDataSeeded(true);
       } finally {
         setIsLoading(false);
@@ -80,8 +80,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     };
 
     checkAndSeedData();
-    // Não usar initialLastNumbers como dependência para evitar atualizações indesejadas
-  }, [name]);
+  }, [name, initialLastNumbers]);
 
   const verificarEstrategia = (numero: number) => {
     // Placeholder para verificação de estratégia
@@ -93,102 +92,35 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       console.log(`[${name}] [${new Date().toLocaleTimeString()}] Buscando números do Supabase...`);
       setIsLoading(true);
       
-      // Primeiro tentamos buscar o ID da roleta
-      const idResponse = await fetch(
-        `https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roletas?nome=eq.${encodeURIComponent(name)}&select=id`,
-        {
-          headers: {
-            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ',
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache, no-store'
-          }
-        }
-      );
+      // Usar a função específica para buscar números pelo nome da roleta
+      const numbers = await fetchRouletteLatestNumbersByName(name, 20);
       
-      if (!idResponse.ok) {
-        console.error(`[${name}] Erro ao buscar ID da roleta: ${idResponse.statusText}`);
-        setIsLoading(false);
-        return;
-      }
-      
-      const idData = await idResponse.json();
-      if (!idData || idData.length === 0) {
-        console.error(`[${name}] Roleta não encontrada no Supabase`);
-        setIsLoading(false);
-        return;
-      }
-      
-      const roletaId = idData[0].id;
-      console.log(`[${name}] ID da roleta: ${roletaId}`);
-      
-      // Buscamos os últimos números diretamente do Supabase
-      const supabaseUrl = "https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roleta_numeros";
-      const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ";
-      
-      const response = await fetch(
-        `${supabaseUrl}?roleta_id=eq.${roletaId}&select=numero,created_at&order=created_at.desc&limit=20`,
-        {
-          headers: {
-            'apikey': supabaseKey,
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache, no-store'
-          }
-        }
-      );
-      
-      if (!response.ok) {
-        console.error(`[${name}] Erro ao buscar números da roleta: ${response.statusText}`);
-        setIsLoading(false);
-        return;
-      }
-      
-      const data = await response.json();
-      console.log(`[${name}] Dados obtidos do Supabase (${data.length} registros):`, data);
-      
-      if (Array.isArray(data) && data.length > 0) {
-        // Extrair apenas os números na ordem correta (mais recente primeiro)
-        const numbers = data.map(item => item.numero);
-        console.log(`[${name}] Números extraídos do Supabase:`, numbers);
+      if (Array.isArray(numbers) && numbers.length > 0) {
+        console.log(`[${name}] Números obtidos do Supabase (${numbers.length}):`, numbers);
         
-        // Converter para números inteiros
-        const validNumbers = numbers
-          .filter(num => num !== undefined && num !== null)
-          .map(num => typeof num === 'string' ? parseInt(num, 10) : Number(num))
-          .filter(num => !isNaN(num) && num >= 0 && num <= 36);
+        // Detectar se há um novo número em comparação com o estado atual
+        const isNewNumber = lastNumbers.length > 0 && numbers[0] !== lastNumbers[0];
         
-        console.log(`[${name}] Números validados do Supabase (${validNumbers.length}):`, validNumbers);
+        // Atualizar o estado com os números do Supabase
+        setLastNumbers(numbers);
+        setUsingSupabaseData(true);
         
-        if (validNumbers.length > 0) {
-          // Detectar se há um novo número em comparação com o estado atual
-          const isNewNumber = lastNumbers.length > 0 && validNumbers[0] !== lastNumbers[0];
+        if (isNewNumber) {
+          setPreviousLastNumber(lastNumbers[0]);
+          verificarEstrategia(numbers[0]);
           
-          // Atualizar o estado com os números do Supabase
-          setLastNumbers(validNumbers);
-          setUsingSupabaseData(true);
-          
-          if (isNewNumber) {
-            setPreviousLastNumber(lastNumbers[0]);
-            verificarEstrategia(validNumbers[0]);
-            
-            // Notificar o usuário que os números foram atualizados
-            toast({
-              title: "Números Atualizados",
-              description: `Último número: ${validNumbers[0]} (Supabase)`,
-              variant: "default",
-            });
-          }
-          
-          console.log(`[${name}] Usando ${validNumbers.length} números do Supabase para exibição`);
-        } else {
-          console.log(`[${name}] Nenhum número válido encontrado no Supabase`);
-          setUsingSupabaseData(false);
+          toast({
+            title: "Números Atualizados",
+            description: `Último número: ${numbers[0]} (${name})`,
+            variant: "default",
+          });
         }
       } else {
-        console.log(`[${name}] Nenhum número encontrado no Supabase para a roleta`);
+        console.log(`[${name}] Nenhum número encontrado no Supabase`);
         setUsingSupabaseData(false);
       }
     } catch (error) {
-      console.error(`[${name}] Erro ao buscar números da roleta:`, error);
+      console.error(`[${name}] Erro ao buscar números:`, error);
       setUsingSupabaseData(false);
     } finally {
       setIsLoading(false);
@@ -290,12 +222,13 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
 
   // Função para determinar a cor do número da roleta
   const getRouletteNumberColor = (num: number) => {
+    num = Number(num); // Garantir que o número está no formato correto
     if (num === 0) {
       return 'bg-green-600 text-white'; // Verde para o zero
     } else if ([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36].includes(num)) {
-      return 'bg-red-600 text-white'; // Vermelho para números ímpares
+      return 'bg-red-600 text-white'; // Vermelho para números específicos
     } else {
-      return 'bg-black text-white'; // Preto para números pares
+      return 'bg-black text-white'; // Preto para os demais números
     }
   };
 
@@ -407,6 +340,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
 
 // Funções auxiliares para insights
 const getColorName = (num: number): string => {
+  num = Number(num); // Garantir que o número está no formato correto
   if (num === 0) return "Verde";
   if ([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36].includes(num)) return "Vermelho";
   return "Preto";

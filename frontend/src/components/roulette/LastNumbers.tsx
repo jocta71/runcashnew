@@ -13,7 +13,11 @@ const LastNumbers = memo(({ numbers, isLoading = false }: LastNumbersProps) => {
   const validNumbers = Array.isArray(numbers) 
     ? numbers
         .filter(num => num !== undefined && num !== null)
-        .map(num => typeof num === 'string' ? parseInt(num as string, 10) : Number(num))
+        .map(num => {
+          // Converter para números adequadamente
+          const converted = typeof num === 'string' ? parseInt(num as string, 10) : Number(num);
+          return converted;
+        })
         .filter(num => !isNaN(num) && num >= 0 && num <= 36)
     : [];
 
