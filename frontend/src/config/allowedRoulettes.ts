@@ -9,11 +9,11 @@ export const ROLETAS_PERMITIDAS = [
   "2010065",  // Bucharest Auto-Roulette
   "2010096",  // Speed Auto Roulette
   "2010017",  // Auto-Roulette
-  "2010098",  // Auto-Roulette VIP
+  "2010098",  // Auto-Roulette VIP,
   
-  // IMPORTANTE: Remove o coringa "*" para garantir que apenas roletas específicas sejam permitidas
-  // Para permitir todas as roletas, descomente a linha abaixo
-  // "*"
+  // IMPORTANTE: O coringa "*" permite todas as roletas
+  // Remova esta linha para permitir apenas roletas específicas
+  "*" // Permite todas as roletas
 ];
 
 /**

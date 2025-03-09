@@ -14,7 +14,7 @@ import {
   fetchRouletteLatestNumbersByName,
   fetchAvailableRoulettesFromNumbers
 } from '@/integrations/api/rouletteService';
-import { filterAllowedRoulettes, atualizarRoletasPermitidas } from '@/config/allowedRoulettes';
+import { filterAllowedRoulettes } from '@/config/allowedRoulettes';
 import { toast } from '@/components/ui/use-toast';
 
 interface ChatMessage {
@@ -160,32 +160,89 @@ const Index = () => {
   
   // Efeito para carregar dados quando o componente montar
   useEffect(() => {
-    // Primeiro atualizar a lista de roletas permitidas do Supabase
-    console.log('[DEBUG] Atualizando lista de roletas permitidas...');
-    atualizarRoletasPermitidas().then(() => {
-      console.log('[DEBUG] Lista de roletas permitidas atualizada, buscando dados...');
-      // Depois buscar os dados das roletas
-      fetchRoulettes();
-      
-      // Configurar polling para atualizar a cada 30 segundos (mais frequente para dados em tempo real)
-      const intervalId = setInterval(fetchRoulettes, 30000);
-      
-      // Limpar intervalo quando o componente for desmontado
-      return () => {
-        clearInterval(intervalId);
-      };
-    }).catch(error => {
-      console.error('[DEBUG] Erro ao atualizar lista de roletas permitidas:', error);
-      // Mesmo se falhar, tenta buscar roletas com a lista padrão
-      fetchRoulettes();
-      
-      const intervalId = setInterval(fetchRoulettes, 30000);
-      return () => {
-        clearInterval(intervalId);
-      };
-    });
+    // Busca imediata quando o componente monta
+    fetchRoulettes();
+    
+    // Configurar polling para atualizar a cada 30 segundos (mais frequente para dados em tempo real)
+    const intervalId = setInterval(fetchRoulettes, 30000);
+    
+    // Limpar intervalo quando o componente for desmontado
+    return () => {
+      clearInterval(intervalId);
+    };
   }, []);
   
+  // Mostrar mensagem de carregamento enquanto busca dados
+  if (isLoading && !loaded) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen p-4">
+        <div className="text-xl font-semibold mb-4">Carregando roletas...</div>
+        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-green-500"></div>
+      </div>
+    );
+  }
+
+  // NOVO: Fallback para mostrar algo se não houver roletas
+  if (!isLoading && roulettes.length === 0) {
+    console.log("[DEPURAÇÃO] Nenhuma roleta disponível após carregamento. Mostrando mensagem de fallback.");
+    
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-6">
+        <div className="max-w-4xl w-full bg-black/30 rounded-lg p-8 text-center">
+          <h1 className="text-2xl font-bold mb-4">Nenhuma roleta encontrada</h1>
+          <p className="mb-8">
+            Não foi possível encontrar roletas para exibir. Isso pode ocorrer pelos seguintes motivos:
+          </p>
+          
+          <div className="grid gap-4 md:grid-cols-2 text-left mb-8">
+            <div className="bg-black/20 p-4 rounded-lg">
+              <h3 className="font-semibold mb-2">Possíveis causas:</h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Conexão com o Supabase falhou</li>
+                <li>Nenhuma roleta na tabela roleta_numeros</li>
+                <li>Filtro de roletas permitidas muito restritivo</li>
+                <li>Erro na consolidação de roletas</li>
+              </ul>
+            </div>
+            
+            <div className="bg-black/20 p-4 rounded-lg">
+              <h3 className="font-semibold mb-2">Soluções:</h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Verifique a conexão com o Supabase</li>
+                <li>Adicione roletas através do scraper</li>
+                <li>Verifique as configuraçoes em allowedRoulettes.ts</li>
+                <li>Verifique o console para erros</li>
+              </ul>
+            </div>
+          </div>
+          
+          <div className="flex justify-center gap-4">
+            <Button
+              onClick={() => window.location.reload()}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Tentar novamente
+            </Button>
+            
+            <Button
+              onClick={() => window.open('/config-sync', '_blank')}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              Configurar roletas
+            </Button>
+            
+            <Button
+              onClick={debugSupabaseData}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              Depurar Supabase
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const filteredRoulettes = roulettes.filter(roulette => 
     roulette.name.toLowerCase().includes(search.toLowerCase())
   );
