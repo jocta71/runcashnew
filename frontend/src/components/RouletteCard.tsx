@@ -1,5 +1,5 @@
 import { TrendingUp } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from '@/components/ui/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { strategies, numberGroups } from './roulette/constants';
@@ -26,6 +26,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
   const [currentStrategy, setCurrentStrategy] = useState(strategies[0]);
   const [selectedGroup, setSelectedGroup] = useState<string>("grupo-123");
   const [lastNumbers, setLastNumbers] = useState<number[]>(initialLastNumbers);
+  const [previousLastNumber, setPreviousLastNumber] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [dataSeeded, setDataSeeded] = useState(false);
 
@@ -77,67 +78,77 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     checkAndSeedData();
   }, [initialLastNumbers]);
 
-  useEffect(() => {
-    const fetchRouletteNumbers = async () => {
-      try {
-        setIsLoading(true);
-        console.log(`Buscando números para roleta: ${name}`);
-        
-        const response = await fetch(
-          `https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roletas?nome=eq.${encodeURIComponent(name)}&select=numeros`,
-          {
-            headers: {
-              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ',
-              'Content-Type': 'application/json'
-            }
+  const fetchRouletteNumbers = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      console.log(`Buscando números para roleta: ${name}`);
+      
+      const response = await fetch(
+        `https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roletas?nome=eq.${encodeURIComponent(name)}&select=numeros`,
+        {
+          headers: {
+            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ',
+            'Content-Type': 'application/json'
           }
-        );
-        
-        if (!response.ok) {
-          throw new Error(`Erro ao buscar dados: ${response.statusText}`);
         }
-        
-        const data = await response.json();
-        console.log(`Dados recebidos para ${name}:`, data);
-
-        if (data && data.length > 0 && data[0].numeros) {
-          let validNumbers = [];
-          
-          if (Array.isArray(data[0].numeros)) {
-            validNumbers = data[0].numeros
-              .map(num => typeof num === 'string' ? parseInt(num, 10) : num)
-              .filter(num => !isNaN(num))
-              .slice(0, 20);
-          }
-          
-          console.log(`Números processados para ${name}:`, validNumbers);
-          
-          if (validNumbers.length > 0) {
-            setLastNumbers(validNumbers);
-          } else {
-            console.log(`Nenhum número válido encontrado para ${name}, usando dados iniciais`);
-            setLastNumbers(initialLastNumbers);
-          }
-        } else {
-          console.log(`Dados inválidos recebidos para ${name}, usando dados iniciais`);
-          setLastNumbers(initialLastNumbers);
-        }
-      } catch (error) {
-        console.error(`Erro buscando números para ${name}:`, error);
-        setLastNumbers(initialLastNumbers);
-      } finally {
-        setIsLoading(false);
+      );
+      
+      if (!response.ok) {
+        throw new Error(`Erro ao buscar dados: ${response.statusText}`);
       }
-    };
+      
+      const data = await response.json();
+      console.log(`Dados recebidos para ${name}:`, data);
 
+      if (data && data.length > 0 && data[0].numeros) {
+        let validNumbers = [];
+        
+        if (Array.isArray(data[0].numeros)) {
+          // Pega os números, converte para inteiros e filtra valores inválidos
+          validNumbers = data[0].numeros
+            .map(num => typeof num === 'string' ? parseInt(num, 10) : num)
+            .filter(num => !isNaN(num));
+          
+          // Verificamos se temos um número novo antes de atualizar o estado
+          const currentLastNumber = validNumbers.length > 0 ? validNumbers[validNumbers.length - 1] : null;
+          
+          // Se temos um último número e ele é diferente do anterior, atualizamos
+          if (currentLastNumber !== null && currentLastNumber !== previousLastNumber) {
+            console.log(`Novo número detectado para ${name}: ${currentLastNumber}`);
+            setPreviousLastNumber(currentLastNumber);
+            
+            // Ordena os números em ordem inversa para que os mais recentes apareçam primeiro
+            // Limita a 20 números para exibição
+            const reversedNumbers = [...validNumbers].reverse().slice(0, 20);
+            setLastNumbers(reversedNumbers);
+          }
+        }
+        
+        console.log(`Números processados para ${name}:`, validNumbers.slice(-5));
+      } else {
+        console.log(`Dados inválidos recebidos para ${name}, usando dados iniciais`);
+        setLastNumbers(initialLastNumbers);
+      }
+    } catch (error) {
+      console.error(`Erro buscando números para ${name}:`, error);
+      setLastNumbers(initialLastNumbers);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [name, initialLastNumbers, previousLastNumber]);
+
+  useEffect(() => {
     if (dataSeeded) {
+      // Busca inicial
       fetchRouletteNumbers();
       
+      // Configurar polling para atualizar a cada 10 segundos
       const intervalId = setInterval(fetchRouletteNumbers, 10000);
       
+      // Limpar intervalo quando o componente for desmontado
       return () => clearInterval(intervalId);
     }
-  }, [name, dataSeeded, initialLastNumbers]);
+  }, [dataSeeded, fetchRouletteNumbers]);
 
   useEffect(() => {
     generateSuggestion();
@@ -180,6 +191,36 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     });
   };
 
+  // Memorize components to prevent unnecessary re-renders
+  const memoizedNumbers = useMemo(() => (
+    <LastNumbers numbers={lastNumbers} isLoading={isLoading} />
+  ), [lastNumbers, isLoading]);
+
+  const memoizedSuggestion = useMemo(() => (
+    <SuggestionDisplay 
+      suggestion={suggestion}
+      selectedGroup={selectedGroup}
+      isBlurred={isBlurred}
+      toggleVisibility={toggleVisibility}
+      numberGroups={numberGroups}
+    />
+  ), [suggestion, selectedGroup, isBlurred]);
+
+  const memoizedWinRate = useMemo(() => (
+    <WinRateDisplay wins={wins} losses={losses} />
+  ), [wins, losses]);
+
+  const memoizedTrendChart = useMemo(() => (
+    <RouletteTrendChart trend={trend} />
+  ), [trend]);
+
+  const memoizedActionButtons = useMemo(() => (
+    <RouletteActionButtons 
+      onDetailsClick={handleDetailsClick}
+      onPlayClick={handlePlayClick}
+    />
+  ), []);
+
   return (
     <div 
       className="bg-[#17161e]/90 backdrop-filter backdrop-blur-sm border border-white/10 rounded-xl p-4 space-y-3 animate-fade-in hover-scale cursor-pointer h-auto"
@@ -190,24 +231,11 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
         <TrendingUp size={20} className="text-[#00ff00]" />
       </div>
       
-      <LastNumbers numbers={lastNumbers} isLoading={isLoading} />
-      
-      <SuggestionDisplay 
-        suggestion={suggestion}
-        selectedGroup={selectedGroup}
-        isBlurred={isBlurred}
-        toggleVisibility={toggleVisibility}
-        numberGroups={numberGroups}
-      />
-      
-      <WinRateDisplay wins={wins} losses={losses} />
-      
-      <RouletteTrendChart trend={trend} />
-      
-      <RouletteActionButtons 
-        onDetailsClick={handleDetailsClick}
-        onPlayClick={handlePlayClick}
-      />
+      {memoizedNumbers}
+      {memoizedSuggestion}
+      {memoizedWinRate}
+      {memoizedTrendChart}
+      {memoizedActionButtons}
     </div>
   );
 };

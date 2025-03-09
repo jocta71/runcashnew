@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, memo } from 'react';
 import RouletteNumber from './RouletteNumber';
 import { Loader2 } from 'lucide-react';
 
@@ -7,7 +7,8 @@ interface LastNumbersProps {
   isLoading?: boolean;
 }
 
-const LastNumbers = ({ numbers, isLoading = false }: LastNumbersProps) => {
+// Componente otimizado com memo para evitar re-renderizações desnecessárias
+const LastNumbers = memo(({ numbers, isLoading = false }: LastNumbersProps) => {
   // Garantir que todos são números válidos
   const validNumbers = Array.isArray(numbers) 
     ? numbers
@@ -40,10 +41,13 @@ const LastNumbers = ({ numbers, isLoading = false }: LastNumbersProps) => {
   return (
     <div className="flex flex-wrap justify-center gap-2 max-w-full">
       {validNumbers.map((num, i) => (
-        <RouletteNumber key={i} number={num} />
+        <RouletteNumber key={`${num}-${i}`} number={num} />
       ))}
     </div>
   );
-};
+});
+
+// Adiciona um nome de exibição para melhorar a depuração
+LastNumbers.displayName = 'LastNumbers';
 
 export default LastNumbers;
