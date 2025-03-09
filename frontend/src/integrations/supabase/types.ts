@@ -33,6 +33,51 @@ export interface Database {
         }
         Relationships: []
       }
+      roletas: {
+        Row: {
+          id: string
+          nome: string
+          numeros: number[]
+          updated_at: string
+          estado_estrategia: string
+          numero_gatilho: number
+          numero_gatilho_anterior: number
+          terminais_gatilho: number[]
+          terminais_gatilho_anterior: number[]
+          vitorias: number
+          derrotas: number
+          sugestao_display: string
+        }
+        Insert: {
+          id: string
+          nome: string
+          numeros: number[]
+          updated_at?: string
+          estado_estrategia?: string
+          numero_gatilho?: number
+          numero_gatilho_anterior?: number
+          terminais_gatilho?: number[]
+          terminais_gatilho_anterior?: number[]
+          vitorias?: number
+          derrotas?: number
+          sugestao_display?: string
+        }
+        Update: {
+          id?: string
+          nome?: string
+          numeros?: number[]
+          updated_at?: string
+          estado_estrategia?: string
+          numero_gatilho?: number
+          numero_gatilho_anterior?: number
+          terminais_gatilho?: number[]
+          terminais_gatilho_anterior?: number[]
+          vitorias?: number
+          derrotas?: number
+          sugestao_display?: string
+        }
+        Relationships: []
+      }
       subscriptions: {
         Row: {
           id: string

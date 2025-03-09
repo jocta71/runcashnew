@@ -32,12 +32,30 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
   useEffect(() => {
     const checkAndSeedData = async () => {
       try {
-        const { data, error, count } = await supabase
-          .from('roletas')
-          .select('numeros', { count: 'exact', head: true });
+        console.log("Verificando dados no Supabase...");
         
-        if (!count || count === 0) {
-          console.log('No data found in roletas table, using mock data');
+        const response = await fetch(
+          'https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roletas?select=count',
+          {
+            headers: {
+              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ',
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        
+        if (!response.ok) {
+          console.error('Erro ao verificar a tabela roletas');
+          setLastNumbers(initialLastNumbers);
+          setDataSeeded(true);
+          return;
+        }
+        
+        const data = await response.json();
+        console.log('Resposta da verificação da tabela:', data);
+        
+        if (!data || data.length === 0) {
+          console.log('Nenhum dado encontrado, usando dados locais');
           setLastNumbers(initialLastNumbers);
           setDataSeeded(true);
           toast({
@@ -46,11 +64,11 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
             variant: 'default',
           });
         } else {
-          console.log('Data already exists, using database data');
+          console.log('Dados existentes no banco, tentando carregar');
           setDataSeeded(true);
         }
       } catch (error) {
-        console.error('Error checking data:', error);
+        console.error('Erro ao verificar dados:', error);
         setLastNumbers(initialLastNumbers);
         setDataSeeded(true);
       }
@@ -63,31 +81,49 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     const fetchRouletteNumbers = async () => {
       try {
         setIsLoading(true);
-        console.log(`Fetching numbers for roulette: ${name}`);
+        console.log(`Buscando números para roleta: ${name}`);
         
-        const { data, error } = await supabase
-          .from('roletas')
-          .select('numeros')
-          .eq('nome', name)
-          .single();
-
-        if (error) {
-          console.error('Error fetching roulette numbers:', error);
-          return;
+        const response = await fetch(
+          `https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roletas?nome=eq.${encodeURIComponent(name)}&select=numeros`,
+          {
+            headers: {
+              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ',
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        
+        if (!response.ok) {
+          throw new Error(`Erro ao buscar dados: ${response.statusText}`);
         }
+        
+        const data = await response.json();
+        console.log(`Dados recebidos para ${name}:`, data);
 
-        console.log(`Received data for ${name}:`, data);
-
-        if (data && data.numeros && Array.isArray(data.numeros) && data.numeros.length > 0) {
-          const recentNumbers = data.numeros.slice(0, 5).map(num => parseInt(num, 10));
-          console.log(`Setting recent numbers for ${name}:`, recentNumbers);
-          setLastNumbers(recentNumbers);
+        if (data && data.length > 0 && data[0].numeros) {
+          let validNumbers = [];
+          
+          if (Array.isArray(data[0].numeros)) {
+            validNumbers = data[0].numeros
+              .map(num => typeof num === 'string' ? parseInt(num, 10) : num)
+              .filter(num => !isNaN(num))
+              .slice(0, 5);
+          }
+          
+          console.log(`Números processados para ${name}:`, validNumbers);
+          
+          if (validNumbers.length > 0) {
+            setLastNumbers(validNumbers);
+          } else {
+            console.log(`Nenhum número válido encontrado para ${name}, usando dados iniciais`);
+            setLastNumbers(initialLastNumbers);
+          }
         } else {
-          console.log(`No valid numbers found for ${name}, using initial data`);
+          console.log(`Dados inválidos recebidos para ${name}, usando dados iniciais`);
           setLastNumbers(initialLastNumbers);
         }
       } catch (error) {
-        console.error('Error in fetching roulette numbers:', error);
+        console.error(`Erro buscando números para ${name}:`, error);
         setLastNumbers(initialLastNumbers);
       } finally {
         setIsLoading(false);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import RouletteNumber from './RouletteNumber';
 import { Loader2 } from 'lucide-react';
 
@@ -10,8 +10,16 @@ interface LastNumbersProps {
 const LastNumbers = ({ numbers, isLoading = false }: LastNumbersProps) => {
   // Garantir que todos são números válidos
   const validNumbers = Array.isArray(numbers) 
-    ? numbers.filter(num => !isNaN(Number(num))).map(num => Number(num))
+    ? numbers
+        .filter(num => num !== undefined && num !== null)
+        .map(num => typeof num === 'string' ? parseInt(num as string, 10) : Number(num))
+        .filter(num => !isNaN(num) && num >= 0 && num <= 36)
     : [];
+
+  useEffect(() => {
+    console.log('LastNumbers recebeu:', numbers);
+    console.log('LastNumbers validados:', validNumbers);
+  }, [numbers, validNumbers]);
 
   if (isLoading) {
     return (

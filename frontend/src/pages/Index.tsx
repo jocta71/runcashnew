@@ -32,6 +32,7 @@ interface Roulette {
   trend: { value: number }[];
 }
 
+// Mock roulette data as fallback if database data is not available
 const mockRoulettes = [{
   name: "Roleta Brasileira",
   lastNumbers: [7, 11, 23, 5, 18],
@@ -230,9 +231,9 @@ const Index = () => {
       try {
         setIsLoading(true);
         
-        // Usando o método fetch diretamente com a API Supabase REST
+        // Usando fetch direto em vez do cliente Supabase
         const response = await fetch(
-          'https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roletas',
+          'https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roletas?select=*',
           {
             headers: {
               'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ',
@@ -242,35 +243,52 @@ const Index = () => {
         );
         
         if (!response.ok) {
-          throw new Error('Falha ao buscar dados');
+          throw new Error(`Erro ao buscar dados: ${response.statusText}`);
         }
         
         const data = await response.json();
-        console.log('Fetched data from Supabase:', data);
+        console.log('Dados buscados do Supabase:', data);
         
         if (data && data.length > 0) {
-          // Transform the database data to match our component structure
-          const transformedData: Roulette[] = data.map((item: any) => ({
-            name: item.nome || 'Roleta sem nome',
-            lastNumbers: Array.isArray(item.numeros) 
-              ? item.numeros.slice(0, 5).map((num: any) => parseInt(num, 10))
-              : [],
-            wins: item.vitorias || 0,
-            losses: item.derrotas || 0,
-            trend: Array.from({ length: 20 }, () => ({ value: Math.random() * 100 }))
-          }));
-          
-          console.log('Transformed data:', transformedData);
-          setRoulettes(transformedData);
-          
-          toast({
-            title: 'Dados carregados',
-            description: 'Dados atualizados em tempo real',
-            variant: 'default',
+          // Transformar os dados do banco para a estrutura do componente
+          const transformedData: Roulette[] = data.map((item: any) => {
+            // Extrair números e garantir que são válidos
+            let validNumbers: number[] = [];
+            if (Array.isArray(item.numeros)) {
+              validNumbers = item.numeros
+                .filter((num: any) => num !== undefined && num !== null)
+                .map((num: any) => typeof num === 'string' ? parseInt(num, 10) : Number(num))
+                .filter((num: number) => !isNaN(num) && num >= 0 && num <= 36)
+                .slice(0, 5);
+            }
+            
+            return {
+              name: item.nome || 'Roleta sem nome',
+              lastNumbers: validNumbers.length > 0 ? validNumbers : [0, 0, 0, 0, 0],
+              wins: item.vitorias || 0,
+              losses: item.derrotas || 0,
+              trend: Array.from({ length: 20 }, () => ({ value: Math.random() * 100 }))
+            };
           });
+          
+          console.log('Dados transformados:', transformedData);
+          
+          if (transformedData.length > 0) {
+            setRoulettes(transformedData);
+            
+            toast({
+              title: 'Dados carregados',
+              description: 'Dados atualizados em tempo real',
+              variant: 'default',
+            });
+          } else {
+            console.log('Sem dados válidos após transformação, usando mocks');
+          }
+        } else {
+          console.log('Sem dados no Supabase ou formato inválido, usando mocks');
         }
       } catch (err) {
-        console.error('Error in fetching roulettes:', err);
+        console.error('Erro ao buscar roletas:', err);
         toast({
           title: 'Erro ao carregar dados',
           description: 'Usando dados locais como fallback',
@@ -283,10 +301,10 @@ const Index = () => {
     
     fetchRoulettes();
     
-    // Set up a polling interval to refresh data every 30 seconds
+    // Configurar polling para atualizar a cada 30 segundos
     const intervalId = setInterval(fetchRoulettes, 30000);
     
-    // Clean up interval on component unmount
+    // Limpar intervalo quando o componente for desmontado
     return () => clearInterval(intervalId);
   }, []);
   
