@@ -3,7 +3,6 @@ const axios = require('axios');
 
 // URL de teste do Asaas - usando ambiente de homologação
 const API_BASE_URL = 'https://sandbox.asaas.com/api/v3';
-const DEFAULT_API_KEY = '$aact_hmlg_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OmRhNjc3NWMzLWRmMzQtNDc1NS05ZTY2LWMzNGFjYWQ1NzRiZTo6JGFhY2hfNTMwM2FiNDAtZGY4My00NTBhLWJkNmMtMDAxZTVjNWE4MGE1';
 
 /**
  * Handler da função serverless para criar clientes no Asaas
@@ -53,8 +52,17 @@ module.exports = async (req, res) => {
       });
     }
 
-    // Usar a chave de API das variáveis de ambiente ou a chave de teste
-    const apiKey = process.env.ASAAS_API_KEY || DEFAULT_API_KEY;
+    // Usar a chave de API das variáveis de ambiente
+    const apiKey = process.env.ASAAS_API_KEY;
+    
+    if (!apiKey) {
+      console.error('[ASAAS] API key do Asaas não configurada');
+      return res.status(500).json({ 
+        error: 'Erro de configuração', 
+        message: 'A chave de API do Asaas não está configurada no servidor'
+      });
+    }
+    
     console.log('[ASAAS] Usando API Key (início):', apiKey.substring(0, 10) + '...');
 
     // Preparar dados para envio
@@ -113,11 +121,17 @@ module.exports = async (req, res) => {
         const cpfCnpj = req.body.cpfCnpj.replace(/\D/g, '');
         console.log('[ASAAS] CPF já utilizado, buscando cliente:', cpfCnpj);
         
+        const apiKey = process.env.ASAAS_API_KEY;
+        
+        if (!apiKey) {
+          throw new Error('API key do Asaas não configurada');
+        }
+        
         const searchResponse = await axios({
           method: 'get',
           url: `${API_BASE_URL}/customers?cpfCnpj=${cpfCnpj}`,
           headers: {
-            'access_token': process.env.ASAAS_API_KEY || DEFAULT_API_KEY
+            'access_token': apiKey
           }
         });
         

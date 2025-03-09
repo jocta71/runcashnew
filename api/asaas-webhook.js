@@ -3,7 +3,6 @@ const axios = require('axios');
 
 // Configurações da API Asaas
 const API_BASE_URL = 'https://sandbox.asaas.com/api/v3';
-const DEFAULT_API_KEY = '$aact_hmlg_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OjNjMjMwZTZiLTYwNzYtNGMwYS05NjA3LWU2NjYyMDMxZTNlOTo6JGFhY2hfNmYzNDFjZDktZmUwMy00MzdmLWE1ODQtNDA0MjcxMThjZjI0';
 
 module.exports = async (req, res) => {
   // Configurar CORS para aceitar qualquer origem
@@ -66,7 +65,13 @@ module.exports = async (req, res) => {
     
     // Buscar informações atualizadas da assinatura
     try {
-      const apiKey = process.env.ASAAS_API_KEY || DEFAULT_API_KEY;
+      const apiKey = process.env.ASAAS_API_KEY;
+      
+      if (!apiKey) {
+        console.error('API key do Asaas não configurada');
+        throw new Error('A chave de API do Asaas não está configurada no servidor');
+      }
+      
       const subscriptionResponse = await axios({
         method: 'get',
         url: `${API_BASE_URL}/subscriptions/${subscriptionId}`,

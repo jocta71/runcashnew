@@ -3,7 +3,6 @@ const { createClient } = require('@supabase/supabase-js');
 
 // Configurações da API Asaas
 const API_BASE_URL = 'https://sandbox.asaas.com/api/v3';
-const DEFAULT_API_KEY = '$aact_hmlg_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OmRhNjc3NWMzLWRmMzQtNDc1NS05ZTY2LWMzNGFjYWQ1NzRiZTo6JGFhY2hfNTMwM2FiNDAtZGY4My00NTBhLWJkNmMtMDAxZTVjNWE4MGE1';
 
 module.exports = async (req, res) => {
   // Configurar CORS para aceitar qualquer origem
@@ -118,8 +117,16 @@ module.exports = async (req, res) => {
     // Converter para formato YYYY-MM-DD
     const formattedDueDate = nextDueDate.toISOString().split('T')[0];
 
-    // Usar a chave de API das variáveis de ambiente ou a chave de teste
-    const apiKey = process.env.ASAAS_API_KEY || DEFAULT_API_KEY;
+    // Usar a chave de API das variáveis de ambiente
+    const apiKey = process.env.ASAAS_API_KEY;
+    
+    if (!apiKey) {
+      console.error('API key do Asaas não configurada');
+      return res.status(500).json({ 
+        error: 'Erro de configuração', 
+        message: 'A chave de API do Asaas não está configurada no servidor'
+      });
+    }
 
     // Criar assinatura no Asaas
     const response = await axios({
