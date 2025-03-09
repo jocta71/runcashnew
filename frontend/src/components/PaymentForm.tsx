@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { createAsaasCustomer, createAsaasSubscription } from '@/integrations/asaas/client';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 // Função para formatar CPF
 const formatCPF = (value: string) => {
@@ -53,8 +54,12 @@ export const PaymentForm = ({ planId, onPaymentSuccess, onCancel }: PaymentFormP
     phone: ''
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Limpa qualquer erro anterior quando o usuário começa a editar o formulário
+    if (error) setError(null);
+    
     const { name, value } = e.target;
     
     if (name === 'cpf') {
@@ -68,39 +73,29 @@ export const PaymentForm = ({ planId, onPaymentSuccess, onCancel }: PaymentFormP
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     
     if (!user) {
-      toast({
-        title: "Erro de autenticação",
-        description: "Você precisa estar logado para assinar um plano.",
-        variant: "destructive"
-      });
+      setError("Você precisa estar logado para assinar um plano.");
       return;
     }
     
     if (!formData.name || !formData.email || !formData.cpf) {
-      toast({
-        title: "Dados incompletos",
-        description: "Por favor, preencha todos os campos obrigatórios.",
-        variant: "destructive"
-      });
+      setError("Por favor, preencha todos os campos obrigatórios.");
       return;
     }
     
     // Validação simples de CPF (remover formatação e verificar tamanho)
     const cpfClean = formData.cpf.replace(/\D/g, '');
     if (cpfClean.length !== 11) {
-      toast({
-        title: "CPF inválido",
-        description: "Por favor, insira um CPF válido.",
-        variant: "destructive"
-      });
+      setError("Por favor, insira um CPF válido com 11 dígitos.");
       return;
     }
     
     setIsLoading(true);
     
     try {
+      console.log('Iniciando criação de cliente no Asaas...');
       // Passo 1: Criar ou recuperar cliente no Asaas
       const customerId = await createAsaasCustomer({
         name: formData.name,
@@ -112,6 +107,7 @@ export const PaymentForm = ({ planId, onPaymentSuccess, onCancel }: PaymentFormP
       console.log('Cliente criado/recuperado com ID:', customerId);
       
       // Passo 2: Criar assinatura
+      console.log('Criando assinatura para o cliente...');
       const { redirectUrl } = await createAsaasSubscription(
         planId, 
         user.id,
@@ -134,22 +130,40 @@ export const PaymentForm = ({ planId, onPaymentSuccess, onCancel }: PaymentFormP
     } catch (error) {
       console.error('Erro no processo de assinatura:', error);
       
-      toast({
-        title: "Erro ao processar assinatura",
-        description: error instanceof Error ? error.message : "Ocorreu um erro ao processar sua assinatura. Tente novamente mais tarde.",
-        variant: "destructive"
-      });
+      // Exibir mensagem de erro detalhada
+      let errorMessage = "Ocorreu um erro ao processar sua assinatura.";
+      
+      if (error instanceof Error) {
+        setError(`${errorMessage} ${error.message}`);
+        
+        // Mostrar diferentes mensagens dependendo do erro
+        if (error.message.includes('405')) {
+          setError("Erro na comunicação com a API de pagamento. Por favor, entre em contato com o suporte.");
+        } else if (error.message.includes('Network Error')) {
+          setError("Erro de conexão. Verifique sua internet e tente novamente.");
+        }
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }
   };
   
   return (
-    <div className="w-full max-w-md p-6 mx-auto bg-vegas-darkgray rounded-lg shadow-lg">
+    <div className="w-full p-6 mx-auto rounded-lg">
       <h2 className="text-xl font-bold text-white mb-4">Complete seus dados de pagamento</h2>
-      <p className="text-gray-400 mb-6">
+      <p className="text-gray-400 mb-4">
         O pagamento será processado via PIX através da plataforma Asaas
       </p>
+      
+      {error && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Erro</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
       
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
