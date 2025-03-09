@@ -6,7 +6,6 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/AuthPage";
-import RouletteDetailsPage from "./pages/RouletteDetailsPage";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentCanceled from "./pages/PaymentCanceled";
 import PlansPage from "./pages/PlansPage";
@@ -41,12 +40,6 @@ const App = () => (
                 </ProtectedRoute>
               } />
               
-              <Route path="/roulette/:rouletteId" element={
-                <ProtectedRoute>
-                  <RouletteDetailsPage />
-                </ProtectedRoute>
-              } />
-
               {/* Rotas relacionadas a planos e pagamentos */}
               <Route path="/planos" element={
                 <ProtectedRoute>

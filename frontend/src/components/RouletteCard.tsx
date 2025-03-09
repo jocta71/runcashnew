@@ -83,8 +83,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
 
   const fetchRouletteNumbers = useCallback(async () => {
     try {
-      setIsLoading(true);
-      console.log(`Buscando números para roleta: ${name}`);
+      console.log(`Verificando números para roleta: ${name}`);
       
       const response = await fetch(
         `https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roletas?nome=eq.${encodeURIComponent(name)}&select=numeros`,
@@ -101,7 +100,6 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       }
       
       const data = await response.json();
-      console.log(`Dados recebidos para ${name}:`, data);
       
       if (data && data.length > 0 && Array.isArray(data[0].numeros)) {
         const numerosFiltrados = data[0].numeros
@@ -109,26 +107,36 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
           .filter((num: number) => !isNaN(num) && num >= 0 && num <= 36);
         
         if (numerosFiltrados.length > 0) {
-          console.log(`Atualizando números para ${name}:`, numerosFiltrados);
-          setLastNumbers(numerosFiltrados);
-        } else {
-          console.log(`Sem números válidos para ${name}, mantendo padrão`);
+          // Verifica se há algum número novo comparando apenas o último número
+          const ultimoNumeroNoBanco = numerosFiltrados[numerosFiltrados.length - 1];
+          
+          if (lastNumbers.length === 0 || ultimoNumeroNoBanco !== lastNumbers[lastNumbers.length - 1]) {
+            console.log(`Novo número detectado para ${name}: ${ultimoNumeroNoBanco}`);
+            // Apenas adicionamos o novo número ao estado
+            if (lastNumbers.length === 0) {
+              setLastNumbers(numerosFiltrados);
+            } else {
+              // Adicionamos apenas o novo número
+              setLastNumbers(prev => [...prev, ultimoNumeroNoBanco]);
+            }
+            setIsLoading(false); // Remove o indicador de carregamento após atualizar
+          } else {
+            console.log(`Nenhum número novo para ${name}`);
+          }
         }
       }
     } catch (error) {
       console.error(`Erro ao buscar números para ${name}:`, error);
-    } finally {
-      setIsLoading(false);
     }
-  }, [name]);
+  }, [name, lastNumbers]);
 
   useEffect(() => {
     if (dataSeeded) {
       // Busca inicial
       fetchRouletteNumbers();
       
-      // Configurar polling para atualizar a cada 10 segundos
-      const intervalId = setInterval(fetchRouletteNumbers, 10000);
+      // Configurar polling para atualizar a cada 20 segundos (menos frequente)
+      const intervalId = setInterval(fetchRouletteNumbers, 20000);
       
       // Limpar intervalo quando o componente for desmontado
       return () => clearInterval(intervalId);
@@ -164,7 +172,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
 
   const handleDetailsClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigate(`/roulette/${encodeURIComponent(name)}`);
+    setStatsOpen(true);
   };
 
   const handlePlayClick = (e: React.MouseEvent) => {
@@ -255,7 +263,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
           <div className="flex flex-wrap gap-1">
             {lastNumbers.slice(0, 5).map((num, idx) => (
               <div
-                key={idx}
+                key={`number-${idx}`}
                 className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${getRouletteNumberColor(num)}`}
               >
                 {num}

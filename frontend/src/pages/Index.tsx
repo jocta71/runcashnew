@@ -250,7 +250,9 @@ const Index = () => {
   // Função para buscar roletas do banco de dados Supabase
   const fetchRoulettes = async () => {
     try {
-      setIsLoading(true);
+      if (!loaded) { // Set loading state only on initial load
+        setIsLoading(true);
+      }
       
       // Primeiro tentamos o serviço API definido em rouletteService
       console.log('Tentando buscar roletas da API...');
@@ -276,21 +278,38 @@ const Index = () => {
       console.log('Dados formatados:', formattedData);
       
       if (formattedData.length > 0) {
-        setRoulettes(formattedData);
+        // Preservar a ordem existente - atualizar dados sem reordenação
+        if (loaded && roulettes.length > 0) {
+          setRoulettes(prevRoulettes => {
+            return prevRoulettes.map(existingRoulette => {
+              // Encontrar dados atualizados para esta roleta
+              const updatedData = formattedData.find(r => r.name === existingRoulette.name);
+              // Se encontrou, atualizar os dados, senão manter os existentes
+              return updatedData || existingRoulette;
+            });
+          });
+        } else {
+          // Primeira carga - usar os dados como estão
+          setRoulettes(formattedData);
+        }
         setLoaded(true);
       } else {
         // Fallback para dados simulados
         console.log('Nenhuma roleta encontrada, usando dados simulados');
-        setRoulettes(mockRoulettes);
-        setLoaded(true);
+        if (!loaded) { // Só definir mock data na primeira carga
+          setRoulettes(mockRoulettes);
+          setLoaded(true);
+        }
       }
     } catch (error) {
       console.error('Erro ao buscar roletas:', error);
       
       // Fallback para dados simulados
       console.log('Erro ao buscar roletas, usando dados simulados');
-      setRoulettes(mockRoulettes);
-      setLoaded(true);
+      if (!loaded) { // Só definir mock data na primeira carga
+        setRoulettes(mockRoulettes);
+        setLoaded(true);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -300,8 +319,8 @@ const Index = () => {
   useEffect(() => {
     fetchRoulettes();
     
-    // Configurar polling para atualizar a cada 30 segundos
-    const intervalId = setInterval(fetchRoulettes, 30000);
+    // Configurar polling para atualizar a cada 60 segundos (menos frequente)
+    const intervalId = setInterval(fetchRoulettes, 60000);
     
     // Limpar intervalo quando o componente for desmontado
     return () => clearInterval(intervalId);
