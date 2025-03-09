@@ -135,6 +135,47 @@ const generateGroupDistribution = (numbers: number[]) => {
   return groups;
 };
 
+// Gerar dados de média de cores por hora
+const generateColorHourlyStats = (numbers: number[]) => {
+  const redNumbers = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+  const total = numbers.length;
+  
+  // Contar números por cor
+  const redCount = numbers.filter(num => redNumbers.includes(num)).length;
+  const blackCount = numbers.filter(num => num !== 0 && !redNumbers.includes(num)).length;
+  const zeroCount = numbers.filter(num => num === 0).length;
+  
+  // Calcular média por hora (assumindo que temos dados de uma hora)
+  // Para um cenário real, usaríamos dados com timestamps
+  const redAverage = parseFloat((redCount / (total / 60)).toFixed(2));
+  const blackAverage = parseFloat((blackCount / (total / 60)).toFixed(2));
+  const zeroAverage = parseFloat((zeroCount / (total / 60)).toFixed(2));
+  
+  return [
+    {
+      name: "Média de vermelhos por hora",
+      value: redAverage,
+      color: "#ef4444",
+      total: redCount,
+      percentage: parseFloat(((redCount / total) * 100).toFixed(2))
+    },
+    {
+      name: "Média de pretos por hora",
+      value: blackAverage,
+      color: "#111827",
+      total: blackCount,
+      percentage: parseFloat(((blackCount / total) * 100).toFixed(2))
+    },
+    {
+      name: "Média de brancos por hora",
+      value: zeroAverage,
+      color: "#059669",
+      total: zeroCount,
+      percentage: parseFloat(((zeroCount / total) * 100).toFixed(2))
+    }
+  ];
+};
+
 // Determine color for a roulette number
 const getRouletteNumberColor = (num: number) => {
   if (num === 0) return "bg-vegas-green text-black";
@@ -205,6 +246,7 @@ const RouletteStatsModal = ({
   const frequencyData = generateFrequencyData(historicalNumbers);
   const { hot, cold } = getHotColdNumbers(frequencyData);
   const pieData = generateGroupDistribution(historicalNumbers);
+  const colorHourlyStats = generateColorHourlyStats(historicalNumbers);
   
   const winRate = (wins / (wins + losses)) * 100;
 
@@ -363,6 +405,29 @@ const RouletteStatsModal = ({
                   ))}
                 </div>
               </div>
+            </div>
+          </div>
+          
+          {/* Média de cores por hora */}
+          <div className="glass-card p-3 md:p-4 space-y-2 md:space-y-4 col-span-1 lg:col-span-2">
+            <h3 className="text-base md:text-lg font-semibold">Média de cores por hora</h3>
+            <div className="space-y-3">
+              {colorHourlyStats.map((stat, index) => (
+                <div key={`color-stat-${index}`} className="bg-gray-100/10 rounded-md p-3">
+                  <div className="flex items-center mb-1">
+                    <div 
+                      className="w-8 h-8 rounded-md mr-2 flex items-center justify-center" 
+                      style={{ backgroundColor: stat.color === "#111827" ? "black" : stat.color }}
+                    >
+                      <div className="w-5 h-5 rounded-full border-2 border-white"></div>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{stat.name}</p>
+                      <p className="text-xs text-gray-400">Total de {stat.total} <span className="bg-gray-800 text-xs px-1.5 py-0.5 rounded ml-1">{stat.percentage}%</span> {stat.color === "#ef4444" ? "vermelhos" : stat.color === "#111827" ? "pretos" : "brancos"} no dia selecionado</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

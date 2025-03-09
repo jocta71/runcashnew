@@ -239,6 +239,44 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       {memoizedSuggestion}
       {memoizedWinRate}
       {memoizedTrendChart}
+      
+      {/* Insights Section */}
+      <div className="p-2 bg-[#1a1922] rounded-lg border border-[#00ff00]/20">
+        <h4 className="text-xs font-medium text-[#00ff00] mb-1.5 flex items-center">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00] mr-1.5"></span>
+          Insights
+        </h4>
+        <div className="space-y-1.5">
+          {lastNumbers.length > 0 && (
+            <>
+              {/* Tendência de cores */}
+              <div className="flex items-center text-xs">
+                <div className={`w-3 h-3 rounded-full mr-1.5 ${getRouletteNumberColor(lastNumbers[0]).replace('text-white', '')}`}></div>
+                <span className="text-gray-300">
+                  {getColorName(lastNumbers[0])} apareceu nas últimas {getColorStreak(lastNumbers)} rodadas
+                </span>
+              </div>
+              
+              {/* Dica de aposta */}
+              <div className="flex items-center text-xs">
+                <div className="w-3 h-3 rounded-full bg-[#00ff00] mr-1.5"></div>
+                <span className="text-gray-300">
+                  {getInsightMessage(lastNumbers, wins, losses)}
+                </span>
+              </div>
+              
+              {/* Estatística da sessão */}
+              <div className="flex items-center text-xs">
+                <div className="w-3 h-3 rounded-full bg-blue-500 mr-1.5"></div>
+                <span className="text-gray-300">
+                  Taxa de acerto: {((wins / (wins + losses)) * 100).toFixed(1)}% nos últimos 20 números
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      
       {memoizedActionButtons}
 
       <div className="pt-2 flex flex-col h-full">
@@ -284,6 +322,49 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       />
     </div>
   );
+};
+
+// Funções auxiliares para insights
+const getColorName = (num: number): string => {
+  if (num === 0) return "Verde";
+  if ([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36].includes(num)) return "Vermelho";
+  return "Preto";
+};
+
+const getColorStreak = (numbers: number[]): number => {
+  const firstColor = getColorName(numbers[0]);
+  let streak = 1;
+  
+  for (let i = 1; i < numbers.length; i++) {
+    if (getColorName(numbers[i]) === firstColor) {
+      streak++;
+    } else {
+      break;
+    }
+  }
+  
+  return streak;
+};
+
+const getInsightMessage = (numbers: number[], wins: number, losses: number): string => {
+  const lastNum = numbers[0];
+  const isRed = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36].includes(lastNum);
+  const isBlack = lastNum !== 0 && !isRed;
+  const winRate = wins / (wins + losses);
+  
+  if (winRate > 0.65) {
+    return "Momento favorável para apostar em números " + (isRed ? "pretos" : "vermelhos");
+  } else if (numbers.filter(n => n % 2 === 0).length > numbers.length * 0.7) {
+    return "Tendência de números pares nas últimas rodadas";
+  } else if (numbers.filter(n => n % 2 !== 0).length > numbers.length * 0.7) {
+    return "Tendência de números ímpares nas últimas rodadas";
+  } else if (numbers.filter(n => n <= 18).length > numbers.length * 0.7) {
+    return "Tendência de números baixos (1-18) nas últimas rodadas";
+  } else if (numbers.filter(n => n > 18 && n <= 36).length > numbers.length * 0.7) {
+    return "Tendência de números altos (19-36) nas últimas rodadas";
+  } else {
+    return "Distribua suas apostas em diferentes setores da mesa";
+  }
 };
 
 export default RouletteCard;

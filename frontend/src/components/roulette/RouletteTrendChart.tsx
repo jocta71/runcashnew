@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   LineChart,
@@ -9,32 +8,117 @@ import {
   YAxis,
   CartesianGrid,
   Legend,
-  ReferenceLine
+  ReferenceLine,
+  Area,
+  AreaChart
 } from 'recharts';
 
 interface RouletteTrendChartProps {
   trend: { value: number }[];
 }
 
+const CustomTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const value = payload[0].value.toFixed(2);
+    const isPositive = value >= 5;
+    
+    return (
+      <div className="custom-tooltip bg-[#111827] p-1.5 text-xs border border-[#00ff00]/30 rounded-sm shadow-md">
+        <p className={`font-medium ${isPositive ? 'text-[#00ff00]' : 'text-red-500'}`}>
+          {value} {isPositive ? '↑' : '↓'}
+        </p>
+      </div>
+    );
+  }
+  
+  return null;
+};
+
 const RouletteTrendChart = ({ trend }: RouletteTrendChartProps) => {
+  // Calcular médias móveis
+  const enhancedData = trend.map((item, index) => {
+    // Média móvel simples de 5 períodos
+    let sma5 = 0;
+    if (index >= 4) {
+      const last5 = trend.slice(index - 4, index + 1);
+      sma5 = last5.reduce((sum, item) => sum + item.value, 0) / 5;
+    }
+    
+    return {
+      ...item,
+      sma5,
+      // Adicionando indicadores de alta/baixa para criar a aparência de trading
+      high: item.value + (Math.random() * 1.5),
+      low: item.value - (Math.random() * 1.5),
+      open: index > 0 ? trend[index - 1].value : item.value - (Math.random() * 0.5),
+      close: item.value
+    };
+  });
+  
+  // Calcular valor médio para usar como linha de referência
+  const avgValue = trend.reduce((sum, item) => sum + item.value, 0) / trend.length;
+  
   return (
-    <div className="h-16 w-full">
+    <div className="h-24 w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={trend}>
+        <AreaChart 
+          data={enhancedData}
+          margin={{ top: 2, right: 2, left: 0, bottom: 2 }}
+        >
           <defs>
             <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#00ff00" stopOpacity={0.8}/>
-              <stop offset="95%" stopColor="#8bff00" stopOpacity={0.3}/>
+              <stop offset="95%" stopColor="#00ff00" stopOpacity={0.1}/>
             </linearGradient>
           </defs>
-          <Line
+          
+          <CartesianGrid 
+            strokeDasharray="3 3" 
+            vertical={false} 
+            stroke="#333"
+            opacity={0.3}
+          />
+          
+          <XAxis 
+            dataKey="name" 
+            hide={true}
+            domain={['dataMin', 'dataMax']}
+          />
+          
+          <YAxis 
+            domain={['dataMin - 2', 'dataMax + 2']} 
+            hide={true} 
+            padding={{ top: 0, bottom: 0 }}
+          />
+          
+          <Tooltip content={<CustomTooltip />} />
+          
+          <ReferenceLine 
+            y={avgValue} 
+            stroke="#666" 
+            strokeDasharray="3 3" 
+            opacity={0.4}
+          />
+          
+          <Area
             type="monotone"
             dataKey="value"
-            stroke="url(#colorGradient)"
-            strokeWidth={2}
+            stroke="#00ff00"
+            strokeWidth={1.5}
+            fillOpacity={1}
+            fill="url(#colorGradient)"
+            dot={false}
+            activeDot={{ r: 3, fill: '#00ff00', stroke: '#FFF' }}
+          />
+          
+          <Line
+            type="monotone"
+            dataKey="sma5"
+            stroke="#ff8800"
+            strokeWidth={1}
             dot={false}
           />
-        </LineChart>
+        </AreaChart>
       </ResponsiveContainer>
     </div>
   );
