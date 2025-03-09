@@ -29,4 +29,13 @@ export const isRouletteAllowed = (rouletteId: string): boolean => {
  */
 export const filterAllowedRoulettes = <T extends { id: string }>(roulettes: T[]): T[] => {
   return roulettes.filter(roulette => isRouletteAllowed(roulette.id));
+};
+
+/**
+ * Retorna a lista de IDs de roletas permitidas como uma string formatada
+ * para uso em variáveis de ambiente (separadas por vírgula)
+ * @returns String de IDs de roletas separados por vírgula
+ */
+export const getAllowedRoulettesEnvValue = (): string => {
+  return ROLETAS_PERMITIDAS.join(',');
 }; 
