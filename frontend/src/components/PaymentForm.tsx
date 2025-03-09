@@ -124,8 +124,20 @@ export const PaymentForm = ({ planId, onPaymentSuccess, onCancel }: PaymentFormP
         });
         onPaymentSuccess();
       } else {
-        // Para planos pagos, redirecionar para a página de pagamento do Asaas
-        window.location.href = redirectUrl;
+        // Para planos pagos, abrir a página de pagamento do Asaas em nova janela
+        toast({
+          title: "Redirecionando para pagamento",
+          description: "Uma nova janela foi aberta para concluir o pagamento via PIX.",
+        });
+        
+        // Abrir em nova janela para não perder o contexto atual
+        window.open(redirectUrl, '_blank');
+        
+        // Mostrar link de backup caso o popup seja bloqueado
+        setError(
+          `Se a janela de pagamento não abrir, clique neste link: ` + 
+          `<a href="${redirectUrl}" target="_blank" class="text-blue-400 underline">Abrir página de pagamento</a>`
+        );
       }
     } catch (error) {
       console.error('Erro no processo de assinatura:', error);
@@ -161,7 +173,7 @@ export const PaymentForm = ({ planId, onPaymentSuccess, onCancel }: PaymentFormP
         <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Erro</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription dangerouslySetInnerHTML={{ __html: error }} />
         </Alert>
       )}
       
