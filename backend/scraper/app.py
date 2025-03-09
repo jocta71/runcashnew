@@ -16,7 +16,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from webdriver_manager.chrome import ChromeDriverManager
 from supabase import create_client
-from flask import Flask, Response, request
+from flask import Flask, Response, request, jsonify
 from flask_cors import CORS
 import threading
 import queue
@@ -26,7 +26,13 @@ from strategy_analyzer import StrategyAnalyzer
 
 # Criar a aplicação Flask
 app = Flask(__name__)
-CORS(app)  # Habilitar CORS para permitir acesso a partir do frontend
+# Configurar CORS para permitir requisições de qualquer origem
+CORS(app, resources={r"/*": {"origins": "*"}})
+
+# Endpoint de health check para o Fly.io
+@app.route('/health')
+def health_check():
+    return jsonify({"status": "ok", "timestamp": datetime.now().isoformat()})
 
 # Criando a classe EventManager para gerenciar eventos SSE
 class EventManager:
@@ -62,6 +68,15 @@ event_manager = EventManager()
 @app.route('/events')
 def sse():
     """Endpoint SSE para transmitir eventos de novos números de roletas em tempo real"""
+    # Adicionar headers CORS específicos para SSE
+    headers = {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+    }
+    
     def generate():
         client_queue = queue.Queue()
         event_manager.register_client(client_queue)
@@ -82,8 +97,7 @@ def sse():
             # Cliente desconectou
             event_manager.unregister_client(client_queue)
     
-    return Response(generate(), mimetype='text/event-stream', 
-                   headers={'Cache-Control': 'no-cache', 'Connection': 'keep-alive'})
+    return Response(generate(), mimetype='text/event-stream', headers=headers)
 
 # Inicialização do cliente Supabase
 # Garantir que a URL do Supabase esteja corretamente formatada
@@ -113,32 +127,16 @@ def configurar_driver():
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
     
-    # No Heroku, o caminho do executável está em /app/.chromedriver/bin/chromedriver
-    if 'DYNO' in os.environ:
-        chrome_options.binary_location = os.environ.get("GOOGLE_CHROME_BIN")
-        driver = webdriver.Chrome(
-            executable_path=os.environ.get("CHROMEDRIVER_PATH"),
-            options=chrome_options
-        )
-    else:
-        # Para desenvolvimento local
-        try:
-            # Tenta usar o ChromeDriverManager
-            service = Service(ChromeDriverManager().install())
-            driver = webdriver.Chrome(service=service, options=chrome_options)
-        except Exception as e:
-            logger.error(f"Erro ao configurar ChromeDriverManager: {str(e)}")
-            
-            # Fallback: Tentar executável local ou especificado nas variáveis de ambiente
-            if platform.system() == "Windows":
-                chrome_driver_path = os.environ.get("CHROME_DRIVER_PATH", "./chromedriver.exe")
-            else:
-                chrome_driver_path = os.environ.get("CHROME_DRIVER_PATH", "./chromedriver")
-            
-            service = Service(chrome_driver_path)
-            driver = webdriver.Chrome(service=service, options=chrome_options)
+    # Configurações específicas para o ambiente de contêiner no Fly.io
+    chrome_options.binary_location = os.environ.get("CHROME_BIN", "/usr/bin/google-chrome")
     
-    return driver
+    try:
+        driver = webdriver.Chrome(options=chrome_options)
+        logger.info("Driver do Chrome configurado com sucesso")
+        return driver
+    except Exception as e:
+        logger.error(f"Erro ao configurar driver do Chrome: {str(e)}")
+        raise
 
 def extrair_numeros_js(driver, elemento_roleta):
     """
@@ -469,5 +467,5 @@ if __name__ == "__main__":
     scraper_thread.start()
     
     # Iniciar o servidor Flask
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
