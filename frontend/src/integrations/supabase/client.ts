@@ -5,7 +5,34 @@ import type { Database } from './types';
 const SUPABASE_URL = "https://evzqzghxuttctbxgohpx.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ";
 
+// Log de informações (debug)
+console.log('[Supabase] Inicializando cliente com:', { 
+  url: SUPABASE_URL,
+  keyLength: SUPABASE_PUBLISHABLE_KEY.length
+});
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+// Log para confirmar inicialização
+console.log('[Supabase] Cliente inicializado');
+
+// Função de teste para verificar a conexão
+export const testSupabaseConnection = async () => {
+  try {
+    const { data, error } = await supabase.from('roleta_numeros').select('count').limit(1);
+    
+    if (error) {
+      console.error('[Supabase] Erro na conexão:', error);
+      return { success: false, error };
+    }
+    
+    console.log('[Supabase] Conexão testada com sucesso:', data);
+    return { success: true, data };
+  } catch (err) {
+    console.error('[Supabase] Exceção ao testar conexão:', err);
+    return { success: false, error: err };
+  }
+};
