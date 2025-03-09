@@ -102,48 +102,6 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Para planos pagos - MODO SIMULAÇÃO
-    // Remova este bloco e descomente o código abaixo quando estiver pronto para testar a API real
-    console.log(`Simulando assinatura para plano: ${planId}, usuário: ${userId}, cliente: ${customerId}`);
-    
-    // URL de uma página de teste de PIX para simulação
-    const pixDemoUrl = 'https://sandbox.asaas.com/c/123456789';
-    
-    // Armazenar no Supabase com status 'pending' para simulação
-    try {
-      if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
-        const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
-        const planTypeMap = {
-          'basic': 'BASIC',
-          'pro': 'PRO',
-          'premium': 'PREMIUM'
-        };
-        
-        await supabase
-          .from('subscriptions')
-          .upsert({
-            user_id: userId,
-            plan_id: planId,
-            plan_type: planTypeMap[planId],
-            status: 'pending',
-            start_date: new Date().toISOString(),
-            payment_provider: 'asaas',
-            payment_id: `sim_${Date.now()}`,
-            next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-          });
-      }
-    } catch (dbError) {
-      console.error('Erro ao salvar assinatura simulada:', dbError);
-    }
-    
-    return res.status(200).json({
-      success: true,
-      subscriptionId: `sim_${Date.now()}_${planId}`,
-      redirectUrl: pixDemoUrl,
-      message: 'Assinatura simulada criada com sucesso'
-    });
-
-    /* CÓDIGO REAL - Descomente quando estiver pronto para testar com a API Asaas
     // Calcular data de vencimento (próximo dia útil)
     const today = new Date();
     const nextDueDate = new Date(today);
@@ -234,7 +192,6 @@ module.exports = async (req, res) => {
       redirectUrl: paymentUrl || response.data.invoiceUrl,
       message: 'Assinatura criada com sucesso'
     });
-    */
   } catch (error) {
     console.error('Erro detalhado na operação de assinatura:', {
       message: error.message,
@@ -242,21 +199,9 @@ module.exports = async (req, res) => {
       data: error.response?.data
     });
 
-    // SOLUÇÃO TEMPORÁRIA: Mesmo com erro, retornar simulação para permitir testes
-    const pixDemoUrl = 'https://sandbox.asaas.com/c/123456789';
-    return res.status(200).json({
-      success: true,
-      subscriptionId: `failsafe_${Date.now()}`,
-      redirectUrl: pixDemoUrl,
-      message: 'Assinatura simulada para contornar erro',
-      error: error.message
-    });
-    
-    /* Comportamento normal - descomentar quando API estiver pronta
     return res.status(500).json({ 
       error: 'Erro ao criar assinatura', 
       details: error.response?.data || error.message 
     });
-    */
   }
 }; 

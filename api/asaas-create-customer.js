@@ -40,17 +40,6 @@ module.exports = async (req, res) => {
     const apiKey = process.env.ASAAS_API_KEY || DEFAULT_API_KEY;
     console.log('Usando apiKey (primeiros caracteres):', apiKey.substring(0, 10) + '...');
 
-    // TESTE: Retornar sucesso simulado sem chamar a API real
-    // Isso nos permite testar se o problema está no cliente ou na comunicação com a API
-    // Comentar esta seção quando quiser testar a comunicação real
-    /*
-    return res.status(200).json({
-      success: true,
-      customerId: 'cus_test_' + Date.now(),
-      message: 'Cliente criado com sucesso (simulado)'
-    });
-    */
-
     // Preparar dados para envio
     const requestData = {
       name,
@@ -129,21 +118,10 @@ module.exports = async (req, res) => {
       console.error('Erro ao tentar recuperar cliente:', searchError.message);
     }
 
-    // SOLUÇÃO TEMPORÁRIA: Com erro de API, retornar cliente simulado
-    // para permitir testes mesmo sem a API funcionando
-    return res.status(200).json({
-      success: true,
-      customerId: 'cus_000000failsafe',
-      message: 'Cliente simulado para contornar erro de API',
-      error: error.message
-    });
-    
-    /* Comportamento normal (descomentar quando a API estiver funcionando)
     return res.status(500).json({
       error: 'Erro ao criar cliente no Asaas',
       message: error.message,
       details: error.response?.data
     });
-    */
   }
 }; 
