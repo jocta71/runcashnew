@@ -122,9 +122,12 @@ export const fetchAllRoulettes = async (): Promise<RouletteData[]> => {
       }
     }
     
+    // Lista de IDs fixos para roletas (para garantir que passem pelo filtro de allowedRoulettes)
+    const fixedIds = ["2010016", "2380335", "2010065", "2010096", "2010017", "2010098"];
+    
     // 3. Para cada roleta disponível, criar um objeto RouletteData
     const rouletteData: RouletteData[] = await Promise.all(
-      availableRouletteNames.map(async (roletaNome) => {
+      availableRouletteNames.map(async (roletaNome, index) => {
         // 3.1 Buscar os números desta roleta
         const numbers = await fetchRouletteLatestNumbersByName(roletaNome, 20);
         
@@ -132,9 +135,15 @@ export const fetchAllRoulettes = async (): Promise<RouletteData[]> => {
         const wins = Math.floor(Math.random() * 200) + 100;
         const losses = Math.floor(Math.random() * 100) + 50;
         
-        // 3.3 Criar objeto da roleta
+        // 3.3 Criar objeto da roleta - usar ID fixo se disponível, ou gerar baseado no nome
+        const id = index < fixedIds.length 
+          ? fixedIds[index] 
+          : `custom-${roletaNome.replace(/\s+/g, '').toLowerCase()}`;
+          
+        console.log(`[INFO] Associando roleta '${roletaNome}' ao ID '${id}'`);
+        
         return {
-          id: roletaNome.replace(/\s+/g, '').toLowerCase(), // ID provisório baseado no nome
+          id: id,
           nome: roletaNome,
           numeros: numbers,
           updated_at: new Date().toISOString(),

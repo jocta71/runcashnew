@@ -73,25 +73,32 @@ const Index = () => {
     try {
       setIsLoading(true);
       
-      console.log('Buscando roletas disponíveis no Supabase...');
+      console.log('[DEBUG] Iniciando busca de roletas no Supabase...');
       // Primeiro buscar todas as roletas disponíveis na tabela roleta_numeros
       const availableRouletteNames = await fetchAvailableRoulettesFromNumbers();
-      console.log('Roletas encontradas no Supabase:', availableRouletteNames);
+      console.log('[DEBUG] Nomes de roletas encontrados no Supabase:', availableRouletteNames);
       
       if (availableRouletteNames.length > 0) {
         // Se temos roletas do Supabase, usamos elas
-        console.log('Carregando dados das roletas do Supabase...');
+        console.log('[DEBUG] Buscando objetos completos de roletas no Supabase...');
         const data = await fetchAllRoulettes();
+        console.log('[DEBUG] Objetos de roletas recebidos antes do filtro:', data);
         
         // Filtrar apenas as roletas permitidas
         const allowedData = filterAllowedRoulettes(data);
-        console.log('Roletas permitidas após filtro:', allowedData);
+        console.log('[DEBUG] IDs das roletas após filtro:', allowedData.map(r => r.id));
+        console.log('[DEBUG] Nomes das roletas após filtro:', allowedData.map(r => r.nome));
+        
+        if (allowedData.length === 0) {
+          console.warn('[DEBUG] ALERTA: O filtro de roletas permitidas removeu todas as roletas. Verifique os IDs em allowedRoulettes.ts');
+        }
         
         // Para cada roleta, buscar os últimos números
         const formattedDataPromises = allowedData.map(async (item) => {
           // Buscar os últimos 20 números para cada roleta
+          console.log(`[DEBUG] Buscando números para roleta '${item.nome}' (ID: ${item.id})...`);
           const lastNumbers = await fetchRouletteLatestNumbersByName(item.nome, 20);
-          console.log(`Números obtidos para ${item.nome}:`, lastNumbers);
+          console.log(`[DEBUG] Números obtidos para '${item.nome}':`, lastNumbers);
           
           return {
             name: item.nome,
@@ -105,7 +112,7 @@ const Index = () => {
         });
         
         const formattedData = await Promise.all(formattedDataPromises);
-        console.log('Dados formatados com números do Supabase:', formattedData);
+        console.log('[DEBUG] Roletas formatadas finais:', formattedData.map(r => r.name));
         
         setRoulettes(formattedData);
         setLoaded(true);

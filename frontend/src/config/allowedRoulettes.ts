@@ -8,7 +8,9 @@ export const ROLETAS_PERMITIDAS = [
   "2010065",  // Bucharest Auto-Roulette
   "2010096",  // Speed Auto Roulette
   "2010017",  // Auto-Roulette
-  "2010098",  // Auto-Roulette VIP
+  "2010098",  // Auto-Roulette VIP,
+  // Adicionando um valor especial que permitirá aceitar qualquer ID
+  "*" // Permite todas as roletas
 ];
 
 /**
@@ -17,6 +19,10 @@ export const ROLETAS_PERMITIDAS = [
  * @returns boolean indicando se a roleta está permitida
  */
 export const isRouletteAllowed = (rouletteId: string): boolean => {
+  // Se "*" estiver na lista, todas as roletas são permitidas
+  if (ROLETAS_PERMITIDAS.includes("*")) {
+    return true;
+  }
   return ROLETAS_PERMITIDAS.includes(rouletteId);
 };
 
@@ -26,5 +32,9 @@ export const isRouletteAllowed = (rouletteId: string): boolean => {
  * @returns Array filtrado contendo apenas roletas permitidas
  */
 export const filterAllowedRoulettes = <T extends { id: string }>(roulettes: T[]): T[] => {
+  // Se "*" estiver na lista, retorne todas as roletas sem filtrar
+  if (ROLETAS_PERMITIDAS.includes("*")) {
+    return roulettes;
+  }
   return roulettes.filter(roulette => isRouletteAllowed(roulette.id));
 }; 
