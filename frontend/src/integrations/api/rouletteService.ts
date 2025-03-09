@@ -14,7 +14,7 @@ const api = axios.create({
 });
 
 // Configuração do Supabase
-const SUPABASE_URL = "https://evzqzghxuttctbxgohpx.supabase.co/rest/v1";
+const SUPABASE_URL = "https://evzqzghxuttctbxgohpx.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ";
 
 export interface RouletteData {
@@ -59,7 +59,7 @@ export const fetchAvailableRoulettesFromNumbers = async (): Promise<string[]> =>
     
     // Buscar diretamente do Supabase com seleção distinta dos nomes de roletas
     const response = await fetch(
-      `${SUPABASE_URL}/roleta_numeros?select=roleta_nome&order=roleta_nome`,
+      `${SUPABASE_URL}/rest/v1/roleta_numeros?select=roleta_nome&order=roleta_nome`,
       {
         headers: {
           'apikey': SUPABASE_KEY,
@@ -101,7 +101,7 @@ export const fetchAllRoulettes = async (): Promise<RouletteData[]> => {
       
       // 2. Se não houver roletas na tabela roleta_numeros, tentar buscar na tabela roletas
       try {
-        const response = await fetch(`${SUPABASE_URL}/roletas?select=*`, {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/roletas?select=*`, {
           headers: {
             'apikey': SUPABASE_KEY,
             'Content-Type': 'application/json',
@@ -175,7 +175,7 @@ export const fetchRouletteLatestNumbersByName = async (roletaNome: string, limit
     
     // Buscar diretamente do Supabase usando o nome da roleta
     const response = await fetch(
-      `${SUPABASE_URL}/roleta_numeros?roleta_nome=eq.${encodeURIComponent(roletaNome)}&select=numero,created_at&order=created_at.desc&limit=${limit}`,
+      `${SUPABASE_URL}/rest/v1/roleta_numeros?roleta_nome=eq.${encodeURIComponent(roletaNome)}&select=numero,created_at&order=created_at.desc&limit=${limit}`,
       {
         headers: {
           'apikey': SUPABASE_KEY,
@@ -214,7 +214,7 @@ export const fetchRouletteLatestNumbers = async (roletaId: string, limit = 10): 
     // Primeiro tentamos buscar pelo nome da roleta associado ao ID
     let roletaNome = "";
     try {
-      const roletaResponse = await fetch(`${SUPABASE_URL}/roletas?id=eq.${roletaId}&select=nome`, {
+      const roletaResponse = await fetch(`${SUPABASE_URL}/rest/v1/roletas?id=eq.${roletaId}&select=nome`, {
         headers: {
           'apikey': SUPABASE_KEY,
           'Content-Type': 'application/json'
@@ -242,7 +242,7 @@ export const fetchRouletteLatestNumbers = async (roletaId: string, limit = 10): 
     
     // Buscar diretamente do Supabase
     const response = await fetch(
-      `${SUPABASE_URL}/roleta_numeros?roleta_id=eq.${roletaId}&select=numero,created_at&order=created_at.desc&limit=${limit}`,
+      `${SUPABASE_URL}/rest/v1/roleta_numeros?roleta_id=eq.${roletaId}&select=numero,created_at&order=created_at.desc&limit=${limit}`,
       {
         headers: {
           'apikey': SUPABASE_KEY,
@@ -330,7 +330,7 @@ export const fetchRouletteById = async (id: string): Promise<RouletteData> => {
     console.log(`Buscando roleta ${id} do Supabase...`);
     
     // Buscar diretamente do Supabase
-    const response = await fetch(`${SUPABASE_URL}/roletas?id=eq.${id}&select=*`, {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/roletas?id=eq.${id}&select=*`, {
       headers: {
         'apikey': SUPABASE_KEY,
         'Content-Type': 'application/json',

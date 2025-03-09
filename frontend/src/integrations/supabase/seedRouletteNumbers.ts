@@ -1,7 +1,7 @@
 // Script para inserir números de exemplo para as roletas existentes no Supabase
 // Este script deve ser executado para popular a tabela roleta_numeros
 
-const SUPABASE_URL = "https://evzqzghxuttctbxgohpx.supabase.co/rest/v1";
+const SUPABASE_URL = "https://evzqzghxuttctbxgohpx.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ";
 
 interface Roleta {
@@ -19,7 +19,7 @@ const fetchRoletas = async (): Promise<Roleta[]> => {
   try {
     console.log('Buscando todas as roletas do Supabase...');
     
-    const response = await fetch(`${SUPABASE_URL}/roletas?select=id,nome`, {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/roletas?select=id,nome`, {
       headers: {
         'apikey': SUPABASE_KEY,
         'Content-Type': 'application/json',
@@ -44,7 +44,7 @@ const addNumberToRoleta = async (roletaId: string, roletaNome: string, numero: n
   try {
     const now = new Date().toISOString();
     
-    const response = await fetch(`${SUPABASE_URL}/roleta_numeros`, {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/roleta_numeros`, {
       method: 'POST',
       headers: {
         'apikey': SUPABASE_KEY,
