@@ -8,9 +8,9 @@ import ChatUI from '@/components/ChatUI';
 import { Button } from '@/components/ui/button';
 import AnimatedInsights from '@/components/AnimatedInsights';
 import ProfileDropdown from '@/components/ProfileDropdown';
-import { supabase } from '@/integrations/supabase/client';
+import { fetchAllRoulettes, fetchRouletteLatestNumbers } from '@/integrations/api/rouletteService';
+import { filterAllowedRoulettes } from '@/config/allowedRoulettes';
 import { toast } from '@/components/ui/use-toast';
-import { fetchRouletteLatestNumbers } from '@/integrations/api/rouletteService';
 
 interface ChatMessage {
   id: string;
@@ -248,27 +248,26 @@ const Index = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
   
-  // Função para buscar roletas do banco de dados Supabase
+  // Função para buscar roletas do banco de dados
   const fetchRoulettes = async () => {
     try {
-      if (!loaded) { // Set loading state only on initial load
+      if (!loaded) {
         setIsLoading(true);
       }
       
-      // Primeiro tentamos o serviço API definido em rouletteService
-      console.log('Tentando buscar roletas da API...');
-      const response = await fetch('/api/roletas');
-      if (!response.ok) {
-        throw new Error('Falha ao buscar roletas da API');
-      }
+      console.log('Buscando roletas diretamente do Supabase...');
+      const data = await fetchAllRoulettes();
+      console.log('Dados recebidos do Supabase:', data);
       
-      const data = await response.json();
-      console.log('Dados recebidos da API:', data);
+      // Filtrar apenas as roletas permitidas
+      const allowedData = filterAllowedRoulettes(data);
+      console.log('Roletas permitidas:', allowedData);
       
       // Para cada roleta, buscar os últimos números da nova tabela
-      const formattedDataPromises = data.map(async (item) => {
+      const formattedDataPromises = allowedData.map(async (item) => {
         // Buscar os últimos 20 números para cada roleta da nova tabela
         const lastNumbers = await fetchRouletteLatestNumbers(item.id, 20);
+        console.log(`Números obtidos para ${item.nome}:`, lastNumbers);
         
         return {
           name: item.nome,
@@ -281,43 +280,50 @@ const Index = () => {
         };
       });
       
-      // Aguardar todas as promessas serem resolvidas
       const formattedData = await Promise.all(formattedDataPromises);
-      
-      console.log('Dados formatados com números da nova tabela:', formattedData);
+      console.log('Dados formatados com números do Supabase:', formattedData);
       
       if (formattedData.length > 0) {
-        // Preservar a ordem existente - atualizar dados sem reordenação
+        // Notifica o usuário que os dados foram carregados do Supabase
+        toast({
+          title: 'Dados Atualizados',
+          description: `${formattedData.length} roletas carregadas do Supabase`,
+          variant: 'default',
+        });
+        
         if (loaded && roulettes.length > 0) {
           setRoulettes(prevRoulettes => {
             return prevRoulettes.map(existingRoulette => {
-              // Encontrar dados atualizados para esta roleta
               const updatedData = formattedData.find(r => r.name === existingRoulette.name);
-              // Se encontrou, atualizar os dados, senão manter os existentes
               return updatedData || existingRoulette;
             });
           });
         } else {
-          // Primeira carga - usar os dados como estão
           setRoulettes(formattedData);
         }
         setLoaded(true);
       } else {
-        // Fallback para dados simulados
-        console.log('Nenhuma roleta encontrada, usando dados simulados');
-        if (!loaded) { // Só definir mock data na primeira carga
+        console.log('Nenhuma roleta encontrada no Supabase, usando dados simulados');
+        if (!loaded) {
           setRoulettes(mockRoulettes);
           setLoaded(true);
+          toast({
+            title: 'Usando Dados Simulados',
+            description: 'Não foram encontradas roletas no Supabase. Usando dados locais.',
+            variant: 'default',
+          });
         }
       }
     } catch (error) {
-      console.error('Erro ao buscar roletas:', error);
-      
-      // Fallback para dados simulados
-      console.log('Erro ao buscar roletas, usando dados simulados');
-      if (!loaded) { // Só definir mock data na primeira carga
+      console.error('Erro ao buscar roletas do Supabase:', error);
+      if (!loaded) {
         setRoulettes(mockRoulettes);
         setLoaded(true);
+        toast({
+          title: 'Erro de Conexão',
+          description: 'Não foi possível conectar ao Supabase. Usando dados locais.',
+          variant: 'destructive',
+        });
       }
     } finally {
       setIsLoading(false);
@@ -326,13 +332,23 @@ const Index = () => {
   
   // Efeito para carregar dados quando o componente montar
   useEffect(() => {
+    // Busca imediata quando o componente monta
     fetchRoulettes();
     
-    // Configurar polling para atualizar a cada 60 segundos (menos frequente)
-    const intervalId = setInterval(fetchRoulettes, 60000);
+    // Configurar polling para atualizar a cada 30 segundos (mais frequente para dados em tempo real)
+    const intervalId = setInterval(fetchRoulettes, 30000);
     
-    // Limpar intervalo quando o componente for desmontado
-    return () => clearInterval(intervalId);
+    // Forçar uma segunda atualização após 5 segundos para garantir que os dados mais recentes sejam mostrados
+    const quickRefreshTimeout = setTimeout(() => {
+      console.log('Atualizando dados novamente para garantir exibição dos números mais recentes...');
+      fetchRoulettes();
+    }, 5000);
+    
+    // Limpar intervalo e timeout quando o componente for desmontado
+    return () => {
+      clearInterval(intervalId);
+      clearTimeout(quickRefreshTimeout);
+    };
   }, []);
   
   const filteredRoulettes = roulettes.filter(roulette => 
@@ -476,6 +492,13 @@ const Index = () => {
       
       {/* Mobile Chat (drawer) */}
       <ChatUI isOpen={chatOpen} onClose={() => setChatOpen(false)} isMobile={true} />
+      
+      {/* Loading indicator */}
+      {isLoading && (
+        <div className="fixed top-4 right-4 bg-[#00ff00]/10 text-[#00ff00] px-4 py-2 rounded-md border border-[#00ff00]/20 z-50">
+          Atualizando dados do Supabase...
+        </div>
+      )}
     </div>
   );
 };
