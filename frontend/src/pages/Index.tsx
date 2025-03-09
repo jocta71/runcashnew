@@ -40,191 +40,6 @@ interface Roulette {
   status: string;
 }
 
-// Mock roulette data as fallback if database data is not available
-const mockRoulettes = [{
-  name: "Roleta Brasileira",
-  lastNumbers: [7, 11, 23, 5, 18],
-  wins: 150,
-  losses: 50,
-  trend: Array.from({
-    length: 20
-  }, () => ({
-    value: Math.random() * 100
-  }))
-}, {
-  name: "Roleta Europeia",
-  lastNumbers: [32, 15, 3, 26, 8],
-  wins: 180,
-  losses: 70,
-  trend: Array.from({
-    length: 20
-  }, () => ({
-    value: Math.random() * 100
-  }))
-}, {
-  name: "Roleta Americana",
-  lastNumbers: [0, 12, 28, 35, 14],
-  wins: 200,
-  losses: 90,
-  trend: Array.from({
-    length: 20
-  }, () => ({
-    value: Math.random() * 100
-  }))
-}, {
-  name: "Roleta Platinum VIP",
-  lastNumbers: [17, 22, 9, 31, 4],
-  wins: 220,
-  losses: 65,
-  trend: Array.from({
-    length: 20
-  }, () => ({
-    value: Math.random() * 100
-  }))
-}, {
-  name: "Roleta Diamond",
-  lastNumbers: [19, 6, 27, 13, 36],
-  wins: 190,
-  losses: 55,
-  trend: Array.from({
-    length: 20
-  }, () => ({
-    value: Math.random() * 100
-  }))
-}, {
-  name: "Roleta Gold",
-  lastNumbers: [2, 10, 20, 33, 16],
-  wins: 170,
-  losses: 60,
-  trend: Array.from({
-    length: 20
-  }, () => ({
-    value: Math.random() * 100
-  }))
-}, {
-  name: "Roleta Lightning",
-  lastNumbers: [29, 24, 1, 30, 21],
-  wins: 210,
-  losses: 75,
-  trend: Array.from({
-    length: 20
-  }, () => ({
-    value: Math.random() * 100
-  }))
-}, {
-  name: "Roleta Premium",
-  lastNumbers: [5, 18, 34, 11, 25],
-  wins: 230,
-  losses: 85,
-  trend: Array.from({
-    length: 20
-  }, () => ({
-    value: Math.random() * 100
-  }))
-}, {
-  name: "Roleta Turbo",
-  lastNumbers: [8, 17, 29, 2, 19],
-  wins: 185,
-  losses: 65,
-  trend: Array.from({
-    length: 20
-  }, () => ({
-    value: Math.random() * 100
-  }))
-}];
-
-const mockChatMessages: ChatMessage[] = [{
-  id: '1',
-  user: {
-    name: 'Wade Warren',
-    avatar: ''
-  },
-  message: 'when will it be ready?',
-  timestamp: new Date()
-}, {
-  id: '2',
-  user: {
-    name: 'Leslie Alexander',
-    avatar: ''
-  },
-  message: 'when will it be ready?',
-  timestamp: new Date()
-}, {
-  id: '3',
-  user: {
-    name: 'Moderator',
-    avatar: '',
-    isModerator: true
-  },
-  message: 'when will it be ready?',
-  timestamp: new Date()
-}, {
-  id: '4',
-  user: {
-    name: 'Eleanor Pena',
-    avatar: ''
-  },
-  message: 'when will it be ready?',
-  timestamp: new Date()
-}, {
-  id: '5',
-  user: {
-    name: 'Cody Fisher',
-    avatar: ''
-  },
-  message: 'received?',
-  timestamp: new Date()
-}, {
-  id: '6',
-  user: {
-    name: 'Anonymous Admin',
-    avatar: '',
-    isAdmin: true
-  },
-  message: 'Have you spoken to the delivery man? He is more than an hour late',
-  timestamp: new Date()
-}, {
-  id: '7',
-  user: {
-    name: 'Robert Fox',
-    avatar: ''
-  },
-  message: 'Great service.',
-  timestamp: new Date()
-}, {
-  id: '8',
-  user: {
-    name: 'Savannah Nguyen',
-    avatar: ''
-  },
-  message: 'tastes amazing!',
-  timestamp: new Date()
-}, {
-  id: '9',
-  user: {
-    name: 'Arlene McCoy',
-    avatar: ''
-  },
-  message: 'Ok',
-  timestamp: new Date()
-}, {
-  id: '10',
-  user: {
-    name: 'Mummyland',
-    avatar: ''
-  },
-  message: 'when will it be ready?',
-  timestamp: new Date()
-}, {
-  id: '11',
-  user: {
-    name: 'You',
-    avatar: ''
-  },
-  message: 'Hi guys! What are you doing?',
-  timestamp: new Date()
-}];
-
 // Gera dados de tendência baseados na taxa de vitória e derrota
 const generateTrendFromWinRate = (wins: number, losses: number) => {
   const total = wins + losses;
@@ -292,48 +107,43 @@ const Index = () => {
         const formattedData = await Promise.all(formattedDataPromises);
         console.log('Dados formatados com números do Supabase:', formattedData);
         
+        setRoulettes(formattedData);
+        setLoaded(true);
+        
         if (formattedData.length > 0) {
-          setRoulettes(formattedData);
-          setLoaded(true);
-          
           toast({
             title: 'Dados Carregados',
             description: `${formattedData.length} roletas carregadas do Supabase`,
             variant: 'default',
           });
         } else {
-          // Se não temos dados formatados (improvável nesse ponto), usamos o mock
-          console.log('Nenhum dado formatado disponível, usando mock data');
-          setRoulettes(mockRoulettes);
-          setLoaded(true);
-          
           toast({
-            title: 'Usando Dados Simulados',
-            description: 'Não foram encontrados dados completos no Supabase.',
-            variant: 'default',
+            title: 'Nenhuma roleta encontrada',
+            description: 'Não foram encontradas roletas no Supabase.',
+            variant: 'destructive',
           });
         }
       } else {
-        // Se não há roletas no Supabase, usamos o mock data
-        console.log('Nenhuma roleta encontrada no Supabase, usando dados simulados');
-        setRoulettes(mockRoulettes);
+        // Se não há roletas no Supabase, mostramos um array vazio
+        console.log('Nenhuma roleta encontrada no Supabase.');
+        setRoulettes([]);
         setLoaded(true);
         
         toast({
-          title: 'Usando Dados Simulados',
-          description: 'Não foram encontradas roletas no Supabase. Usando dados locais.',
-          variant: 'default',
+          title: 'Nenhuma roleta encontrada',
+          description: 'Não foram encontradas roletas no Supabase.',
+          variant: 'destructive',
         });
       }
     } catch (error) {
       console.error('Erro ao buscar roletas do Supabase:', error);
-      // Em caso de erro, usamos o mock data
-      setRoulettes(mockRoulettes);
+      // Em caso de erro, mostramos um array vazio
+      setRoulettes([]);
       setLoaded(true);
       
       toast({
         title: 'Erro de Conexão',
-        description: 'Não foi possível conectar ao Supabase. Usando dados locais.',
+        description: 'Não foi possível conectar ao Supabase.',
         variant: 'destructive',
       });
     } finally {
