@@ -5,32 +5,40 @@ const axios = require('axios');
 const API_BASE_URL = 'https://sandbox.asaas.com/api/v3';
 const DEFAULT_API_KEY = '$aact_hmlg_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OjNjMjMwZTZiLTYwNzYtNGMwYS05NjA3LWU2NjYyMDMxZTNlOTo6JGFhY2hfNmYzNDFjZDktZmUwMy00MzdmLWE1ODQtNDA0MjcxMThjZjI0';
 
+/**
+ * Handler da função serverless para criar clientes no Asaas
+ */
 module.exports = async (req, res) => {
-  console.log('asaas-create-customer endpoint chamado com método:', req.method);
-  console.log('URL completa:', req.url);
-  console.log('Headers da requisição:', JSON.stringify(req.headers));
+  console.log('[ASAAS] Endpoint chamado: /api/asaas-create-customer');
+  console.log('[ASAAS] Método:', req.method);
+  console.log('[ASAAS] URL:', req.url);
+  console.log('[ASAAS] Cabeçalhos:', JSON.stringify(req.headers));
 
   // Configurar CORS para aceitar qualquer origem
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
   res.setHeader('Access-Control-Allow-Headers', '*');
 
   // Responder a requisições preflight OPTIONS imediatamente
   if (req.method === 'OPTIONS') {
-    console.log('Requisição OPTIONS recebida, retornando 200');
+    console.log('[ASAAS] Respondendo requisição OPTIONS com 200 OK');
     return res.status(200).end();
   }
 
   // Apenas aceitar método POST
   if (req.method !== 'POST') {
-    console.error('Método não permitido:', req.method);
-    return res.status(405).json({ error: 'Method Not Allowed', method: req.method });
+    console.error('[ASAAS] Método não permitido:', req.method);
+    console.error('[ASAAS] Erro 405 - Método Não Permitido');
+    return res.status(405).json({ 
+      error: 'Method Not Allowed', 
+      message: `O endpoint apenas aceita requisições POST, mas recebeu ${req.method}`,
+      method: req.method 
+    });
   }
 
-  // Debug dos headers recebidos
-  console.log('Headers recebidos:', req.headers);
-  console.log('Corpo da requisição:', req.body);
+  // Debug dos dados recebidos
+  console.log('[ASAAS] Body da requisição:', req.body);
   
   try {
     // Extrair dados do corpo
@@ -38,13 +46,16 @@ module.exports = async (req, res) => {
     
     // Validação básica
     if (!name || !email || !cpfCnpj) {
-      console.error('Dados incompletos:', { name, email, cpfCnpj });
-      return res.status(400).json({ error: 'Dados obrigatórios não fornecidos' });
+      console.error('[ASAAS] Dados incompletos:', { name, email, cpfCnpj });
+      return res.status(400).json({ 
+        error: 'Dados obrigatórios não fornecidos',
+        missing: !name ? 'name' : !email ? 'email' : 'cpfCnpj'
+      });
     }
 
     // Usar a chave de API das variáveis de ambiente ou a chave de teste
     const apiKey = process.env.ASAAS_API_KEY || DEFAULT_API_KEY;
-    console.log('Usando apiKey (primeiros caracteres):', apiKey.substring(0, 10) + '...');
+    console.log('[ASAAS] Usando API Key (início):', apiKey.substring(0, 10) + '...');
 
     // Preparar dados para envio
     const requestData = {
@@ -55,9 +66,10 @@ module.exports = async (req, res) => {
       notificationDisabled: false
     };
 
-    console.log('Dados que serão enviados para a API:', requestData);
+    console.log('[ASAAS] Dados para envio:', requestData);
     
     // Fazer a chamada real para a API do Asaas
+    console.log('[ASAAS] Chamando API do Asaas para criar cliente...');
     const response = await axios({
       method: 'post',
       url: `${API_BASE_URL}/customers`,
@@ -68,7 +80,8 @@ module.exports = async (req, res) => {
       data: requestData
     });
 
-    console.log('Resposta da API Asaas:', response.status, response.data);
+    console.log('[ASAAS] Cliente criado com sucesso! Status:', response.status);
+    console.log('[ASAAS] ID do cliente:', response.data.id);
     
     // Retornar resposta de sucesso
     return res.status(200).json({
@@ -78,20 +91,19 @@ module.exports = async (req, res) => {
     });
   } catch (error) {
     // Log detalhado do erro
-    console.error('Erro detalhado na chamada à API do Asaas:');
-    console.error('Mensagem:', error.message);
+    console.error('[ASAAS] Erro na operação:');
+    console.error('[ASAAS] Mensagem:', error.message);
     
     if (error.response) {
       // A requisição foi feita e o servidor respondeu com um status diferente de 2xx
-      console.error('Status:', error.response.status);
-      console.error('Headers:', error.response.headers);
-      console.error('Corpo da resposta:', error.response.data);
+      console.error('[ASAAS] Status do erro:', error.response.status);
+      console.error('[ASAAS] Corpo da resposta:', JSON.stringify(error.response.data));
     } else if (error.request) {
       // A requisição foi feita mas não houve resposta
-      console.error('Sem resposta. Request:', error.request);
+      console.error('[ASAAS] Sem resposta da API do Asaas');
     } else {
       // Algo aconteceu ao configurar a requisição
-      console.error('Erro na configuração da requisição');
+      console.error('[ASAAS] Erro na configuração da requisição');
     }
 
     // Se o erro for devido a CPF duplicado, tentar recuperar o cliente
@@ -99,7 +111,7 @@ module.exports = async (req, res) => {
       if (error.response?.data?.errors?.[0]?.code === 'invalid_cpfCnpj' && 
           error.response?.data?.errors?.[0]?.description?.includes('já utilizado')) {
         const cpfCnpj = req.body.cpfCnpj.replace(/\D/g, '');
-        console.log('CPF já utilizado, buscando cliente:', cpfCnpj);
+        console.log('[ASAAS] CPF já utilizado, buscando cliente:', cpfCnpj);
         
         const searchResponse = await axios({
           method: 'get',
@@ -111,7 +123,7 @@ module.exports = async (req, res) => {
         
         if (searchResponse.data.data && searchResponse.data.data.length > 0) {
           const customer = searchResponse.data.data[0];
-          console.log('Cliente encontrado:', customer);
+          console.log('[ASAAS] Cliente existente encontrado:', customer.id);
           
           return res.status(200).json({
             success: true,
@@ -121,7 +133,7 @@ module.exports = async (req, res) => {
         }
       }
     } catch (searchError) {
-      console.error('Erro ao tentar recuperar cliente:', searchError.message);
+      console.error('[ASAAS] Erro ao tentar recuperar cliente:', searchError.message);
     }
 
     return res.status(500).json({
