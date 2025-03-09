@@ -1,5 +1,5 @@
 /**
- * Cliente Stripe - Usando API do Vercel
+ * Cliente Stripe - Chamando APIs serverless do Vercel
  */
 
 import axios from 'axios';
@@ -13,21 +13,36 @@ export const createCheckoutSession = async (planId: string, userId: string): Pro
   try {
     console.log(`Iniciando criação de sessão de checkout para planId: ${planId}, userId: ${userId}`);
     
-    // Como estamos usando o Vercel, a API está no mesmo domínio do frontend
+    // Adicionando logs de debug para verificar problemas
+    console.log('Enviando requisição para:', `${window.location.origin}/api/create-checkout-session`);
+    
+    // API na pasta /api do projeto
     const response = await axios.post('/api/create-checkout-session', {
       planId,
       userId
     });
     
+    console.log('Resposta recebida da API:', response);
+    
     if (response.data && response.data.url) {
-      console.log('Sessão de checkout criada com sucesso:', response.data);
+      console.log('URL do checkout:', response.data.url);
       return response.data.url;
     } else {
+      console.error('Resposta da API não contém URL:', response.data);
       throw new Error('Resposta da API inválida');
     }
     
   } catch (error) {
     console.error('Erro ao criar sessão de checkout:', error);
+    
+    if (error instanceof Error) {
+      // Mostramos mais detalhes sobre o erro
+      console.error('Detalhes do erro:', error.message);
+      if ('response' in error && error.response) {
+        // @ts-ignore - Propriedades de axios Error
+        console.error('Dados da resposta:', error.response.data);
+      }
+    }
     
     // Em caso de erro, usar modo simulado como fallback
     console.log('Usando modo simulado devido a erro');
