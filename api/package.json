@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Funções de API para o RunCash",
   "dependencies": {
-    "stripe": "^12.0.0",
+    "axios": "^1.5.0",
     "@supabase/supabase-js": "^2.38.0"
   }
 } 

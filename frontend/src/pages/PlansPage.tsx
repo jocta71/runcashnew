@@ -5,13 +5,13 @@ import { Check, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { 
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useAuth } from '@/context/AuthContext';
-import { createCheckoutSession } from '@/integrations/stripe/client';
+import { PaymentForm } from '@/components/PaymentForm';
 
 const PlansPage = () => {
   const { availablePlans, currentPlan, loading } = useSubscription();
@@ -19,6 +19,8 @@ const PlansPage = () => {
   const [selectedInterval, setSelectedInterval] = useState<'monthly' | 'annual'>('monthly');
   const { toast } = useToast();
   const [processingPlan, setProcessingPlan] = useState<string | null>(null);
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   
   const handleSelectPlan = async (planId: string) => {
     // Se já for o plano atual, apenas mostrar mensagem
@@ -39,30 +41,32 @@ const PlansPage = () => {
       return;
     }
     
-    // Mostrar toast de processamento
+    // Mostrar formulário de pagamento
+    setSelectedPlanId(planId);
+    setShowPaymentForm(true);
+  };
+  
+  const handlePaymentSuccess = () => {
+    // Fechar o modal de pagamento
+    setShowPaymentForm(false);
+    setSelectedPlanId(null);
+    
+    // Mostrar mensagem de sucesso
     toast({
-      title: "Processando...",
-      description: "Preparando sua assinatura"
+      title: "Assinatura realizada com sucesso!",
+      description: "Seu plano foi atualizado e você já pode acessar todos os recursos.",
     });
     
-    setProcessingPlan(planId);
-    
-    try {
-      // Chamar a função que cria a sessão de checkout
-      const checkoutUrl = await createCheckoutSession(planId, user.id);
-      
-      // Redirecionar para o checkout ou página de sucesso
-      window.location.href = checkoutUrl;
-    } catch (error) {
-      console.error("Erro ao selecionar plano:", error);
-      toast({
-        title: "Erro ao processar solicitação",
-        description: "Ocorreu um erro ao selecionar o plano. Tente novamente mais tarde.",
-        variant: "destructive"
-      });
-    } finally {
-      setProcessingPlan(null);
-    }
+    // Redirecionar para a página inicial após alguns segundos
+    setTimeout(() => {
+      window.location.href = '/';
+    }, 2000);
+  };
+  
+  const handlePaymentCancel = () => {
+    // Fechar o modal de pagamento
+    setShowPaymentForm(false);
+    setSelectedPlanId(null);
   };
   
   // Calcular preço anual (com desconto)
@@ -211,11 +215,29 @@ const PlansPage = () => {
         <div className="flex items-center space-x-2 text-sm text-gray-400">
           <AlertCircle className="h-4 w-4" />
           <p>
-            Todos os pagamentos são processados de forma segura via Stripe. 
+            Todos os pagamentos são processados de forma segura via Asaas. 
+            Aceitamos pagamentos via PIX.
             Você pode cancelar sua assinatura a qualquer momento.
           </p>
         </div>
       </div>
+      
+      {/* Modal de pagamento */}
+      <Dialog open={showPaymentForm} onOpenChange={setShowPaymentForm}>
+        <DialogContent className="bg-vegas-black border-gray-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assinar Plano</DialogTitle>
+          </DialogHeader>
+          
+          {selectedPlanId && (
+            <PaymentForm
+              planId={selectedPlanId}
+              onPaymentSuccess={handlePaymentSuccess}
+              onCancel={handlePaymentCancel}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
