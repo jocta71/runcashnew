@@ -41,12 +41,35 @@ if CASINO_URL.startswith('='):
 def roleta_permitida_por_id(id_roleta):
     roletas_permitidas = os.getenv('ALLOWED_ROULETTES', '')
     
-    # Se a variável não estiver definida ou estiver vazia, permitir todas
+    # Se o ID da roleta não for válido, rejeitar imediatamente
+    if not id_roleta or not isinstance(id_roleta, str) or id_roleta.strip() == '':
+        logger.warning(f"ID de roleta inválido: {id_roleta}")
+        return False
+    
+    # Se a variável de ambiente estiver vazia, usar lista padrão de roletas permitidas
     if not roletas_permitidas:
-        return True
+        # Lista padrão de roletas permitidas - mantém consistência com o frontend
+        roletas_padrao = [
+            "2010016",  # Immersive Roulette
+            "2380335",  # Brazilian Mega Roulette
+            "2010065",  # Bucharest Auto-Roulette
+            "2010096",  # Speed Auto Roulette
+            "2010017",  # Auto-Roulette
+            "2010098"   # Auto-Roulette VIP
+        ]
+        logger.info(f"Usando lista padrão de roletas permitidas: {roletas_padrao}")
+        return id_roleta in roletas_padrao
     
     # Dividir a string por vírgulas para obter a lista de roletas permitidas
     lista_permitidas = [r.strip() for r in roletas_permitidas.split(',')]
     
     # Verificar se o ID da roleta está na lista de permitidas
-    return id_roleta in lista_permitidas
+    resultado = id_roleta in lista_permitidas
+    
+    # Registrar no log se a roleta foi permitida ou não
+    if resultado:
+        logger.debug(f"Roleta permitida: {id_roleta}")
+    else:
+        logger.debug(f"Roleta ignorada: {id_roleta} (não está na lista de permitidas)")
+    
+    return resultado
