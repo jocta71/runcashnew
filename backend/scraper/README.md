@@ -67,6 +67,68 @@ CREATE TABLE roletas (
 INSERT INTO roletas (id, data) VALUES ('historico', '{}');
 ```
 
+## Nova Estrutura de Armazenamento
+
+### Tabela `roleta_numeros`
+
+A partir da versão atualizada, o scraper utiliza uma nova estrutura de armazenamento de dados com a tabela `roleta_numeros`. Esta tabela armazena cada número individualmente, em vez de mantê-los em um array, permitindo:
+
+- Consultas mais eficientes
+- Melhor organização dos dados
+- Análises temporais precisas
+- Escalabilidade para grandes volumes de dados
+
+### Implementação da Nova Estrutura
+
+Para implementar a nova estrutura, siga estes passos:
+
+1. Execute o script SQL `create_roleta_numeros_table.sql` para criar a tabela e suas funcionalidades:
+
+```bash
+psql -h <seu-host-supabase> -d postgres -U postgres -f create_roleta_numeros_table.sql
+```
+
+Ou execute o SQL diretamente no editor de SQL da interface do Supabase.
+
+2. A tabela `roleta_numeros` terá a seguinte estrutura:
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| id | SERIAL | Identificador único do registro |
+| roleta_id | TEXT | ID da roleta |
+| roleta_nome | TEXT | Nome da roleta |
+| numero | INTEGER | Número sorteado (0-36) |
+| created_at | TIMESTAMPTZ | Data e hora em que o número foi registrado |
+
+3. Funcionalidades Adicionais:
+   - Trigger para limitar automaticamente a 1000 registros por roleta
+   - Índices para otimizar consultas comuns
+   - View `vw_ultimos_numeros_roleta` para facilitar consultas
+   - Função `get_ultimos_numeros()` para obter os últimos números
+
+### Consultas Úteis
+
+```sql
+-- Obter os últimos 10 números de uma roleta específica
+SELECT numero, created_at 
+FROM roleta_numeros 
+WHERE roleta_id = '2341648' 
+ORDER BY created_at DESC 
+LIMIT 10;
+
+-- Contar ocorrências de cada número para uma roleta
+SELECT numero, COUNT(*) as ocorrencias 
+FROM roleta_numeros 
+WHERE roleta_id = '2341648' 
+GROUP BY numero 
+ORDER BY ocorrencias DESC;
+
+-- Verificar quantos números cada roleta tem armazenados
+SELECT roleta_nome, COUNT(*) as total 
+FROM roleta_numeros 
+GROUP BY roleta_id, roleta_nome;
+```
+
 ## Deploy no Heroku
 
 1. Crie uma aplicação no Heroku:

@@ -10,6 +10,7 @@ import AnimatedInsights from '@/components/AnimatedInsights';
 import ProfileDropdown from '@/components/ProfileDropdown';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
+import { fetchRouletteLatestNumbers } from '@/integrations/api/rouletteService';
 
 interface ChatMessage {
   id: string;
@@ -264,18 +265,26 @@ const Index = () => {
       const data = await response.json();
       console.log('Dados recebidos da API:', data);
       
-      // Transformar dados da API para o formato usado no frontend
-      const formattedData = data.map(item => ({
-        name: item.nome,
-        lastNumbers: Array.isArray(item.numeros) ? item.numeros : [],
-        wins: item.vitorias || 0,
-        losses: item.derrotas || 0,
-        trend: generateTrendFromWinRate(item.vitorias, item.derrotas),
-        suggestion: item.sugestao_display || '',
-        status: item.estado_estrategia || 'NEUTRAL'
-      }));
+      // Para cada roleta, buscar os últimos números da nova tabela
+      const formattedDataPromises = data.map(async (item) => {
+        // Buscar os últimos 20 números para cada roleta da nova tabela
+        const lastNumbers = await fetchRouletteLatestNumbers(item.id, 20);
+        
+        return {
+          name: item.nome,
+          lastNumbers: lastNumbers.length > 0 ? lastNumbers : (Array.isArray(item.numeros) ? item.numeros : []),
+          wins: item.vitorias || 0,
+          losses: item.derrotas || 0,
+          trend: generateTrendFromWinRate(item.vitorias, item.derrotas),
+          suggestion: item.sugestao_display || '',
+          status: item.estado_estrategia || 'NEUTRAL'
+        };
+      });
       
-      console.log('Dados formatados:', formattedData);
+      // Aguardar todas as promessas serem resolvidas
+      const formattedData = await Promise.all(formattedDataPromises);
+      
+      console.log('Dados formatados com números da nova tabela:', formattedData);
       
       if (formattedData.length > 0) {
         // Preservar a ordem existente - atualizar dados sem reordenação

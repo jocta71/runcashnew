@@ -11,6 +11,7 @@ import RouletteActionButtons from './roulette/RouletteActionButtons';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import RouletteStatsModal from './roulette/RouletteStatsModal';
+import { fetchRouletteLatestNumbers } from '@/integrations/api/rouletteService';
 
 interface RouletteCardProps {
   name: string;
@@ -85,53 +86,48 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     try {
       console.log(`[${new Date().toLocaleTimeString()}] Buscando números para roleta: ${name}`);
       
-      const response = await fetch(
-        `https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roletas?nome=eq.${encodeURIComponent(name)}&select=numeros`,
+      // Primeiro tentamos buscar o ID da roleta
+      const idResponse = await fetch(
+        `https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roletas?nome=eq.${encodeURIComponent(name)}&select=id`,
         {
           headers: {
             'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ',
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache, no-store' // Evitar cache para sempre pegar dados novos
+            'Content-Type': 'application/json'
           }
         }
       );
       
-      if (!response.ok) {
-        throw new Error(`Erro ao buscar dados: ${response.statusText}`);
+      if (!idResponse.ok) {
+        throw new Error(`Erro ao buscar ID da roleta: ${idResponse.statusText}`);
       }
       
-      const data = await response.json();
-      console.log(`[${new Date().toLocaleTimeString()}] Dados recebidos para ${name}:`, data);
+      const idData = await idResponse.json();
+      if (!idData || idData.length === 0) {
+        throw new Error(`Roleta não encontrada: ${name}`);
+      }
       
-      if (data && data.length > 0 && Array.isArray(data[0].numeros)) {
-        const numerosFiltrados = data[0].numeros
-          .map((num: any) => typeof num === 'string' ? parseInt(num, 10) : Number(num))
-          .filter((num: number) => !isNaN(num) && num >= 0 && num <= 36);
-        
-        console.log(`[${new Date().toLocaleTimeString()}] Números filtrados para ${name}:`, numerosFiltrados);
-        
-        if (numerosFiltrados.length > 0) {
-          // SEMPRE atualizar com os números recebidos do banco
-          console.log(`[${new Date().toLocaleTimeString()}] Atualizando números para ${name} (${numerosFiltrados.length} números)`);
-          setLastNumbers(numerosFiltrados);
-        } else if (lastNumbers.length === 0) {
-          // Apenas se não houver números atualmente exibidos, usar dados padrão
-          console.log(`[${new Date().toLocaleTimeString()}] Sem números do banco, usando dados padrão para ${name}`);
-          setLastNumbers(initialLastNumbers);
+      const roletaId = idData[0].id;
+      console.log(`[${new Date().toLocaleTimeString()}] ID da roleta ${name}: ${roletaId}`);
+      
+      // Agora buscamos os últimos números usando a nova função
+      const numbers = await fetchRouletteLatestNumbers(roletaId, 20);
+      console.log(`[${new Date().toLocaleTimeString()}] Números obtidos para ${name}:`, numbers);
+      
+      if (numbers && numbers.length > 0) {
+        setLastNumbers(numbers);
+        // Detectar se há um novo número
+        if (lastNumbers.length > 0 && numbers[0] !== lastNumbers[0]) {
+          setPreviousLastNumber(lastNumbers[0]);
+          // Verificar estratégia com o novo número
+          verificarEstrategia(numbers[0]);
         }
-      } else if (lastNumbers.length === 0) {
-        console.log(`[${new Date().toLocaleTimeString()}] Dados inválidos para ${name}, usando dados padrão`);
-        setLastNumbers(initialLastNumbers);
       }
     } catch (error) {
-      console.error(`[${new Date().toLocaleTimeString()}] Erro ao buscar números para ${name}:`, error);
-      if (lastNumbers.length === 0) {
-        setLastNumbers(initialLastNumbers);
-      }
+      console.error(`Erro ao buscar números da roleta ${name}:`, error);
     } finally {
       setIsLoading(false);
     }
-  }, [name, initialLastNumbers, lastNumbers]);
+  }, [name, lastNumbers]);
 
   useEffect(() => {
     if (dataSeeded) {

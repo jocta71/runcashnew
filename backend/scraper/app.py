@@ -21,7 +21,20 @@ from config import CASINO_URL, SUPABASE_URL, SUPABASE_KEY, roleta_permitida_por_
 from strategy_analyzer import StrategyAnalyzer
 
 # Inicialização do cliente Supabase
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Garantir que a URL do Supabase esteja corretamente formatada
+supabase_url = SUPABASE_URL
+if supabase_url.startswith('@'):
+    supabase_url = supabase_url[1:]
+if not supabase_url.startswith('http'):
+    supabase_url = f"https://{supabase_url}"
+
+try:
+    supabase = create_client(supabase_url, SUPABASE_KEY)
+    logger.info(f"Cliente Supabase inicializado com sucesso: {supabase_url}")
+except Exception as e:
+    logger.error(f"Erro ao inicializar cliente Supabase: {str(e)}")
+    logger.error(f"URL: {supabase_url}")
+    logger.error(f"Key: {SUPABASE_KEY[:10]}...")
 
 # Dicionário global para manter os analisadores de cada mesa
 analisadores_mesas = {}
@@ -49,14 +62,16 @@ def configurar_driver():
             service = Service(ChromeDriverManager().install())
             driver = webdriver.Chrome(service=service, options=chrome_options)
         except Exception as e:
-            logger.error(f"Erro ao configurar driver com ChromeDriverManager: {str(e)}")
+            logger.error(f"Erro ao configurar ChromeDriverManager: {str(e)}")
             
-            # Fallback para o método direto
+            # Fallback: Tentar executável local ou especificado nas variáveis de ambiente
             if platform.system() == "Windows":
-                driver = webdriver.Chrome(options=chrome_options)
+                chrome_driver_path = os.environ.get("CHROME_DRIVER_PATH", "./chromedriver.exe")
             else:
-                # Para Linux/Mac
-                driver = webdriver.Chrome(options=chrome_options)
+                chrome_driver_path = os.environ.get("CHROME_DRIVER_PATH", "./chromedriver")
+            
+            service = Service(chrome_driver_path)
+            driver = webdriver.Chrome(service=service, options=chrome_options)
     
     return driver
 
@@ -109,12 +124,7 @@ def extrair_id_roleta(elemento_roleta):
         match = re.search(r'cy-live-casino-grid-item-(\d+)', classes)
         if match:
             id_roleta = match.group(1)
-            return id_roleta
-        
-        # Padrão 2: game-type-123456
-        match = re.search(r'game-type-(\d+)', classes)
-        if match:
-            id_roleta = match.group(1)
+            logger.info(f"ID da roleta extraído: {id_roleta}")
             return id_roleta
         
         # ID padrão usando o texto do título se não encontrar ID específico
@@ -126,57 +136,128 @@ def extrair_id_roleta(elemento_roleta):
         logger.warning(f"Erro ao extrair ID da roleta: {str(e)}")
         return "unknown"
 
-def atualizar_supabase(dados_roletas):
-    """Atualiza os dados no Supabase"""
+def obter_ultimos_numeros(roleta_id, limite=1000):
+    """
+    Obtém os últimos números de uma roleta específica da tabela roleta_numeros
+    """
     try:
-        # Verificar se a tabela existe
-        supabase.table("roletas").select("count").limit(1).execute()
+        url = f"{supabase_url}/rest/v1/roleta_numeros"
         
-        # Para cada roleta, criar ou atualizar seu registro
-        for nome_roleta, dados in dados_roletas.items():
-            # Extrair o ID da roleta dos dados (se disponível) ou gerar um ID baseado no nome
-            id_roleta = dados.get("id", f"roleta-{hash(nome_roleta) % 10000}")
-            
-            # Extrair dados da estratégia
-            estrategia_data = dados.get("estrategia", {})
-            
-            # Preparar os dados para inserção
-            registro = {
-                "id": id_roleta,
-                "nome": nome_roleta,
-                "numeros": dados.get("numeros", []),
-                "updated_at": datetime.now().isoformat(),
-                # Adicionar campos da estratégia
-                "estado_estrategia": estrategia_data.get("estado", "NEUTRAL"),
-                "numero_gatilho": estrategia_data.get("numero_gatilho", -1),
-                "numero_gatilho_anterior": estrategia_data.get("numero_gatilho_anterior", -1),
-                "terminais_gatilho": estrategia_data.get("terminais_gatilho", []),
-                "terminais_gatilho_anterior": estrategia_data.get("terminais_gatilho_anterior", []),
-                "vitorias": estrategia_data.get("vitorias", 0),
-                "derrotas": estrategia_data.get("derrotas", 0),
-                "sugestao_display": estrategia_data.get("sugestao_display", "")
-            }
-            
-            # Atualizar os dados no Supabase
-            response = supabase.table("roletas").upsert(registro).execute()
-            
-            logger.info(f"Dados atualizados para roleta '{nome_roleta}' (ID: {id_roleta})")
+        logger.info(f"Consultando números para roleta {roleta_id} em: {url}")
         
-        return True
-    
+        response = supabase.table("roleta_numeros") \
+            .select("numero") \
+            .filter("roleta_id", "eq", roleta_id) \
+            .order("created_at", desc=True) \
+            .limit(limite) \
+            .execute()
+        
+        if response.data:
+            # Extrair apenas os números e converter para lista
+            numeros = [item['numero'] for item in response.data]
+            logger.info(f"Obtidos {len(numeros)} números para a roleta ID {roleta_id}")
+            return numeros
+        else:
+            logger.info(f"Nenhum número encontrado para a roleta ID {roleta_id}")
+            return []
     except Exception as e:
-        logger.error(f"Erro ao atualizar dados no Supabase: {str(e)}")
+        logger.error(f"Erro ao obter números da roleta {roleta_id}: {str(e)}")
+        return []
+
+def inserir_novo_numero(roleta_id, roleta_nome, numero):
+    """
+    Insere um novo número na tabela roleta_numeros
+    """
+    try:
+        # Validar o número
+        if isinstance(numero, str):
+            numero_int = int(re.sub(r'[^\d]', '', numero))
+        else:
+            numero_int = int(numero)
+        
+        if not (0 <= numero_int <= 36):
+            logger.warning(f"Número inválido para inserção: {numero}")
+            return False
+        
+        # Preparar dados para inserção
+        data = {
+            "roleta_id": roleta_id,
+            "roleta_nome": roleta_nome,
+            "numero": numero_int,
+            "created_at": datetime.now().isoformat()
+        }
+        
+        url = f"{supabase_url}/rest/v1/roleta_numeros"
+        logger.info(f"Inserindo número {numero_int} para roleta {roleta_nome} em: {url}")
+        
+        # Inserir na tabela roleta_numeros
+        response = supabase.table("roleta_numeros").insert(data).execute()
+        logger.info(f"Número {numero_int} inserido para a roleta {roleta_nome} (ID: {roleta_id})")
+        return True
+    except Exception as e:
+        logger.error(f"Erro ao inserir número {numero} para a roleta {roleta_nome}: {str(e)}")
+        return False
+
+def processar_novos_numeros(roleta_id, roleta_nome, numeros_novos):
+    """
+    Processa novos números detectados para uma roleta
+    """
+    if not numeros_novos:
+        return False
+    
+    # Obter números existentes para verificar duplicidade
+    numeros_existentes = obter_ultimos_numeros(roleta_id, limite=100)
+    
+    # Verificar cada número novo
+    numeros_adicionados = False
+    for num_str in numeros_novos:
+        try:
+            # Validar o número
+            if isinstance(num_str, str):
+                num_limpo = re.sub(r'[^\d]', '', num_str)
+                if not num_limpo:
+                    continue
+                num = int(num_limpo)
+            else:
+                num = int(num_str)
+            
+            # Verificar duplicidade (apenas com os mais recentes para performance)
+            if not numeros_existentes or num != numeros_existentes[0]:
+                if inserir_novo_numero(roleta_id, roleta_nome, num):
+                    numeros_adicionados = True
+                    # Atualizar a lista de números existentes
+                    numeros_existentes.insert(0, num)
+            else:
+                logger.debug(f"Número {num} já existente para a roleta {roleta_nome}")
+        except Exception as e:
+            logger.warning(f"Erro ao processar número {num_str}: {str(e)}")
+    
+    return numeros_adicionados
+
+def atualizar_dados_estrategia(roleta_id, roleta_nome, dados_estrategia):
+    """
+    Atualiza os dados de estratégia para uma roleta
+    """
+    try:
+        # Verificamos se existe uma tabela auxiliar para dados de estratégia
+        # Se não existe, podemos considerar criar uma no futuro
+        logger.debug(f"Dados de estratégia processados para {roleta_nome}")
+        # Por enquanto, apenas retornamos True pois não estamos armazenando esses dados
+        return True
+    except Exception as e:
+        logger.error(f"Erro ao atualizar dados de estratégia para {roleta_nome}: {str(e)}")
         return False
 
 def scrape_roletas(driver=None):
     """Função principal que realiza o scraping das roletas"""
-    driver_interno = driver
     try:
-        # Configurar o driver apenas se não foi fornecido externamente
-        if not driver_interno:
-            driver_interno = configurar_driver()
-            if not driver_interno:
-                logger.error("Não foi possível inicializar o driver")
+        # Inicializar driver se não fornecido
+        driver_interno = driver
+        if driver_interno is None:
+            try:
+                driver_interno = configurar_driver()
+            except Exception as e:
+                logger.error(f"Erro ao configurar driver: {str(e)}")
                 return None
         
         logger.info(f"Navegando para: {CASINO_URL}")
@@ -193,9 +274,6 @@ def scrape_roletas(driver=None):
             # Encontrar todas as roletas na página
             elementos_roletas = driver_interno.find_elements(By.CSS_SELECTOR, ".cy-live-casino-grid-item")
             logger.info(f"Encontradas {len(elementos_roletas)} roletas na página")
-            
-            # Dicionário para armazenar os dados atualizados
-            dados_atualizados = {}
             
             # Processar cada roleta
             for elemento_roleta in elementos_roletas:
@@ -216,25 +294,29 @@ def scrape_roletas(driver=None):
                     # Inicializar analisador para a roleta se não existir
                     if titulo_roleta not in analisadores_mesas:
                         analisadores_mesas[titulo_roleta] = StrategyAnalyzer(titulo_roleta)
+                        # Carregar números existentes no analisador
+                        numeros_existentes = obter_ultimos_numeros(id_roleta)
+                        if numeros_existentes:
+                            analisadores_mesas[titulo_roleta].add_numbers(numeros_existentes)
+                            logger.info(f"Carregados {len(numeros_existentes)} números existentes para o analisador de {titulo_roleta}")
                     
                     # Extrair números da roleta
                     numeros = extrair_numeros_js(driver_interno, elemento_roleta)
                     
+                    # Processar novos números
+                    if processar_novos_numeros(id_roleta, titulo_roleta, numeros):
+                        logger.info(f"Novos números processados para {titulo_roleta}: {numeros}")
+                    
                     # Adicionar números ao analisador
                     if analisadores_mesas[titulo_roleta].add_numbers(numeros):
-                        logger.info(f"Novos números adicionados para {titulo_roleta}: {numeros}")
-                    
-                    # Adicionar dados da mesa ao dicionário de dados atualizados
-                    dados = analisadores_mesas[titulo_roleta].get_data()
-                    dados["id"] = id_roleta  # Adicionar o ID da roleta aos dados
-                    dados_atualizados[titulo_roleta] = dados
+                        logger.info(f"Novos números adicionados ao analisador para {titulo_roleta}: {numeros}")
+                        
+                        # Atualizar dados de estratégia se necessário
+                        dados_estrategia = analisadores_mesas[titulo_roleta].get_data().get("estrategia", {})
+                        atualizar_dados_estrategia(id_roleta, titulo_roleta, dados_estrategia)
                 
                 except Exception as e:
                     logger.error(f"Erro ao processar roleta: {str(e)}")
-            
-            # Atualizar dados no Supabase
-            if dados_atualizados:
-                atualizar_supabase(dados_atualizados)
             
             # Pausa entre ciclos (entre 2 e 3 segundos)
             pausa = random.uniform(2, 3)
@@ -249,44 +331,46 @@ def scrape_roletas(driver=None):
     
     except Exception as e:
         logger.error(f"Erro no processo de scraping: {str(e)}")
-        # Não fechar o driver em caso de erro, apenas retorná-lo
-        return driver_interno
     
-    # Retornar o driver em vez de fechá-lo
-    return driver_interno
+    finally:
+        # Fechar o driver apenas se foi criado internamente
+        if driver is None and 'driver_interno' in locals() and driver_interno:
+            try:
+                driver_interno.quit()
+                logger.info("Driver fechado com sucesso")
+            except Exception as e:
+                logger.error(f"Erro ao fechar driver: {str(e)}")
 
 def main():
-    """Função principal que executa o scraping continuamente"""
-    logger.info("Iniciando aplicação de scraping")
-    
-    # Configurar o driver uma única vez
-    driver = configurar_driver()
-    if not driver:
-        logger.error("Não foi possível inicializar o driver")
-        return
-    
+    """Função principal"""
     try:
-        # Executar scraping em loop contínuo
+        # Verificar se a tabela roleta_numeros existe
+        try:
+            supabase.table("roleta_numeros").select("count").limit(1).execute()
+            logger.info("Tabela roleta_numeros verificada com sucesso")
+        except Exception as e:
+            logger.error(f"Erro ao verificar tabela roleta_numeros: {str(e)}")
+            logger.error("A tabela roleta_numeros pode não existir. Verifique a configuração do banco de dados.")
+            return
+        
+        logger.info("Iniciando scraper de roletas...")
+        
+        # Agendar o scraping conforme o intervalo configurado
+        logger.info(f"Agendando scraping a cada {SCRAPE_INTERVAL_MINUTES} minutos")
+        schedule.every(SCRAPE_INTERVAL_MINUTES).minutes.do(scrape_roletas)
+        
+        # Executar imediatamente uma vez
+        scrape_roletas()
+        
+        # Loop principal para manter o agendamento
         while True:
-            # Passar o driver para a função de scraping
-            driver = scrape_roletas(driver)
-            
-            # Se o driver for None, algo deu errado e precisamos reconfigurá-lo
-            if not driver:
-                logger.info("Reconfigurando o driver...")
-                driver = configurar_driver()
-                if not driver:
-                    logger.error("Não foi possível reinicializar o driver")
-                    break
+            schedule.run_pending()
+            time.sleep(1)
     
     except KeyboardInterrupt:
-        logger.info("Scraping interrompido pelo usuário")
-    finally:
-        # Fechar o driver apenas quando o programa inteiro terminar
-        if driver:
-            driver.quit()
-            logger.info("Driver fechado")
+        logger.info("Scraper interrompido pelo usuário")
+    except Exception as e:
+        logger.error(f"Erro no scraper: {str(e)}")
 
 if __name__ == "__main__":
-    import os  # Para verificar variáveis de ambiente
     main()

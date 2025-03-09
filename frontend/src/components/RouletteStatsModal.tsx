@@ -38,8 +38,35 @@ interface RouletteStatsModalProps {
 // Função para buscar números do banco para uma roleta específica
 const fetchRouletteHistoricalNumbers = async (rouletteName: string) => {
   try {
+    console.log(`[${new Date().toLocaleTimeString()}] Buscando histórico para ${rouletteName}...`);
+    
+    // Primeiro obtemos o ID da roleta
+    const idResponse = await fetch(
+      `https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roletas?nome=eq.${encodeURIComponent(rouletteName)}&select=id`,
+      {
+        headers: {
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ',
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    if (!idResponse.ok) {
+      throw new Error(`Erro ao buscar ID da roleta: ${idResponse.statusText}`);
+    }
+    
+    const idData = await idResponse.json();
+    if (!idData || idData.length === 0) {
+      console.log(`[${new Date().toLocaleTimeString()}] Roleta não encontrada: ${rouletteName}`);
+      return [];
+    }
+    
+    const roletaId = idData[0].id;
+    console.log(`[${new Date().toLocaleTimeString()}] ID da roleta ${rouletteName}: ${roletaId}`);
+    
+    // Agora buscamos até 100 números da tabela roleta_numeros
     const response = await fetch(
-      `https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roletas?nome=eq.${encodeURIComponent(rouletteName)}&select=numeros`,
+      `https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roleta_numeros?roleta_id=eq.${roletaId}&select=numero,created_at&order=created_at.desc&limit=100`,
       {
         headers: {
           'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ',
@@ -53,21 +80,29 @@ const fetchRouletteHistoricalNumbers = async (rouletteName: string) => {
     }
     
     const data = await response.json();
+    console.log(`[${new Date().toLocaleTimeString()}] Resposta do Supabase para ${rouletteName}:`, data);
     
-    if (data && data.length > 0 && Array.isArray(data[0].numeros)) {
-      console.log('Dados históricos encontrados:', data[0].numeros.length);
+    if (data && Array.isArray(data) && data.length > 0) {
+      console.log(`[${new Date().toLocaleTimeString()}] Dados históricos encontrados para ${rouletteName}: ${data.length} números`);
       
-      // Converter para números inteiros e filtrar valores inválidos
-      const validNumbers = data[0].numeros
-        .map((num: any) => typeof num === 'string' ? parseInt(num, 10) : Number(num))
-        .filter((num: number) => !isNaN(num) && num >= 0 && num <= 36);
+      // Extrair apenas os números e converter para inteiros se necessário
+      const validNumbers = data
+        .map(item => typeof item.numero === 'string' ? parseInt(item.numero, 10) : Number(item.numero))
+        .filter(num => !isNaN(num) && num >= 0 && num <= 36);
       
-      return validNumbers;
+      // Invertemos a ordem para ter do mais antigo para o mais recente
+      const reversedNumbers = validNumbers.reverse();
+      
+      console.log(`[${new Date().toLocaleTimeString()}] Números válidos para ${rouletteName}: ${reversedNumbers.length}`);
+      
+      return reversedNumbers;
+    } else {
+      console.log(`[${new Date().toLocaleTimeString()}] Nenhum dado encontrado para ${rouletteName}`);
     }
     
     return [];
   } catch (error) {
-    console.error('Erro ao buscar números históricos:', error);
+    console.error(`[${new Date().toLocaleTimeString()}] Erro ao buscar números históricos:`, error);
     return [];
   }
 };
