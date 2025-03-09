@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Search, Wallet, Menu, MessageSquare } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '@/components/Sidebar';
 import RouletteCard from '@/components/RouletteCard';
 import { Input } from '@/components/ui/input';
@@ -7,6 +8,8 @@ import ChatUI from '@/components/ChatUI';
 import { Button } from '@/components/ui/button';
 import AnimatedInsights from '@/components/AnimatedInsights';
 import ProfileDropdown from '@/components/ProfileDropdown';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/components/ui/use-toast';
 
 interface ChatMessage {
   id: string;
@@ -19,6 +22,14 @@ interface ChatMessage {
   };
   message: string;
   timestamp: Date;
+}
+
+interface Roulette {
+  name: string;
+  lastNumbers: number[];
+  wins: number;
+  losses: number;
+  trend: { value: number }[];
 }
 
 const mockRoulettes = [{
@@ -209,15 +220,87 @@ const Index = () => {
   const [search, setSearch] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const navigate = useNavigate();
+  const [roulettes, setRoulettes] = useState<Roulette[]>(mockRoulettes);
+  const [isLoading, setIsLoading] = useState(true);
   
-  const filteredRoulettes = mockRoulettes.filter(roulette => roulette.name.toLowerCase().includes(search.toLowerCase()));
+  // Fetch roulette data from Supabase
+  useEffect(() => {
+    const fetchRoulettes = async () => {
+      try {
+        setIsLoading(true);
+        
+        // Usando o método fetch diretamente com a API Supabase REST
+        const response = await fetch(
+          'https://evzqzghxuttctbxgohpx.supabase.co/rest/v1/roletas',
+          {
+            headers: {
+              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ',
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        
+        if (!response.ok) {
+          throw new Error('Falha ao buscar dados');
+        }
+        
+        const data = await response.json();
+        console.log('Fetched data from Supabase:', data);
+        
+        if (data && data.length > 0) {
+          // Transform the database data to match our component structure
+          const transformedData: Roulette[] = data.map((item: any) => ({
+            name: item.nome || 'Roleta sem nome',
+            lastNumbers: Array.isArray(item.numeros) 
+              ? item.numeros.slice(0, 5).map((num: any) => parseInt(num, 10))
+              : [],
+            wins: item.vitorias || 0,
+            losses: item.derrotas || 0,
+            trend: Array.from({ length: 20 }, () => ({ value: Math.random() * 100 }))
+          }));
+          
+          console.log('Transformed data:', transformedData);
+          setRoulettes(transformedData);
+          
+          toast({
+            title: 'Dados carregados',
+            description: 'Dados atualizados em tempo real',
+            variant: 'default',
+          });
+        }
+      } catch (err) {
+        console.error('Error in fetching roulettes:', err);
+        toast({
+          title: 'Erro ao carregar dados',
+          description: 'Usando dados locais como fallback',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchRoulettes();
+    
+    // Set up a polling interval to refresh data every 30 seconds
+    const intervalId = setInterval(fetchRoulettes, 30000);
+    
+    // Clean up interval on component unmount
+    return () => clearInterval(intervalId);
+  }, []);
+  
+  const filteredRoulettes = roulettes.filter(roulette => 
+    roulette.name.toLowerCase().includes(search.toLowerCase())
+  );
+  
   const topRoulettes = useMemo(() => {
-    return [...mockRoulettes].sort((a, b) => {
+    return [...roulettes].sort((a, b) => {
       const aWinRate = a.wins / (a.wins + a.losses) * 100;
       const bWinRate = b.wins / (b.wins + b.losses) * 100;
       return bWinRate - aWinRate;
     }).slice(0, 3);
-  }, []);
+  }, [roulettes]);
 
   return (
     <div className="min-h-screen flex bg-vegas-black">
@@ -313,9 +396,17 @@ const Index = () => {
         </div>
         
         <main className="pt-4 md:pt-[70px] pb-8 px-4 md:px-6 md:pl-[280px] md:pr-[340px] w-full min-h-screen bg-[#100f13]">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mt-2 md:mt-6">
-            {filteredRoulettes.map((roulette, index) => <RouletteCard key={index} {...roulette} />)}
-          </div>
+          {isLoading ? (
+            <div className="flex justify-center items-center h-[200px]">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-vegas-gold"></div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mt-2 md:mt-6">
+              {filteredRoulettes.map((roulette, index) => (
+                <RouletteCard key={index} {...roulette} />
+              ))}
+            </div>
+          )}
           
           {/* Mobile Footer Space (to avoid content being hidden behind fixed elements) */}
           <div className="h-16 md:h-0"></div>
@@ -327,6 +418,17 @@ const Index = () => {
       
       {/* Mobile Chat (drawer) */}
       <ChatUI isOpen={chatOpen} onClose={() => setChatOpen(false)} isMobile={true} />
+      
+      <div className="bg-gradient-to-r from-vegas-gold to-yellow-500 p-4 rounded-lg mb-6">
+        <h3 className="text-black font-bold mb-2">Atualize para o Plano Premium</h3>
+        <p className="text-black/80 mb-3">Acesse estatísticas em tempo real e muito mais!</p>
+        <button 
+          className="bg-black text-white px-4 py-2 rounded-md text-sm"
+          onClick={() => navigate('/planos')}
+        >
+          Ver Planos
+        </button>
+      </div>
     </div>
   );
 };

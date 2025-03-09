@@ -63,6 +63,8 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     const fetchRouletteNumbers = async () => {
       try {
         setIsLoading(true);
+        console.log(`Fetching numbers for roulette: ${name}`);
+        
         const { data, error } = await supabase
           .from('roletas')
           .select('numeros')
@@ -74,12 +76,19 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
           return;
         }
 
-        if (data && data.numeros && data.numeros.length > 0) {
-          const recentNumbers = data.numeros.slice(0, 5);
+        console.log(`Received data for ${name}:`, data);
+
+        if (data && data.numeros && Array.isArray(data.numeros) && data.numeros.length > 0) {
+          const recentNumbers = data.numeros.slice(0, 5).map(num => parseInt(num, 10));
+          console.log(`Setting recent numbers for ${name}:`, recentNumbers);
           setLastNumbers(recentNumbers);
+        } else {
+          console.log(`No valid numbers found for ${name}, using initial data`);
+          setLastNumbers(initialLastNumbers);
         }
       } catch (error) {
         console.error('Error in fetching roulette numbers:', error);
+        setLastNumbers(initialLastNumbers);
       } finally {
         setIsLoading(false);
       }
@@ -87,8 +96,12 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
 
     if (dataSeeded) {
       fetchRouletteNumbers();
+      
+      const intervalId = setInterval(fetchRouletteNumbers, 10000);
+      
+      return () => clearInterval(intervalId);
     }
-  }, [name, dataSeeded]);
+  }, [name, dataSeeded, initialLastNumbers]);
 
   useEffect(() => {
     generateSuggestion();
