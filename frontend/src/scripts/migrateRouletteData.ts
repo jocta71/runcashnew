@@ -135,7 +135,7 @@ CREATE TABLE temp_roleta_mapping (
 -- 4. Preencher o mapeamento
 INSERT INTO temp_roleta_mapping (old_id, old_nome, new_id)
 SELECT 
-  '${Object.values(uniqueRoulettes)[0].id}' as old_id, 
+  '${Object.values(uniqueRoulettes)[0]?.id || 'default-id'}' as old_id, 
   nome, 
   id 
 FROM roletas_unicas;
