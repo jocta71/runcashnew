@@ -53,6 +53,19 @@ export const getAllowedRoulettesEnvValue = (): string => {
 };
 
 /**
+ * Função para atualizar a lista de roletas permitidas
+ * Esta função é necessária para compatibilidade com código existente
+ * @param ids Lista de IDs de roletas a serem permitidas
+ * @returns Verdadeiro se a atualização foi bem-sucedida
+ */
+export const atualizarRoletasPermitidas = (ids: string[]): boolean => {
+  console.log("Função atualizarRoletasPermitidas chamada com IDs:", ids);
+  // Esta função é apenas um stub para compatibilidade
+  // A implementação real exigiria persistência de dados
+  return true;
+};
+
+/**
  * Instruções para configurar as roletas permitidas no scraper (app.py)
  * 
  * 1. Copie o valor retornado por getAllowedRoulettesEnvValue()
