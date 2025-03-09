@@ -3,7 +3,7 @@ const { createClient } = require('@supabase/supabase-js');
 
 // Configurações da API Asaas
 const API_BASE_URL = 'https://sandbox.asaas.com/api/v3';
-const DEFAULT_API_KEY = '$aact_hmlg_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OjNjMjMwZTZiLTYwNzYtNGMwYS05NjA3LWU2NjYyMDMxZTNlOTo6JGFhY2hfNmYzNDFjZDktZmUwMy00MzdmLWE1ODQtNDA0MjcxMThjZjI0';
+const DEFAULT_API_KEY = '$aact_hmlg_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OmRhNjc3NWMzLWRmMzQtNDc1NS05ZTY2LWMzNGFjYWQ1NzRiZTo6JGFhY2hfNTMwM2FiNDAtZGY4My00NTBhLWJkNmMtMDAxZTVjNWE4MGE1';
 
 module.exports = async (req, res) => {
   // Configurar CORS para aceitar qualquer origem
@@ -29,9 +29,17 @@ module.exports = async (req, res) => {
   try {
     const { planId, customerId, userId } = req.body;
     
-    // Validação básica
+    // Log detalhado dos parâmetros recebidos
+    console.log('Parâmetros recebidos:', { planId, customerId, userId });
+    
+    // Validação básica mais completa
     if (!planId || !userId) {
-      return res.status(400).json({ error: 'Dados obrigatórios não fornecidos' });
+      return res.status(400).json({ error: 'Dados obrigatórios não fornecidos: planId ou userId' });
+    }
+
+    if (!customerId) {
+      console.error('customerId não fornecido na requisição');
+      return res.status(400).json({ error: 'ID do cliente (customerId) é obrigatório' });
     }
 
     // Mapeamento de planos
