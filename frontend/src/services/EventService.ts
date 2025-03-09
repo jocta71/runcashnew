@@ -1,5 +1,6 @@
 // Serviço para gerenciar eventos em tempo real usando Server-Sent Events (SSE)
 import { toast } from '@/components/ui/use-toast';
+import config from '@/config/env';
 
 // Definição dos tipos de eventos
 export interface RouletteNumberEvent {
@@ -30,34 +31,10 @@ class EventService {
   private reconnectTimeout: number | null = null;
   private backoffTime: number = 1000; // Tempo inicial de backoff em ms
 
-  // URL do endpoint SSE com prioridade para variáveis de ambiente
+  // Obtém a URL do servidor de eventos da configuração centralizada
   private getServerUrl(): string {
-    // 1. Verificar se existe uma variável de ambiente configurada (prioridade máxima)
-    const envServerUrl = import.meta.env.VITE_SSE_SERVER_URL;
-    if (envServerUrl) {
-      console.log(`Usando URL do servidor de eventos da variável de ambiente: ${envServerUrl}`);
-      return envServerUrl;
-    }
-    
-    // 2. Detecção automática baseada no ambiente
-    const isProduction = window.location.hostname !== 'localhost' && 
-                         window.location.hostname !== '127.0.0.1';
-    
-    if (isProduction) {
-      // No ambiente de produção, tente primeiro usar a mesma origem que o frontend
-      // Isso funciona se o backend estiver no mesmo domínio
-      const protocol = window.location.protocol;
-      const host = window.location.host;
-      
-      console.log(`Ambiente de produção detectado. Tentando usar ${protocol}//${host}/events`);
-      console.log('IMPORTANTE: Se o frontend está na Vercel e o backend está em outro lugar, configure VITE_SSE_SERVER_URL nas variáveis de ambiente');
-      
-      return `${protocol}//${host}/events`;
-    } else {
-      // Em desenvolvimento, usar localhost na porta 5000
-      console.log('Ambiente de desenvolvimento detectado, usando http://localhost:5000/events');
-      return 'http://localhost:5000/events';
-    }
+    console.log(`[EventService] Usando URL do servidor de eventos: ${config.sseServerUrl}`);
+    return config.sseServerUrl;
   }
 
   private constructor() {

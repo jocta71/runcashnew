@@ -1,4 +1,5 @@
 import axios from 'axios';
+import config from '@/config/env';
 
 // Usar a variável de ambiente para a URL da API, com fallback para localhost
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -13,9 +14,9 @@ const api = axios.create({
   }
 });
 
-// Configuração do Supabase
-const SUPABASE_URL = "https://evzqzghxuttctbxgohpx.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ";
+// Configuração do Supabase (usando configuração centralizada)
+const SUPABASE_URL = config.supabaseUrl;
+const SUPABASE_KEY = config.supabaseApiKey;
 
 export interface RouletteData {
   id: string;
