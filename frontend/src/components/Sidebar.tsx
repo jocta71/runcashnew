@@ -90,13 +90,6 @@ const Sidebar = ({ isOpen = false, onClose, isMobile = false }: SidebarProps) =>
           <div className="space-y-1">
             <div className="menu-item">
               <div className="bg-[#1A191F] p-1.5 rounded-md">
-                <BarChart3 size={18} className="text-white" />
-              </div>
-              <span>Estatísticas</span>
-            </div>
-            
-            <div className="menu-item">
-              <div className="bg-[#1A191F] p-1.5 rounded-md">
                 <Rocket size={18} className="text-vegas-gold" />
               </div>
               <Link to="/planos" className="text-white hover:text-vegas-gold transition-colors">Planos Premium</Link>
