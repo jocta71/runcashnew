@@ -16,9 +16,74 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from webdriver_manager.chrome import ChromeDriverManager
 from supabase import create_client
+from flask import Flask, Response, request
+from flask_cors import CORS
+import threading
+import queue
 
 from config import CASINO_URL, SUPABASE_URL, SUPABASE_KEY, roleta_permitida_por_id, SCRAPE_INTERVAL_MINUTES, logger, MAX_CICLOS
 from strategy_analyzer import StrategyAnalyzer
+
+# Criar a aplicação Flask
+app = Flask(__name__)
+CORS(app)  # Habilitar CORS para permitir acesso a partir do frontend
+
+# Criando a classe EventManager para gerenciar eventos SSE
+class EventManager:
+    def __init__(self):
+        self.clients = []
+        self.event_queue = queue.Queue()
+        
+    def register_client(self, client_queue):
+        self.clients.append(client_queue)
+        logger.info(f"Novo cliente SSE registrado. Total: {len(self.clients)}")
+        
+    def unregister_client(self, client_queue):
+        if client_queue in self.clients:
+            self.clients.remove(client_queue)
+            logger.info(f"Cliente SSE desconectado. Restantes: {len(self.clients)}")
+    
+    def notify_clients(self, event_data):
+        # Adicionar evento à fila
+        self.event_queue.put(event_data)
+        
+        # Enviar para todos os clientes
+        for client_queue in self.clients[:]:  # Copia para evitar problemas se a lista mudar
+            try:
+                client_queue.put(event_data)
+            except Exception as e:
+                logger.error(f"Erro ao enviar evento para cliente: {str(e)}")
+                # Cliente com problema, remover
+                self.unregister_client(client_queue)
+
+# Instanciando o gerenciador de eventos
+event_manager = EventManager()
+
+@app.route('/events')
+def sse():
+    """Endpoint SSE para transmitir eventos de novos números de roletas em tempo real"""
+    def generate():
+        client_queue = queue.Queue()
+        event_manager.register_client(client_queue)
+        
+        # Enviar um evento inicial
+        yield 'data: {"type": "connected", "message": "Conexão SSE estabelecida"}\n\n'
+        
+        try:
+            while True:
+                # Aguardar eventos na fila do cliente
+                try:
+                    event_data = client_queue.get(timeout=30)  # 30s timeout para heartbeat
+                    yield f'data: {json.dumps(event_data)}\n\n'
+                except queue.Empty:
+                    # Enviar heartbeat para manter a conexão viva
+                    yield 'event: ping\ndata: {}\n\n'
+        except GeneratorExit:
+            # Cliente desconectou
+            event_manager.unregister_client(client_queue)
+    
+    return Response(generate(), mimetype='text/event-stream', 
+                   headers={'Cache-Control': 'no-cache', 'Connection': 'keep-alive'})
 
 # Inicialização do cliente Supabase
 # Garantir que a URL do Supabase esteja corretamente formatada
@@ -193,6 +258,18 @@ def inserir_novo_numero(roleta_id, roleta_nome, numero):
         # Inserir na tabela roleta_numeros
         response = supabase.table("roleta_numeros").insert(data).execute()
         logger.info(f"Número {numero_int} inserido para a roleta {roleta_nome} (ID: {roleta_id})")
+        
+        # Notificar clientes SSE sobre o novo número
+        event_data = {
+            "type": "new_number",
+            "roleta_id": roleta_id,
+            "roleta_nome": roleta_nome, 
+            "numero": numero_int,
+            "timestamp": datetime.now().isoformat()
+        }
+        event_manager.notify_clients(event_data)
+        logger.info(f"Evento SSE enviado para novo número {numero_int} da roleta {roleta_nome}")
+        
         return True
     except Exception as e:
         logger.error(f"Erro ao inserir número {numero} para a roleta {roleta_nome}: {str(e)}")
@@ -386,4 +463,11 @@ def main():
         logger.error(f"Erro no scraper: {str(e)}")
 
 if __name__ == "__main__":
-    main()
+    # Iniciar o scraper em um thread separado
+    scraper_thread = threading.Thread(target=main)
+    scraper_thread.daemon = True
+    scraper_thread.start()
+    
+    # Iniciar o servidor Flask
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)

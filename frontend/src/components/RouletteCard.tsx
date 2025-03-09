@@ -1,5 +1,5 @@
 import { TrendingUp, ChartBar } from 'lucide-react';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from '@/components/ui/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { strategies, numberGroups } from './roulette/constants';
@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import RouletteStatsModal from './roulette/RouletteStatsModal';
 import { fetchRouletteLatestNumbersByName } from '@/integrations/api/rouletteService';
+import EventService, { RouletteNumberEvent } from '@/services/EventService';
 
 interface RouletteCardProps {
   name: string;
@@ -33,18 +34,24 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
   const [isLoading, setIsLoading] = useState(true);
   const [dataSeeded, setDataSeeded] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
-  // Novo estado para rastrear se os números vêm do Supabase
   const [usingSupabaseData, setUsingSupabaseData] = useState(false);
+  
+  // Referência ao serviço de eventos
+  const eventServiceRef = useRef<EventService | null>(null);
 
   useEffect(() => {
     console.log(`[DEPURAÇÃO][${name}] Inicializando componente RouletteCard`);
     
+    // Inicializar o serviço de eventos
+    const eventService = EventService.getInstance();
+    eventServiceRef.current = eventService;
+    
     const checkAndSeedData = async () => {
       try {
-        console.log(`[DEPURAÇÃO][${name}] Buscando dados no Supabase...`);
+        console.log(`[DEPURAÇÃO][${name}] Buscando dados iniciais no Supabase...`);
         setIsLoading(true);
         
-        // Buscar números diretamente do Supabase pela função específica para busca por nome
+        // Buscar números iniciais do Supabase
         console.log(`[DEPURAÇÃO][${name}] Chamando fetchRouletteLatestNumbersByName...`);
         const numbers = await fetchRouletteLatestNumbersByName(name, 20);
         
@@ -55,9 +62,6 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
           setLastNumbers(numbers);
           setUsingSupabaseData(true);
           setDataSeeded(true);
-          
-          // Exibir alerta para cada roleta que tem dados
-          console.log(`[DEPURAÇÃO][${name}] Números carregados com sucesso!`);
           
           toast({
             title: `Dados carregados: ${name}`,
@@ -109,74 +113,59 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     checkAndSeedData();
   }, [name, initialLastNumbers]);
 
+  // Handler para novos eventos de números de roleta
+  const handleNewNumber = useCallback((event: RouletteNumberEvent) => {
+    console.log(`[DEPURAÇÃO][${name}] Novo número recebido via SSE: ${event.numero}`);
+    
+    // Atualizar o estado apenas se for um número novo
+    setLastNumbers(currentNumbers => {
+      if (currentNumbers.length === 0 || currentNumbers[0] !== event.numero) {
+        // Salvar o número anterior
+        if (currentNumbers.length > 0) {
+          setPreviousLastNumber(currentNumbers[0]);
+        }
+        
+        // Verificar estratégia para o novo número
+        verificarEstrategia(event.numero);
+        
+        // Criar o novo array de números
+        const updatedNumbers = [event.numero, ...currentNumbers.slice(0, 19)];
+        
+        toast({
+          title: "Novo Número",
+          description: `${event.numero} (${name})`,
+          variant: "default",
+        });
+        
+        return updatedNumbers;
+      }
+      
+      return currentNumbers;
+    });
+  }, [name]);
+
+  // Inscrever-se para receber eventos da roleta específica
+  useEffect(() => {
+    if (dataSeeded && eventServiceRef.current) {
+      console.log(`[DEPURAÇÃO][${name}] Inscrevendo para eventos da roleta`);
+      
+      // Inscrever-se para receber atualizações em tempo real
+      eventServiceRef.current.subscribe(name, handleNewNumber);
+      
+      // Limpar inscrição quando o componente desmontar
+      return () => {
+        if (eventServiceRef.current) {
+          console.log(`[DEPURAÇÃO][${name}] Cancelando inscrição de eventos`);
+          eventServiceRef.current.unsubscribe(name, handleNewNumber);
+        }
+      };
+    }
+  }, [dataSeeded, name, handleNewNumber]);
+
   const verificarEstrategia = (numero: number) => {
     // Placeholder para verificação de estratégia
     console.log(`[${name}] Verificando estratégia para número: ${numero}`);
   };
-
-  const fetchRouletteNumbers = useCallback(async () => {
-    try {
-      console.log(`[DEPURAÇÃO][${name}] Atualizando números do Supabase...`);
-      setIsLoading(true);
-      
-      // Usar a função específica para buscar números pelo nome da roleta
-      const numbers = await fetchRouletteLatestNumbersByName(name, 20);
-      
-      console.log(`[DEPURAÇÃO][${name}] Números atualizados recebidos:`, numbers);
-      
-      if (Array.isArray(numbers) && numbers.length > 0) {
-        console.log(`[DEPURAÇÃO][${name}] ${numbers.length} números encontrados na atualização`);
-        
-        // Detectar se há um novo número em comparação com o estado atual
-        const isNewNumber = lastNumbers.length > 0 && numbers[0] !== lastNumbers[0];
-        
-        // Atualizar o estado com os números do Supabase
-        setLastNumbers(numbers);
-        setUsingSupabaseData(true);
-        
-        if (isNewNumber) {
-          setPreviousLastNumber(lastNumbers[0]);
-          verificarEstrategia(numbers[0]);
-          
-          toast({
-            title: "Números Atualizados",
-            description: `Último número: ${numbers[0]} (${name})`,
-            variant: "default",
-          });
-        }
-      } else {
-        console.log(`[DEPURAÇÃO][${name}] Nenhum número encontrado na atualização`);
-        setUsingSupabaseData(false);
-      }
-    } catch (error) {
-      console.error(`[ERRO][${name}] Erro ao buscar números:`, error);
-      setUsingSupabaseData(false);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [name, lastNumbers]);
-
-  useEffect(() => {
-    if (dataSeeded) {
-      // Busca inicial imediata
-      fetchRouletteNumbers();
-      
-      // Configurar polling para atualizar a cada 5 segundos
-      const intervalId = setInterval(fetchRouletteNumbers, 5000);
-      
-      // Forçar uma segunda atualização após 2 segundos
-      const quickRefreshTimeout = setTimeout(() => {
-        console.log(`[${name}] Forçando atualização rápida para garantir exibição dos números`);
-        fetchRouletteNumbers();
-      }, 2000);
-      
-      // Limpar intervalo e timeout quando o componente for desmontado
-      return () => {
-        clearInterval(intervalId);
-        clearTimeout(quickRefreshTimeout);
-      };
-    }
-  }, [dataSeeded, fetchRouletteNumbers, name]);
 
   useEffect(() => {
     generateSuggestion();

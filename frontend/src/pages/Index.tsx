@@ -16,6 +16,7 @@ import {
 } from '@/integrations/api/rouletteService';
 import { filterAllowedRoulettes } from '@/config/allowedRoulettes';
 import { toast } from '@/components/ui/use-toast';
+import EventService from '@/services/EventService';
 
 interface ChatMessage {
   id: string;
@@ -67,6 +68,18 @@ const Index = () => {
   const [roulettes, setRoulettes] = useState<Roulette[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
+  
+  // Inicializar o serviço de eventos quando o componente montar
+  useEffect(() => {
+    // Inicializar o EventService para começar a receber atualizações em tempo real
+    const eventService = EventService.getInstance();
+    
+    // Limpar quando o componente desmontar
+    return () => {
+      // O serviço é um singleton, então não queremos destruí-lo completamente
+      // apenas limpar recursos específicos deste componente se necessário
+    };
+  }, []);
   
   // Função para buscar roletas do banco de dados
   const fetchRoulettes = async () => {
@@ -160,16 +173,11 @@ const Index = () => {
   
   // Efeito para carregar dados quando o componente montar
   useEffect(() => {
-    // Busca imediata quando o componente monta
+    // Buscar dados iniciais das roletas apenas uma vez quando o componente montar
     fetchRoulettes();
     
-    // Configurar polling para atualizar a cada 30 segundos (mais frequente para dados em tempo real)
-    const intervalId = setInterval(fetchRoulettes, 30000);
-    
-    // Limpar intervalo quando o componente for desmontado
-    return () => {
-      clearInterval(intervalId);
-    };
+    // Não precisamos mais fazer polling, pois agora recebemos eventos em tempo real
+    // O EventService já foi inicializado e cada RouletteCard se inscreveu para receber atualizações específicas
   }, []);
   
   const filteredRoulettes = roulettes.filter(roulette => 
