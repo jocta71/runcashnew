@@ -3,7 +3,7 @@ const { createClient } = require('@supabase/supabase-js');
 
 // Configurações da API Asaas
 const API_BASE_URL = 'https://sandbox.asaas.com/api/v3';
-const DEFAULT_API_KEY = '$aact_YTU5YTE0M2M2N2I4MTliNzk0YTI5N2U5MzdjNWZmNDQ6OjAwMDAwMDAwMDAwMDAwNTg3MzA6OiRhYWNoXzdlYjJmMjA1LTZkOWMtNDQ0NC1iOTMzLTgwNjk5ODBhODVkMw==';
+const DEFAULT_API_KEY = '$aact_hmlg_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OjNjMjMwZTZiLTYwNzYtNGMwYS05NjA3LWU2NjYyMDMxZTNlOTo6JGFhY2hfNmYzNDFjZDktZmUwMy00MzdmLWE1ODQtNDA0MjcxMThjZjI0';
 
 module.exports = async (req, res) => {
   // Configurar CORS para aceitar qualquer origem

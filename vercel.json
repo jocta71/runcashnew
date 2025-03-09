@@ -1,11 +1,27 @@
 {
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/(.*)", "destination": "/frontend/index.html" }
+    { "source": "/api/(.*)", "destination": "/api/$1" }
+  ],
+  "routes": [
+    { "src": "/payment-success", "dest": "/frontend/index.html" },
+    { "src": "/plans", "dest": "/frontend/index.html" },
+    { "src": "/(.*)", "dest": "/frontend/$1" }
   ],
   "functions": {
     "api/**/*.js": {
-      "runtime": "nodejs18.x"
+      "memory": 1024,
+      "maxDuration": 10
     }
-  }
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Credentials", "value": "true" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,OPTIONS,PATCH,DELETE,POST,PUT" },
+        { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version" }
+      ]
+    }
+  ]
 } 
