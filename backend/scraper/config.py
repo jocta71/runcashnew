@@ -23,6 +23,9 @@ logger.addHandler(console_handler)
 # Máximo de ciclos (0 = infinito)
 MAX_CICLOS = 0
 
+# Intervalo de scraping em minutos (padrão: 5 minutos)
+SCRAPE_INTERVAL_MINUTES = int(os.getenv('SCRAPE_INTERVAL_MINUTES', 5))
+
 # Supabase
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
