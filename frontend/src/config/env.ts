@@ -2,7 +2,8 @@
  * Configuração centralizada das variáveis de ambiente
  * 
  * Este arquivo fornece acesso centralizado a todas as variáveis de ambiente
- * utilizadas pelo aplicativo, com valores fallback para desenvolvimento local.
+ * utilizadas pelo aplicativo. As variáveis DEVEM ser configuradas no Vercel
+ * ou no arquivo .env para desenvolvimento local.
  */
 
 // Interface para tipagem das variáveis de ambiente
@@ -22,40 +23,41 @@ interface EnvConfig {
 const isProduction = window.location.hostname !== 'localhost' && 
                      window.location.hostname !== '127.0.0.1';
 
-// Função para obter variáveis de ambiente com fallbacks
-function getEnvVar(key: string, fallback: string): string {
-  // @ts-ignore - Ignorando erro de tipagem do Vite
-  const value = import.meta.env[key];
-  return value !== undefined ? value : fallback;
-}
-
-// Função para obter variáveis de ambiente obrigatórias (sem fallback)
+// Função para obter variáveis de ambiente sem fallback
 function getRequiredEnvVar(key: string): string {
   // @ts-ignore - Ignorando erro de tipagem do Vite
   const value = import.meta.env[key];
-  if (value === undefined) {
-    throw new Error(`Variável de ambiente obrigatória ${key} não está configurada`);
+  
+  if (value === undefined || value === '') {
+    // Em desenvolvimento, mostrar um erro útil
+    if (!isProduction) {
+      console.error(`[Config Error] Variável de ambiente ${key} não está definida. Configure-a no arquivo .env ou nas variáveis de ambiente do Vercel.`);
+    }
+    throw new Error(`Variável de ambiente ${key} não está definida`);
   }
+  
   return value;
 }
 
-// Configuração com variáveis de ambiente e valores padrão
+// Configuração com variáveis de ambiente do Vercel/env
 const config: EnvConfig = {
   // URL do servidor SSE
-  sseServerUrl: getEnvVar(
-    'VITE_SSE_SERVER_URL', 
-    isProduction 
-      ? `${window.location.protocol}//${window.location.host}/events`
-      : 'http://localhost:5000/events'
-  ),
+  sseServerUrl: (function() {
+    try {
+      // @ts-ignore
+      return getRequiredEnvVar('VITE_SSE_SERVER_URL');
+    } catch (e) {
+      // Fallback para desenvolvimento apenas
+      if (!isProduction) {
+        console.warn('[Config] Fallback para SSE local, defina VITE_SSE_SERVER_URL para produção');
+        return 'http://localhost:5000/events';
+      }
+      throw e;
+    }
+  })(),
   
-  // Configurações do Supabase
-  supabaseUrl: getEnvVar(
-    'VITE_SUPABASE_URL',
-    'https://evzqzghxuttctbxgohpx.supabase.co'
-  ),
-  
-  // Chave da API Supabase - obrigatoriamente da variável de ambiente
+  // Configurações do Supabase - sem fallbacks hardcoded
+  supabaseUrl: getRequiredEnvVar('VITE_SUPABASE_URL'),
   supabaseApiKey: getRequiredEnvVar('VITE_SUPABASE_API_KEY'),
   
   // Flag de ambiente
