@@ -29,6 +29,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
   const [currentStrategy, setCurrentStrategy] = useState(strategies[0]);
   const [selectedGroup, setSelectedGroup] = useState<string>("grupo-123");
   const [lastNumbers, setLastNumbers] = useState<number[]>([]);
+  const [lastTimestamps, setLastTimestamps] = useState<string[]>([]);
   const [previousLastNumber, setPreviousLastNumber] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [dataSeeded, setDataSeeded] = useState(false);
@@ -50,30 +51,39 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     
     const checkAndSeedData = async () => {
       try {
-        console.log(`[DEPURAÇÃO][${name}] Buscando dados iniciais no Supabase...`);
+        console.log(`[DEPURAÇÃO][${name}] Buscando dados iniciais...`);
         setIsLoading(true);
         
-        // Buscar números iniciais do Supabase
-        console.log(`[DEPURAÇÃO][${name}] Chamando fetchRouletteLatestNumbersByName...`);
-        const numbers = await fetchRouletteLatestNumbersByName(name, 20);
-        
-        console.log(`[DEPURAÇÃO][${name}] Números recebidos:`, numbers);
-        
-        if (numbers && numbers.length > 0) {
-          setLastNumbers(numbers.map(n => Number(n)));
-          setDataSeeded(true);
-          setUsingSupabaseData(true);
-          setIsLoading(false);
-          console.log(`[DEPURAÇÃO][${name}] Dados carregados com sucesso do Supabase`);
-        } else {
-          console.log(`[DEPURAÇÃO][${name}] Nenhum dado encontrado no Supabase, usando dados iniciais`);
+        // Versão simplificada para evitar problemas
+        try {
+          // Primeira tentativa: usar dados do Supabase com tratamento de erro robusto
+          const result = await fetchRouletteLatestNumbersByName(name, 20);
+          
+          if (result && result.numbers && result.numbers.length > 0) {
+            console.log(`[DEPURAÇÃO][${name}] Dados carregados do Supabase:`, result.numbers);
+            setLastNumbers(result.numbers.map(n => Number(n)));
+            setDataSeeded(true);
+            setUsingSupabaseData(true);
+          } else {
+            // Fallback para dados iniciais
+            console.log(`[DEPURAÇÃO][${name}] Usando dados iniciais`, initialLastNumbers);
+            setLastNumbers(initialLastNumbers || []);
+            setDataSeeded(true);
+            setUsingSupabaseData(false);
+          }
+        } catch (error) {
+          // Em caso de erro, usar os dados iniciais
+          console.error(`[ERRO][${name}] Erro ao buscar dados:`, error);
+          console.log(`[DEPURAÇÃO][${name}] Usando dados iniciais após erro`, initialLastNumbers);
           setLastNumbers(initialLastNumbers || []);
           setDataSeeded(true);
           setUsingSupabaseData(false);
+        } finally {
           setIsLoading(false);
         }
       } catch (error) {
-        console.error(`[ERRO][${name}] Erro ao buscar dados:`, error);
+        // Tratamento de erro em último nível
+        console.error(`[ERRO FATAL][${name}] Erro não tratado:`, error);
         setLastNumbers(initialLastNumbers || []);
         setDataSeeded(true);
         setUsingSupabaseData(false);
@@ -199,6 +209,10 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
                     variant: "default",
                   });
                   
+                  // Também armazenar o timestamp do novo número
+                  const currentTime = new Date().toISOString();
+                  setLastTimestamps(timestamps => [currentTime, ...(timestamps || []).slice(0, 19)]);
+                  
                   return updatedNumbers;
                 }
                 return currentNumbers;
@@ -286,8 +300,8 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
 
   // Memorize components to prevent unnecessary re-renders
   const memoizedNumbers = useMemo(() => (
-    <LastNumbers numbers={lastNumbers} isLoading={isLoading} />
-  ), [lastNumbers, isLoading]);
+    <LastNumbers numbers={lastNumbers} isLoading={isLoading} timestamps={lastTimestamps} />
+  ), [lastNumbers, isLoading, lastTimestamps]);
 
   const memoizedSuggestion = useMemo(() => (
     <SuggestionDisplay 
