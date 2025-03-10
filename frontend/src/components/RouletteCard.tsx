@@ -494,8 +494,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       className="bg-[#17161e]/90 backdrop-filter backdrop-blur-sm border border-white/10 rounded-xl p-4 space-y-3 animate-fade-in hover-scale cursor-pointer h-auto"
       onClick={handleDetailsClick}
     >
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">{roletaNome}</h3>
+      <div className="flex items-center justify-end">
         <div className="flex items-center">
           {usingSupabaseData ? (
             <span className="text-xs mr-2 text-[#00ff00]">Dados do Supabase</span>
@@ -624,37 +623,10 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
           </div>
         </div>
         
-        <button 
-          className="w-full flex items-center justify-center bg-[#00ff00]/10 hover:bg-[#00ff00]/20 text-[#00ff00] py-2 px-4 rounded-lg transition-colors mt-2"
-          onClick={(e) => {
-            e.stopPropagation(); // Evitar que o click propague para o card
-            setStatsOpen(true);
-          }}
-        >
-          <BarChart3 size={16} className="mr-1.5" />
-          <span className="text-xs font-medium">Ver Análise Completa</span>
-        </button>
+        {/* Botão "Ver Análise Completa" removido a pedido do usuário */}
       </div>
       
       {memoizedActionButtons}
-
-      <div className="pt-2 flex flex-col h-full">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-[#00ff00]">{roletaNome}</h2>
-          <Button
-            variant="outline"
-            size="sm"
-            className="px-2 py-1 h-8 text-xs border-[#00ff00] text-[#00ff00] hover:bg-[#00ff00]/10"
-            onClick={(e) => {
-              e.stopPropagation();
-              setStatsOpen(true);
-            }}
-          >
-            <ChartBar className="h-3 w-3 mr-1" />
-            Estatísticas
-          </Button>
-        </div>
-      </div>
 
       <RouletteStatsModal
         open={statsOpen}
