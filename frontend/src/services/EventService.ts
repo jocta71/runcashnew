@@ -66,14 +66,11 @@ class EventService {
         this.connectionAttempts = 0;
         this.backoffTime = 1000; // Resetar o tempo de backoff
         
-        // Mostrar toast apenas na primeira conexão bem-sucedida, não em reconexões
-        if (this.connectionAttempts === 0) {
-          toast({
-            title: "Conexão em tempo real estabelecida",
-            description: "Você receberá atualizações automáticas das roletas",
-            variant: "default"
-          });
-        }
+        toast({
+          title: "Conexão em tempo real estabelecida",
+          description: "Você receberá atualizações automáticas das roletas",
+          variant: "default"
+        });
       };
 
       this.eventSource.onerror = (error) => {
@@ -85,22 +82,8 @@ class EventService {
           this.eventSource = null;
         }
 
-        // Tentar reconectar com backoff exponencial limitado
+        // Tentar reconectar com backoff exponencial
         this.connectionAttempts++;
-        
-        // Limitar o número máximo de tentativas para evitar ciclos infinitos
-        if (this.connectionAttempts > 5) {
-          console.log('Máximo de tentativas de reconexão atingido. Parando tentativas automáticas.');
-          
-          toast({
-            title: "Conexão indisponível",
-            description: "O servidor de eventos não está respondendo. Os dados podem estar desatualizados.",
-            variant: "destructive"
-          });
-          
-          return; // Parar de tentar após 5 tentativas
-        }
-        
         const delay = Math.min(this.backoffTime * Math.pow(1.5, this.connectionAttempts - 1), 30000);
         
         console.log(`Tentando reconectar em ${delay}ms (tentativa ${this.connectionAttempts})`);
@@ -113,8 +96,7 @@ class EventService {
           this.connect();
         }, delay);
         
-        // Mostrar toast apenas após múltiplas falhas para não sobrecarregar a interface
-        if (this.connectionAttempts === 3) {
+        if (this.connectionAttempts > 3) {
           toast({
             title: "Problemas de conexão",
             description: "Tentando reconectar ao servidor de eventos...",
