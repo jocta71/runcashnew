@@ -83,7 +83,7 @@ export function useRoletaAnalytics(roletaNome: string, refreshInterval: number =
         .from('roleta_numeros')
         .select('numero, cor')
         .eq('roleta_nome', roletaNome)
-        .order('created_at', { ascending: false })
+        .order('timestamp', { ascending: false })
         .limit(100);
         
       if (error) throw error;
@@ -118,7 +118,7 @@ export function useRoletaAnalytics(roletaNome: string, refreshInterval: number =
         .from('roleta_numeros')
         .select('numero, cor, paridade')
         .eq('roleta_nome', roletaNome)
-        .order('created_at', { ascending: false })
+        .order('timestamp', { ascending: false })
         .limit(20);
         
       if (error) throw error;
@@ -165,7 +165,7 @@ export function useRoletaAnalytics(roletaNome: string, refreshInterval: number =
         .from('roleta_numeros')
         .select('numero, dezena')
         .eq('roleta_nome', roletaNome)
-        .order('created_at', { ascending: false })
+        .order('timestamp', { ascending: false })
         .limit(100);
         
       if (error) throw error;

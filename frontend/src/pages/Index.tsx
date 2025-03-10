@@ -236,7 +236,7 @@ const Index = () => {
     try {
       // Fazer uma consulta direta à tabela roleta_numeros
       const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/roleta_numeros?select=id,created_at,roleta_id,roleta_nome,numero&order=created_at.desc&limit=10`,
+        `${SUPABASE_URL}/rest/v1/roleta_numeros?select=id,timestamp,roleta_id,roleta_nome,numero&order=timestamp.desc&limit=10`,
         {
           headers: {
             'apikey': SUPABASE_KEY,
@@ -273,7 +273,7 @@ const Index = () => {
         // Mostrar detalhes dos primeiros 5 registros
         console.log("[DEPURAÇÃO] Primeiros registros:");
         for (let i = 0; i < Math.min(5, data.length); i++) {
-          console.log(`[${i+1}] ID: ${data[i].id}, Roleta: ${data[i].roleta_nome}, Número: ${data[i].numero}, Data: ${data[i].created_at}`);
+          console.log(`[${i+1}] ID: ${data[i].id}, Roleta: ${data[i].roleta_nome}, Número: ${data[i].numero}, Data: ${data[i].timestamp}`);
         }
       } else {
         toast({

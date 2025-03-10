@@ -50,7 +50,7 @@ export interface RouletteNumberRecord {
   roleta_id: string;
   roleta_nome: string;
   numero: number;
-  created_at: string;
+  timestamp: string;
 }
 
 // Função para listar todas as roletas disponíveis na tabela roleta_numeros
@@ -216,7 +216,7 @@ export const fetchRouletteLatestNumbersByName = async (roletaNome: string, limit
     
     // Buscar diretamente do Supabase usando o nome da roleta
     const response = await fetch(
-      `${SUPABASE_URL}/rest/v1/roleta_numeros?roleta_nome=eq.${encodeURIComponent(roletaNome)}&select=id,created_at,roleta_id,roleta_nome,numero&order=created_at.desc&limit=${limit}`,
+      `${SUPABASE_URL}/rest/v1/roleta_numeros?roleta_nome=eq.${encodeURIComponent(roletaNome)}&select=id,timestamp,roleta_id,roleta_nome,numero&order=timestamp.desc&limit=${limit}`,
       {
         headers: {
           'apikey': SUPABASE_KEY,
@@ -302,7 +302,7 @@ export const fetchRouletteLatestNumbers = async (roletaId: string, limit = 10): 
     
     // Tentar buscar do Supabase usando o ID da roleta
     const response = await fetch(
-      `${SUPABASE_URL}/rest/v1/roleta_numeros?roleta_id=eq.${encodeURIComponent(roletaId)}&select=numero&order=created_at.desc&limit=${limit}`,
+      `${SUPABASE_URL}/rest/v1/roleta_numeros?roleta_id=eq.${encodeURIComponent(roletaId)}&select=numero&order=timestamp.desc&limit=${limit}`,
       {
         headers: {
           'apikey': SUPABASE_KEY,
