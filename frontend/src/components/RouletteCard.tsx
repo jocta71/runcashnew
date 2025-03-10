@@ -155,7 +155,6 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     // Configurar assinatura do Supabase Realtime para a tabela roleta_numeros
     const setupRealtimeSubscription = () => {
       console.log(`[REALTIME][${roletaNome}] Configurando assinatura do Supabase Realtime...`);
-      console.log(`[REALTIME][${roletaNome}] URL do Supabase:`, supabase.getUrl());
       
       try {
         // Teste de conexão com o Supabase
