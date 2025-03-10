@@ -68,6 +68,7 @@ const Index = () => {
   const [roulettes, setRoulettes] = useState<Roulette[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   
   // Inicializar o serviço de eventos quando o componente montar
   useEffect(() => {
@@ -88,6 +89,12 @@ const Index = () => {
   
   // Função para buscar roletas do banco de dados
   const fetchRoulettes = async () => {
+    // Verificar se já carregou os dados anteriormente para evitar recarregamento desnecessário
+    if (hasLoadedOnce && roulettes.length > 0) {
+      console.log('[DEBUG] Dados já carregados anteriormente, ignorando nova solicitação de carregamento');
+      return;
+    }
+    
     try {
       setIsLoading(true);
       
@@ -134,6 +141,7 @@ const Index = () => {
         
         setRoulettes(formattedData);
         setLoaded(true);
+        setHasLoadedOnce(true);
         
         if (formattedData.length > 0) {
           toast({
