@@ -7,6 +7,49 @@
     <meta name="description" content="Lovable Generated Project" />
     <meta name="author" content="Lovable" />
     <meta property="og:image" content="/og-image.png" />
+    <script>
+      // Prevenir o recarregamento automático quando a página perde e recupera o foco
+      (function() {
+        // Guarda a última vez que a página foi carregada
+        let lastLoadTime = Date.now();
+        
+        // Sempre que a página é recarregada, verificamos se é um recarregamento "natural"
+        window.addEventListener('load', function() {
+          const currentTime = Date.now();
+          // Se o recarregamento ocorreu menos de 2 segundos após mudança de visibilidade, foi automático
+          if (currentTime - lastLoadTime < 2000 && document.visibilityState === 'visible') {
+            // Impedir o recarregamento
+            history.pushState(null, document.title, location.href);
+            console.log('Prevented auto-reload on tab/window focus');
+          }
+          
+          // Atualizar o tempo de carregamento
+          lastLoadTime = currentTime;
+        });
+        
+        // Cache para a função bfcache
+        window.addEventListener('pageshow', function(event) {
+          if (event.persisted) {
+            // Impedir recarregamento quando vier do cache do navegador
+            history.pushState(null, document.title, location.href);
+            console.log('Prevented reload from bfcache');
+          }
+        });
+        
+        // Prevenir recarregamento quando a página ganha foco novamente
+        document.addEventListener('visibilitychange', function() {
+          if (document.visibilityState === 'visible') {
+            lastLoadTime = Date.now();
+          }
+        });
+        
+        // Adicionar evento para histórico
+        window.addEventListener('popstate', function(event) {
+          history.pushState(null, document.title, location.href);
+          console.log('Navigation prevented');
+        });
+      })();
+    </script>
   </head>
 
   <body>
