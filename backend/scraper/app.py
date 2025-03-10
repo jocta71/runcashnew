@@ -450,7 +450,7 @@ def obter_ultimos_numeros(roleta_id, limite=1000):
         response = supabase.table("roleta_numeros") \
             .select("numero") \
             .filter("roleta_id", "eq", roleta_id) \
-            .order("created_at", desc=True) \
+            .order("timestamp", desc=True) \
             .limit(limite) \
             .execute()
         
@@ -486,7 +486,7 @@ def inserir_novo_numero(roleta_id, roleta_nome, numero):
             "roleta_id": roleta_id,
             "roleta_nome": roleta_nome,
             "numero": numero_int,
-            "created_at": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat()
         }
         
         # Log em debug em vez de info para reduzir ruído
