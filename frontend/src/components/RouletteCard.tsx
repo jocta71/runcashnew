@@ -82,9 +82,9 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
   // Função para verificar se a página está visível
   const isDocumentVisible = () => document.visibilityState === 'visible';
   
-  // Verificar se estamos no modo de prevenção de recarregamento completo
-  const isPreventingFullReload = () => {
-    return (window as any).__PREVENT_FULL_RELOAD === true;
+  // Verificar se os componentes estão congelados (bloqueados pelo sistema anti-recarregamento)
+  const areComponentsFrozen = () => {
+    return (window as any).__REACT_COMPONENTS_FROZEN === true;
   };
   
   // Persistir o estado sempre que lastNumbers mudar
@@ -101,97 +101,50 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
   // Tratamento para eventos de retorno à página
   useEffect(() => {
     const handleReturnToPage = (event: any) => {
-      console.log(`[EVENTO][${roletaNome}] Retorno à página detectado`);
-      
-      // Se estamos no modo de prevenção de recarregamento completo, apenas garantir que UI está carregada
-      if (isPreventingFullReload()) {
-        console.log(`[EVENTO][${roletaNome}] Modo de atualização contínua ativo, mantendo assinaturas Realtime`);
-        setIsLoading(false);
-        setDataSeeded(true);
+      console.log(`[EVENTO][${roletaNome}] Retorno à página detectado, tempo fora:`, 
+        Math.round(event.detail.timeAway / 1000), 'segundos');
         
-        // Configurar/reconectar assinaturas Realtime se necessário
-        setupRealtimeSubscription();
-      }
-    };
-    
-    // Função para configurar assinatura Realtime para novos números
-    const setupRealtimeSubscription = () => {
-      // Cancela assinatura anterior se existir
-      if (supabaseSubscriptionRef.current) {
-        try {
-          console.log(`[REALTIME][${roletaNome}] Removendo assinatura antiga`);
-          supabase.removeChannel(supabaseSubscriptionRef.current);
-          supabaseSubscriptionRef.current = null;
-        } catch (e) {
-          console.error(`[REALTIME][${roletaNome}] Erro ao remover assinatura:`, e);
-        }
+      // Se os componentes estão congelados, não fazer nada
+      if (areComponentsFrozen()) {
+        console.log(`[EVENTO][${roletaNome}] Componentes congelados, mantendo estado atual`);
+        return;
       }
       
-      try {
-        console.log(`[REALTIME][${roletaNome}] Configurando nova assinatura Realtime`);
+      // Verificar se precisamos atualizar dados
+      const lastUpdated = persistentState[roletaNome]?.lastUpdated || 0;
+      const now = Date.now();
+      const tenMinutes = 10 * 60 * 1000;
+      
+      if (now - lastUpdated > tenMinutes && document.visibilityState === 'visible') {
+        console.log(`[EVENTO][${roletaNome}] Atualizando dados antigos silenciosamente`);
         
-        const subscription = supabase
-          .channel(`roleta_numeros_changes_${roletaNome}_${Date.now()}`)
-          .on('postgres_changes', { 
-            event: 'INSERT', 
-            schema: 'public', 
-            table: 'roleta_numeros',
-            filter: `roleta_nome=eq.${roletaNome}`
-          }, (payload) => {
+        // Atualização silenciosa em segundo plano, sem alterar UI
+        fetchRouletteLatestNumbersByName(roletaNome, 20)
+          .then(numbers => {
             if (!isMounted.current) return;
             
-            if (payload.new && payload.new.roleta_nome === roletaNome) {
-              const novoNumero = Number(payload.new.numero);
-              console.log(`[REALTIME][${roletaNome}] Novo número recebido: ${novoNumero}`);
+            if (numbers && numbers.length > 0) {
+              const processedNumbers = numbers.map(n => Number(n));
               
-              // Atualizar o estado com o novo número
-              setLastNumbers(currentNumbers => {
-                // Verificar se é um número novo
-                if (currentNumbers.length === 0 || currentNumbers[0] !== novoNumero) {
-                  console.log(`[REALTIME][${roletaNome}] Adicionando novo número: ${novoNumero}`);
-                  
-                  // Salvar o número anterior
-                  if (currentNumbers.length > 0) {
-                    setPreviousLastNumber(currentNumbers[0]);
-                  }
-                  
-                  // Verificar estratégia para o novo número
-                  verificarEstrategia(novoNumero);
-                  
-                  // Exibir notificação toast apenas se o documento estiver visível
-                  if (isDocumentVisible()) {
-                    toast({
-                      title: "Novo Número",
-                      description: `${novoNumero} (${roletaNome})`,
-                      variant: "default",
-                    });
-                  }
-                  
-                  // Criar o novo array de números
-                  const updatedNumbers = [novoNumero, ...currentNumbers.slice(0, 19)];
-                  
-                  // Atualizar estado persistente
-                  persistentState[roletaNome] = {
-                    lastNumbers: updatedNumbers,
-                    lastUpdated: Date.now(),
-                    hasLoaded: true
-                  };
-                  
-                  return updatedNumbers;
-                }
-                return currentNumbers;
-              });
+              // Comparar com os dados atuais para verificar se há novidades
+              if (JSON.stringify(processedNumbers) !== JSON.stringify(lastNumbers)) {
+                console.log(`[EVENTO][${roletaNome}] Novos dados disponíveis, atualizando silenciosamente`);
+                setLastNumbers(processedNumbers);
+              } else {
+                console.log(`[EVENTO][${roletaNome}] Dados iguais, mantendo estado atual`);
+              }
+              
+              // Atualizar estado persistente de qualquer forma
+              persistentState[roletaNome] = {
+                lastNumbers: processedNumbers,
+                lastUpdated: Date.now(),
+                hasLoaded: true
+              };
             }
           })
-          .subscribe((status: string) => {
-            console.log(`[REALTIME][${roletaNome}] Status da assinatura: ${status}`);
+          .catch(error => {
+            console.error(`[ERRO][${roletaNome}] Erro ao atualizar dados:`, error);
           });
-          
-        supabaseSubscriptionRef.current = subscription;
-        return subscription;
-      } catch (error) {
-        console.error(`[REALTIME][${roletaNome}] Erro ao configurar assinatura:`, error);
-        return null;
       }
     };
     
@@ -204,107 +157,144 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     };
   }, [roletaNome, lastNumbers]);
 
-  // Inicialização - Carrega dados apenas se necessário e configura Realtime
+  // Função para atualizar apenas o último número, sem recarregar todo o componente
+  const updateLastNumber = useCallback((novoNumero: number) => {
+    if (!lastNumbers.includes(novoNumero)) {
+      console.log(`[UPDATE][${roletaNome}] Atualizando apenas o último número: ${novoNumero}`);
+      
+      // Salvar o número anterior para referência
+      if (lastNumbers.length > 0) {
+        setPreviousLastNumber(lastNumbers[0]);
+      }
+      
+      // Verificar estratégia para o novo número
+      verificarEstrategia(novoNumero);
+      
+      // Atualizar o array de números
+      const updatedNumbers = [novoNumero, ...lastNumbers.slice(0, 19)];
+      
+      // Atualizar estado persistente
+      persistentState[roletaNome] = {
+        lastNumbers: updatedNumbers,
+        lastUpdated: Date.now(),
+        hasLoaded: true
+      };
+      
+      // Atualizar o estado
+      setLastNumbers(updatedNumbers);
+      
+      // Notificar sobre o novo número (apenas se o documento estiver visível)
+      if (isDocumentVisible()) {
+        toast({
+          title: "Novo Número",
+          description: `${novoNumero} (${roletaNome})`,
+          variant: "default",
+        });
+      }
+      
+      return true;
+    }
+    
+    return false;
+  }, [lastNumbers, roletaNome]);
+
+  // Inicialização - Carrega dados apenas se necessário
   useEffect(() => {
     console.log(`[CICLO][${roletaNome}] Componente montado`);
     
-    // Se estamos no modo de prevenção de recarregamento completo, usar o estado persistente e assinar Realtime
-    if (isPreventingFullReload()) {
-      console.log(`[CICLO][${roletaNome}] Modo de atualização contínua ativo`);
+    // Se os componentes estão congelados, não fazer nada além de carregar do estado persistente
+    if (areComponentsFrozen()) {
+      console.log(`[CICLO][${roletaNome}] Componentes congelados, usando apenas estado persistente`);
       
-      // Usar dados em cache
       if (persistentState[roletaNome]?.lastNumbers?.length > 0) {
-        console.log(`[CICLO][${roletaNome}] Usando dados em cache:`, persistentState[roletaNome].lastNumbers.length);
         setLastNumbers(persistentState[roletaNome].lastNumbers);
-      } else if (initialLastNumbers && initialLastNumbers.length > 0) {
-        console.log(`[CICLO][${roletaNome}] Usando dados iniciais:`, initialLastNumbers.length);
-        setLastNumbers(initialLastNumbers);
-      }
-      
-      setIsLoading(false);
-      setDataSeeded(true);
-    } else {
-      const needsUpdate = () => {
-        // Se já temos estado persistente e foi atualizado recentemente, não precisamos atualizar
-        if (persistentState[roletaNome]?.hasLoaded) {
-          const lastUpdated = persistentState[roletaNome].lastUpdated;
-          const now = Date.now();
-          const fiveMinutes = 5 * 60 * 1000;
-          
-          // Se foi atualizado há menos de 5 minutos, não precisamos atualizar
-          if (now - lastUpdated < fiveMinutes) {
-            console.log(`[CICLO][${roletaNome}] Dados ainda recentes (${Math.round((now - lastUpdated)/1000)}s), pulando busca`);
-            return false;
-          }
-        }
-        
-        // Se não estiver visível, não precisamos atualizar agora
-        if (!isDocumentVisible()) {
-          console.log(`[CICLO][${roletaNome}] Documento não visível, adiando atualização`);
-          return false;
-        }
-        
-        return true;
-      };
-      
-      if (needsUpdate()) {
-        // Buscar dados iniciais do Supabase
-        console.log(`[CICLO][${roletaNome}] Buscando dados iniciais no Supabase...`);
-        
-        fetchRouletteLatestNumbersByName(roletaNome, 20)
-          .then(numbers => {
-            if (!isMounted.current) return;
-            
-            if (numbers && numbers.length > 0) {
-              console.log(`[CICLO][${roletaNome}] Recebidos ${numbers.length} números`);
-              const processedNumbers = numbers.map(n => Number(n));
-              setLastNumbers(processedNumbers);
-              setUsingSupabaseData(true);
-              
-              // Atualizar estado persistente
-              persistentState[roletaNome] = {
-                lastNumbers: processedNumbers,
-                lastUpdated: Date.now(),
-                hasLoaded: true
-              };
-            } else if (initialLastNumbers && initialLastNumbers.length > 0) {
-              console.log(`[CICLO][${roletaNome}] Sem dados do Supabase, usando iniciais`);
-              setLastNumbers(initialLastNumbers);
-            }
-            
-            setIsLoading(false);
-            setDataSeeded(true);
-          })
-          .catch(error => {
-            if (!isMounted.current) return;
-            
-            console.error(`[ERRO][${roletaNome}] Erro ao buscar dados:`, error);
-            if (initialLastNumbers && initialLastNumbers.length > 0) {
-              setLastNumbers(initialLastNumbers);
-            }
-            setIsLoading(false);
-            setDataSeeded(true);
-          });
-      } else {
-        // Já temos dados recentes, apenas confirmar que está carregado
-        if (persistentState[roletaNome]?.lastNumbers?.length > 0) {
-          setLastNumbers(persistentState[roletaNome].lastNumbers);
-        } else if (initialLastNumbers && initialLastNumbers.length > 0) {
-          setLastNumbers(initialLastNumbers);
-        }
-        
         setIsLoading(false);
         setDataSeeded(true);
+        return;
       }
     }
     
-    // Configurar assinatura Realtime para novos números (independente do modo)
-    const setupRealtimeSubscription = () => {
-      try {
-        console.log(`[REALTIME][${roletaNome}] Configurando assinatura Realtime`);
+    const needsUpdate = () => {
+      // Se estamos congelados, não atualizar
+      if (areComponentsFrozen()) {
+        return false;
+      }
+      
+      // Se já temos estado persistente e foi atualizado recentemente, não precisamos atualizar
+      if (persistentState[roletaNome]?.hasLoaded) {
+        const lastUpdated = persistentState[roletaNome].lastUpdated;
+        const now = Date.now();
+        const fiveMinutes = 5 * 60 * 1000;
         
-        const subscription = supabase
-          .channel(`roleta_numeros_changes_${roletaNome}_${Date.now()}`)
+        // Se foi atualizado há menos de 5 minutos, não precisamos atualizar
+        if (now - lastUpdated < fiveMinutes) {
+          console.log(`[CICLO][${roletaNome}] Dados ainda recentes (${Math.round((now - lastUpdated)/1000)}s), pulando busca`);
+          return false;
+        }
+      }
+      
+      // Se não estiver visível, não precisamos atualizar agora
+      if (!isDocumentVisible()) {
+        console.log(`[CICLO][${roletaNome}] Documento não visível, adiando atualização`);
+        return false;
+      }
+      
+      return true;
+    };
+    
+    if (needsUpdate()) {
+      // Buscar dados iniciais do Supabase
+      console.log(`[CICLO][${roletaNome}] Buscando dados iniciais no Supabase...`);
+      
+      fetchRouletteLatestNumbersByName(roletaNome, 20)
+        .then(numbers => {
+          if (!isMounted.current) return;
+          
+          if (numbers && numbers.length > 0) {
+            console.log(`[CICLO][${roletaNome}] Recebidos ${numbers.length} números`);
+            const processedNumbers = numbers.map(n => Number(n));
+            setLastNumbers(processedNumbers);
+            setUsingSupabaseData(true);
+            
+            // Atualizar estado persistente
+            persistentState[roletaNome] = {
+              lastNumbers: processedNumbers,
+              lastUpdated: Date.now(),
+              hasLoaded: true
+            };
+          } else if (initialLastNumbers && initialLastNumbers.length > 0) {
+            console.log(`[CICLO][${roletaNome}] Sem dados do Supabase, usando iniciais`);
+            setLastNumbers(initialLastNumbers);
+          }
+          
+          setIsLoading(false);
+          setDataSeeded(true);
+        })
+        .catch(error => {
+          if (!isMounted.current) return;
+          
+          console.error(`[ERRO][${roletaNome}] Erro ao buscar dados:`, error);
+          if (initialLastNumbers && initialLastNumbers.length > 0) {
+            setLastNumbers(initialLastNumbers);
+          }
+          setIsLoading(false);
+          setDataSeeded(true);
+        });
+    } else {
+      // Já temos dados recentes, apenas confirmar que está carregado
+      setIsLoading(false);
+      setDataSeeded(true);
+    }
+    
+    // Configurar assinatura do Supabase Realtime para a tabela roleta_numeros
+    let subscription: any = null;
+    
+    if (isDocumentVisible()) {
+      try {
+        console.log(`[REALTIME][${roletaNome}] Configurando canal Realtime...`);
+        
+        subscription = supabase
+          .channel(`roleta_numeros_changes_${roletaNome}`)
           .on('postgres_changes', { 
             event: 'INSERT', 
             schema: 'public', 
@@ -315,45 +305,10 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
             
             if (payload.new && payload.new.roleta_nome === roletaNome) {
               const novoNumero = Number(payload.new.numero);
-              console.log(`[REALTIME][${roletaNome}] Novo número recebido: ${novoNumero}`);
+              console.log(`[REALTIME][${roletaNome}] Novo número: ${novoNumero}`);
               
-              // Atualizar o estado com o novo número
-              setLastNumbers(currentNumbers => {
-                // Verificar se é um número novo
-                if (currentNumbers.length === 0 || currentNumbers[0] !== novoNumero) {
-                  console.log(`[REALTIME][${roletaNome}] Adicionando novo número: ${novoNumero}`);
-                  
-                  // Salvar o número anterior
-                  if (currentNumbers.length > 0) {
-                    setPreviousLastNumber(currentNumbers[0]);
-                  }
-                  
-                  // Verificar estratégia para o novo número
-                  verificarEstrategia(novoNumero);
-                  
-                  // Exibir notificação toast apenas se o documento estiver visível
-                  if (isDocumentVisible()) {
-                    toast({
-                      title: "Novo Número",
-                      description: `${novoNumero} (${roletaNome})`,
-                      variant: "default",
-                    });
-                  }
-                  
-                  // Criar o novo array de números
-                  const updatedNumbers = [novoNumero, ...currentNumbers.slice(0, 19)];
-                  
-                  // Atualizar estado persistente
-                  persistentState[roletaNome] = {
-                    lastNumbers: updatedNumbers,
-                    lastUpdated: Date.now(),
-                    hasLoaded: true
-                  };
-                  
-                  return updatedNumbers;
-                }
-                return currentNumbers;
-              });
+              // Usar a função updateLastNumber para atualizar apenas o último número
+              updateLastNumber(novoNumero);
             }
           })
           .subscribe((status: string) => {
@@ -361,22 +316,65 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
           });
           
         supabaseSubscriptionRef.current = subscription;
-        return subscription;
       } catch (error) {
-        console.error(`[REALTIME][${roletaNome}] Erro ao configurar assinatura:`, error);
-        return null;
+        console.error(`[REALTIME][${roletaNome}] Erro ao configurar Realtime:`, error);
       }
-    };
+    }
     
-    // Configurar assinatura Realtime (sempre, para garantir atualizações em tempo real)
-    const subscription = setupRealtimeSubscription();
-    
-    // Registrar evento de visibilidade para reconectar Realtime quando a página ficar visível
+    // Registrar evento de visibilidade
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        if (!supabaseSubscriptionRef.current) {
-          console.log(`[VISIBILIDADE][${roletaNome}] Página visível, reconectando Realtime`);
-          setupRealtimeSubscription();
+        console.log(`[VISIBILIDADE][${roletaNome}] Documento visível, verificando estado`);
+        
+        // Verificar se precisamos atualizar dados
+        const lastUpdated = persistentState[roletaNome]?.lastUpdated || 0;
+        const now = Date.now();
+        const tenMinutes = 10 * 60 * 1000;
+        
+        if (now - lastUpdated > tenMinutes) {
+          console.log(`[VISIBILIDADE][${roletaNome}] Dados antigos, atualizando...`);
+          
+          fetchRouletteLatestNumbersByName(roletaNome, 1)
+            .then(numbers => {
+              if (!isMounted.current) return;
+              
+              if (numbers && numbers.length > 0) {
+                const novoNumero = Number(numbers[0]);
+                
+                // Atualizar apenas o último número
+                updateLastNumber(novoNumero);
+              }
+            })
+            .catch(error => {
+              console.error(`[ERRO][${roletaNome}] Erro ao atualizar dados:`, error);
+            });
+        }
+        
+        // Verificar se precisa recriar assinatura
+        if (!subscription && !supabaseSubscriptionRef.current) {
+          try {
+            console.log(`[REALTIME][${roletaNome}] Recriando canal Realtime...`);
+            
+            subscription = supabase
+              .channel(`roleta_numeros_changes_${roletaNome}`)
+              .on('postgres_changes', { 
+                event: 'INSERT', 
+                schema: 'public', 
+                table: 'roleta_numeros',
+                filter: `roleta_nome=eq.${roletaNome}`
+              }, (payload) => {
+                // Lógica de processamento da mensagem
+                if (payload.new && payload.new.roleta_nome === roletaNome) {
+                  const novoNumero = Number(payload.new.numero);
+                  // Lógica de atualização...
+                }
+              })
+              .subscribe();
+              
+            supabaseSubscriptionRef.current = subscription;
+          } catch (error) {
+            console.error(`[REALTIME][${roletaNome}] Erro ao recriar Realtime:`, error);
+          }
         }
       }
     };
@@ -388,15 +386,14 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       console.log(`[CICLO][${roletaNome}] Componente desmontado`);
       isMounted.current = false;
       
-      if (supabaseSubscriptionRef.current) {
+      if (subscription) {
         console.log(`[REALTIME][${roletaNome}] Removendo assinatura`);
-        supabase.removeChannel(supabaseSubscriptionRef.current);
-        supabaseSubscriptionRef.current = null;
+        supabase.removeChannel(subscription);
       }
       
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [roletaNome, initialLastNumbers]);
+  }, [roletaNome]); // Dependência apenas do nome da roleta
 
   const verificarEstrategia = (numero: number) => {
     // Placeholder para verificação de estratégia
