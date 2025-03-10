@@ -29,6 +29,16 @@ function getEnvVar(key: string, fallback: string): string {
   return value !== undefined ? value : fallback;
 }
 
+// Função para obter variáveis de ambiente obrigatórias (sem fallback)
+function getRequiredEnvVar(key: string): string {
+  // @ts-ignore - Ignorando erro de tipagem do Vite
+  const value = import.meta.env[key];
+  if (value === undefined) {
+    throw new Error(`Variável de ambiente obrigatória ${key} não está configurada`);
+  }
+  return value;
+}
+
 // Configuração com variáveis de ambiente e valores padrão
 const config: EnvConfig = {
   // URL do servidor SSE
@@ -45,10 +55,8 @@ const config: EnvConfig = {
     'https://evzqzghxuttctbxgohpx.supabase.co'
   ),
   
-  supabaseApiKey: getEnvVar(
-    'VITE_SUPABASE_API_KEY',
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDY3MjIxMzAsImV4cCI6MjAyMjI5ODEzMH0.Y8ZM1ShjfRPk0VBOPQaLzzxz1Jl0ZvxjZi-z8N0EfOA'
-  ),
+  // Chave da API Supabase - obrigatoriamente da variável de ambiente
+  supabaseApiKey: getRequiredEnvVar('VITE_SUPABASE_API_KEY'),
   
   // Flag de ambiente
   isProduction
