@@ -46,11 +46,12 @@ if IS_PRODUCTION:
     # Em produção, permitir requisições apenas do domínio do frontend na Vercel
     # e outros domínios permitidos
     cors_origins = [
-        "https://runcashnew.vercel.app",       # URL do seu frontend na Vercel
+        "https://runcashnew-frontend-nu.vercel.app",    # URL atual do frontend na Vercel
+        "https://runcashnew.vercel.app",               # URL anterior do frontend na Vercel
         "https://runcashnew-git-master-jocta71.vercel.app",
-        "https://www.runcashnew.com",          # Se você tiver um domínio personalizado
-        "http://localhost:5173",               # Para desenvolvimento local
-        "http://localhost:3000"                # Alternativa para desenvolvimento
+        "https://www.runcashnew.com",                  # Se você tiver um domínio personalizado
+        "http://localhost:5173",                       # Para desenvolvimento local
+        "http://localhost:3000"                        # Alternativa para desenvolvimento
     ]
     CORS(app, resources={
         r"/*": {"origins": cors_origins, "supports_credentials": True}
