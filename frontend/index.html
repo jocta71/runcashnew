@@ -21,50 +21,41 @@
           isInitialized: false
         };
         
-        // Função para congelar completamente os componentes React durante recargas
-        window.freezeReactComponents = function() {
-          console.log('[FREEZE] Congelando componentes React');
-          window.__REACT_COMPONENTS_FROZEN = true;
+        // Função para prevenir recarregamento completo mas permitir atualizações de números
+        window.preventFullReload = function() {
+          console.log('[MODO] Ativando modo de atualização contínua');
+          window.__PREVENT_FULL_RELOAD = true;
+          window.__REACT_COMPONENTS_FROZEN = false; // Garantir que não estão congelados
           
-          // Quando a página é congelada, salvamos uma marcação no sessionStorage
+          // Salvar marcação no sessionStorage
           try {
-            sessionStorage.setItem('components_frozen', 'true');
-            sessionStorage.setItem('freeze_timestamp', Date.now().toString());
+            sessionStorage.setItem('prevent_full_reload', 'true');
+            sessionStorage.removeItem('components_frozen'); // Garantir que não estão congelados
           } catch (e) {
-            console.error('[FREEZE] Erro ao salvar estado:', e);
+            console.error('[MODO] Erro ao salvar estado:', e);
           }
         };
         
-        // Função para descongelar componentes
-        window.unfreezeReactComponents = function() {
-          console.log('[FREEZE] Descongelando componentes React');
-          window.__REACT_COMPONENTS_FROZEN = false;
+        // Função para voltar ao modo normal
+        window.resumeNormalMode = function() {
+          console.log('[MODO] Voltando ao modo normal');
+          window.__PREVENT_FULL_RELOAD = false;
           
           try {
-            sessionStorage.removeItem('components_frozen');
+            sessionStorage.removeItem('prevent_full_reload');
           } catch (e) {
-            console.error('[FREEZE] Erro ao remover estado:', e);
+            console.error('[MODO] Erro ao remover estado:', e);
           }
         };
         
-        // Verificar se já estamos congelados
+        // Verificar se já estamos no modo de prevenção
         try {
-          if (sessionStorage.getItem('components_frozen') === 'true') {
-            window.__REACT_COMPONENTS_FROZEN = true;
-            console.log('[FREEZE] Componentes iniciados em estado congelado');
-            
-            // Se o congelamento foi há muito tempo, descongelar
-            const freezeTime = parseInt(sessionStorage.getItem('freeze_timestamp') || '0');
-            const now = Date.now();
-            const oneHour = 60 * 60 * 1000;
-            
-            if (now - freezeTime > oneHour) {
-              console.log('[FREEZE] Congelamento expirado, descongelando');
-              window.unfreezeReactComponents();
-            }
+          if (sessionStorage.getItem('prevent_full_reload') === 'true') {
+            window.__PREVENT_FULL_RELOAD = true;
+            console.log('[MODO] Iniciado em modo de atualização contínua');
           }
         } catch (e) {
-          console.error('[FREEZE] Erro ao verificar estado de congelamento:', e);
+          console.error('[MODO] Erro ao verificar modo:', e);
         }
         
         // Sempre que a página é recarregada, verificamos se é um recarregamento "natural"
@@ -78,8 +69,8 @@
             history.pushState(null, document.title, location.href);
             console.log('[NAVEGAÇÃO] Prevenido recarregamento automático ao voltar para aba');
             
-            // Congelar componentes React para evitar recarregamento interno
-            window.freezeReactComponents();
+            // Ativar modo de prevenção de recarregamento completo
+            window.preventFullReload();
           }
           
           // Atualizar o tempo de carregamento
@@ -100,8 +91,8 @@
             history.pushState(null, document.title, location.href);
             preventReload = true;
             
-            // Congelar componentes React
-            window.freezeReactComponents();
+            // Ativar modo de prevenção de recarregamento completo
+            window.preventFullReload();
           }
         });
         
@@ -117,8 +108,8 @@
             if (timeSinceLastLoad > 1000 && timeSinceLastLoad < 3600000) {
               console.log('[VISIBILIDADE] Prevenindo recarregamento após', Math.round(timeSinceLastLoad / 1000), 'segundos');
               
-              // Congelar componentes React para evitar recarregamento interno
-              window.freezeReactComponents();
+              // Ativar modo de prevenção de recarregamento completo
+              window.preventFullReload();
               
               // Disparar evento personalizado para notificar componentes
               window.dispatchEvent(new CustomEvent('app:returned-to-page', {
@@ -152,8 +143,8 @@
           if (preventReload) {
             console.log('[NAVEGAÇÃO] Prevenindo unload');
             
-            // Congelar estado antes de potencialmente sair
-            window.freezeReactComponents();
+            // Ativar modo de prevenção de recarregamento completo
+            window.preventFullReload();
             
             // Mensagem não será mostrada em browsers modernos por segurança
             e.preventDefault();
@@ -168,7 +159,7 @@
           // Força o browser a recarregar o cache na inicialização
           window.addEventListener('pagehide', function() {
             console.log('[NAVEGAÇÃO] Página ocultada, preparando para possível retorno');
-            window.freezeReactComponents();
+            window.preventFullReload();
           });
         });
       })();

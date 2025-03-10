@@ -112,12 +112,17 @@ const Index = () => {
     return (window as any).__REACT_COMPONENTS_FROZEN === true;
   };
   
+  // Verificar se estamos no modo de prevenção de recarregamento completo
+  const isPreventingFullReload = () => {
+    return (window as any).__PREVENT_FULL_RELOAD === true;
+  };
+  
   // Função para buscar roletas do banco de dados
   const fetchRoulettes = async () => {
     try {
-      // Se os componentes estão congelados, usar apenas dados em cache
-      if (areComponentsFrozen() && roulettes.length > 0) {
-        console.log('[FREEZE] Componentes congelados, mantendo dados em cache');
+      // Se estamos no modo de prevenção de recarregamento completo, usar apenas dados em cache
+      if (isPreventingFullReload() && roulettes.length > 0) {
+        console.log('[MODO] Modo de atualização contínua ativo, mantendo dados atuais');
         setIsLoading(false);
         setLoaded(true);
         return;
@@ -242,9 +247,9 @@ const Index = () => {
   
   // Efeito para carregar dados quando o componente montar
   useEffect(() => {
-    // Se os componentes estão congelados, não fazer nada além de usar o estado atual
-    if (areComponentsFrozen() && roulettes.length > 0) {
-      console.log('[FREEZE] Index: Componentes congelados, mantendo estado atual com', roulettes.length, 'roletas');
+    // Se estamos no modo de prevenção de recarregamento completo, manter apenas o estado atual
+    if (isPreventingFullReload() && roulettes.length > 0) {
+      console.log('[MODO] Index: Modo de atualização contínua ativo, mantendo dados atuais');
       setIsLoading(false);
       setLoaded(true);
       return;
@@ -427,9 +432,9 @@ const Index = () => {
     const handleReturnToPage = (event: any) => {
       console.log('[EVENTO] Index: Retorno à página detectado');
       
-      // Se os componentes estão congelados, não fazer nada
-      if (areComponentsFrozen()) {
-        console.log('[EVENTO] Index: Componentes congelados, mantendo estado atual');
+      // Se estamos no modo de prevenção de recarregamento completo, manter apenas o estado atual
+      if (isPreventingFullReload()) {
+        console.log('[MODO] Index: Modo de atualização contínua ativo, mantendo interface estática');
         
         // Garantir que a UI não mostre carregamento
         setIsLoading(false);
@@ -457,14 +462,36 @@ const Index = () => {
       }
     };
     
-    // Registrar manipulador para o evento personalizado
+    // Função para configurar manipulador para evento de saída da página
+    const handleLeavingPage = () => {
+      console.log('[EVENTO] Index: Saindo da página');
+      // Salvar dados no sessionStorage para garantir persistência
+      try {
+        sessionStorage.setItem('roulettes_state', JSON.stringify(roulettes));
+        console.log('[PERSISTÊNCIA] Estado salvo antes de sair:', roulettes.length);
+      } catch (error) {
+        console.error('[PERSISTÊNCIA] Erro ao salvar estado:', error);
+      }
+    };
+    
+    // Registrar manipuladores para os eventos personalizados
     window.addEventListener('app:returned-to-page', handleReturnToPage);
+    window.addEventListener('app:leaving-page', handleLeavingPage);
     
     // Limpar quando o componente desmontar
     return () => {
       window.removeEventListener('app:returned-to-page', handleReturnToPage);
+      window.removeEventListener('app:leaving-page', handleLeavingPage);
+      
+      // Salvar dados no sessionStorage para garantir persistência
+      try {
+        sessionStorage.setItem('roulettes_state', JSON.stringify(roulettes));
+        console.log('[PERSISTÊNCIA] Estado salvo ao desmontar:', roulettes.length);
+      } catch (error) {
+        console.error('[PERSISTÊNCIA] Erro ao salvar estado:', error);
+      }
     };
-  }, [roulettes]);
+  }, [roulettes, safeRoulettes.length]);
 
   return (
     <div className="min-h-screen flex bg-vegas-black">
