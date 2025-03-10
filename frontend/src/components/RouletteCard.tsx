@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import RouletteStatsModal from './roulette/RouletteStatsModal';
 import { fetchRouletteLatestNumbersByName } from '@/integrations/api/rouletteService';
+import { useRoletaAnalytics } from '@/hooks/useRoletaAnalytics';
 
 interface RouletteCardProps {
   name: string;
@@ -480,6 +481,14 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     }
   };
 
+  // Adicionar uso do hook useRoletaAnalytics para estatísticas simplificadas
+  const { 
+    colorDistribution, 
+    currentStreak,
+    missingDozens,
+    loading: analyticsLoading 
+  } = useRoletaAnalytics(roletaNome, 30000); // Atualiza a cada 30 segundos
+
   return (
     <div 
       className="bg-[#17161e]/90 backdrop-filter backdrop-blur-sm border border-white/10 rounded-xl p-4 space-y-3 animate-fade-in hover-scale cursor-pointer h-auto"
@@ -506,7 +515,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       <div className="p-2 bg-[#1a1922] rounded-lg border border-[#00ff00]/20">
         <h4 className="text-xs font-medium text-[#00ff00] mb-1.5 flex items-center">
           <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00] mr-1.5"></span>
-          Insights
+          Insights & Estatísticas
         </h4>
         <div className="space-y-1.5">
           {lastNumbers.length > 0 && (
@@ -533,6 +542,62 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
                 <span className="text-gray-300">
                   Taxa de acerto: {((wins / (wins + losses)) * 100).toFixed(1)}% nos últimos 20 números
                 </span>
+              </div>
+              
+              {/* Novas Estatísticas - Distribuição de Cores */}
+              {!analyticsLoading && colorDistribution.length > 0 && (
+                <div className="flex items-center text-xs mt-2 pt-2 border-t border-gray-700">
+                  <div className="flex space-x-1 mr-2">
+                    {colorDistribution.map((item, idx) => (
+                      <div 
+                        key={idx} 
+                        className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold ${
+                          item.cor === 'vermelho' ? 'bg-red-600' : 
+                          item.cor === 'preto' ? 'bg-black' : 'bg-green-600'
+                        }`}
+                        title={`${item.cor}: ${item.porcentagem.toFixed(1)}%`}
+                      >
+                        {Math.round(item.porcentagem)}%
+                      </div>
+                    ))}
+                  </div>
+                  <span className="text-gray-300">
+                    Distribuição de cores
+                  </span>
+                </div>
+              )}
+              
+              {/* Sequência Atual */}
+              {!analyticsLoading && currentStreak.count > 0 && (
+                <div className="flex items-center text-xs">
+                  <div className="w-3 h-3 rounded-full bg-purple-500 mr-1.5"></div>
+                  <span className="text-gray-300">
+                    Sequência: {currentStreak.count}x {currentStreak.value} {currentStreak.type === 'cor' ? '' : ' (' + currentStreak.type + ')'}
+                  </span>
+                </div>
+              )}
+              
+              {/* Dúzias Ausentes */}
+              {!analyticsLoading && missingDozens.length > 0 && (
+                <div className="flex items-center text-xs">
+                  <div className="w-3 h-3 rounded-full bg-yellow-500 mr-1.5"></div>
+                  <span className="text-gray-300">
+                    Dúzia {missingDozens[0].dezena} ausente há {missingDozens[0].ausencia} jogadas
+                  </span>
+                </div>
+              )}
+              
+              {/* Botão para ver análise completa */}
+              <div className="mt-2 pt-2 border-t border-gray-700">
+                <button 
+                  className="w-full text-center text-xs font-medium text-[#00ff00] py-1 px-2 rounded bg-[#00ff00]/10 hover:bg-[#00ff00]/20 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation(); // Evitar que o click propague para o card
+                    setStatsOpen(true);
+                  }}
+                >
+                  Ver análise completa
+                </button>
               </div>
             </>
           )}
