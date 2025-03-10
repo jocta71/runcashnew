@@ -233,7 +233,7 @@ export function useRoletaAnalytics(roletaNome: string, refreshInterval: number =
         event: 'INSERT',
         schema: 'public',
         table: 'roleta_numeros',
-        filter: `roleta_nome=eq.${roletaNome}`
+        filter: 'roleta_nome=eq.' + roletaNome
       }, () => {
         // Atualizar análises quando novos números forem inseridos
         fetchAnalytics();

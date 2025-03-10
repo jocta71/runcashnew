@@ -41,7 +41,7 @@ export function LastNumbersRealtime({ roletaNome, limit = 20 }) {
         event: 'INSERT',
         schema: 'public',
         table: 'roleta_numeros',
-        filter: `roleta_nome=eq.${roletaNome}`
+        filter: 'roleta_nome=eq.' + roletaNome
       }, (payload) => {
         // Adicionar novo número ao estado
         console.log('[LastNumbersRealtime] Novo número recebido:', payload.new);

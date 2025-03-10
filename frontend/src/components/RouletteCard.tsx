@@ -300,7 +300,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
             event: 'INSERT', 
             schema: 'public', 
             table: 'roleta_numeros',
-            filter: `roleta_nome=eq.${roletaNome}`
+            filter: 'roleta_nome=eq.' + roletaNome
           }, (payload) => {
             if (!isMounted.current) return;
             
