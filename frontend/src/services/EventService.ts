@@ -107,16 +107,29 @@ class EventService {
 
       this.eventSource.onmessage = (event) => {
         try {
+          // Log do evento bruto para depuração
+          console.log(`[SSE][RAW] Evento recebido:`, event.data);
+          
           const data = JSON.parse(event.data) as EventData;
           
           if (data.type === 'new_number') {
-            console.log(`Novo número recebido para ${data.roleta_nome}: ${data.numero}`);
+            console.log(`[SSE][EVENT] Novo número recebido para ${data.roleta_nome}: ${data.numero}`);
+            
+            // Verificar quantos listeners estão registrados para esta roleta
+            const roletaListeners = this.listeners.get(data.roleta_nome);
+            const globalListeners = this.listeners.get('*');
+            
+            console.log(`[SSE][STATS] Listeners para ${data.roleta_nome}: ${roletaListeners?.size || 0}`);
+            console.log(`[SSE][STATS] Listeners globais: ${globalListeners?.size || 0}`);
+            
             this.notifyListeners(data);
           } else if (data.type === 'connected') {
-            console.log('Conexão confirmada pelo servidor:', data.message);
+            console.log('[SSE][CONN] Conexão confirmada pelo servidor:', data.message);
+          } else {
+            console.log(`[SSE][UNKNOWN] Tipo de evento desconhecido:`, data);
           }
         } catch (error) {
-          console.error('Erro ao processar evento:', error);
+          console.error('[SSE][ERROR] Erro ao processar evento:', error, 'Dados brutos:', event.data);
         }
       };
     } catch (error) {
@@ -127,12 +140,26 @@ class EventService {
 
   // Adiciona um listener para eventos de uma roleta específica
   public subscribe(roletaNome: string, callback: RouletteEventCallback): void {
+    console.log(`[SSE][SUB] Tentando inscrever para eventos da roleta: ${roletaNome}`);
+    
     if (!this.listeners.has(roletaNome)) {
+      console.log(`[SSE][SUB] Criando novo conjunto de listeners para ${roletaNome}`);
       this.listeners.set(roletaNome, new Set());
     }
 
-    this.listeners.get(roletaNome)?.add(callback);
-    console.log(`Inscrito para eventos da roleta: ${roletaNome}`);
+    const listeners = this.listeners.get(roletaNome);
+    listeners?.add(callback);
+    
+    const count = listeners?.size || 0;
+    console.log(`[SSE][SUB] Inscrito para eventos da roleta: ${roletaNome}. Total de listeners: ${count}`);
+    
+    // Verificar se a conexão SSE está ativa
+    if (!this.isConnected || !this.eventSource) {
+      console.log(`[SSE][SUB] Conexão SSE não está ativa. Tentando reconectar...`);
+      this.connect();
+    } else {
+      console.log(`[SSE][SUB] Conexão SSE já está ativa.`);
+    }
   }
 
   // Remove um listener
@@ -148,26 +175,33 @@ class EventService {
 
   // Notifica os listeners sobre um novo evento
   private notifyListeners(event: RouletteNumberEvent): void {
+    console.log(`[SSE][NOTIFY] Notificando listeners para ${event.roleta_nome}, número: ${event.numero}`);
+    
     // Notificar listeners da roleta específica
     const roletaListeners = this.listeners.get(event.roleta_nome);
-    if (roletaListeners) {
+    if (roletaListeners && roletaListeners.size > 0) {
+      console.log(`[SSE][NOTIFY] Encontrados ${roletaListeners.size} listeners para ${event.roleta_nome}`);
       roletaListeners.forEach(callback => {
         try {
+          console.log(`[SSE][NOTIFY] Chamando callback para ${event.roleta_nome}`);
           callback(event);
         } catch (error) {
-          console.error(`Erro ao chamar callback para roleta ${event.roleta_nome}:`, error);
+          console.error(`[SSE][ERROR] Erro ao chamar callback para ${event.roleta_nome}:`, error);
         }
       });
+    } else {
+      console.log(`[SSE][NOTIFY] Nenhum listener encontrado para ${event.roleta_nome}`);
     }
-
-    // Notificar listeners que escutam todas as roletas (usando "*" como chave)
+    
+    // Notificar listeners globais (*)
     const globalListeners = this.listeners.get('*');
-    if (globalListeners) {
+    if (globalListeners && globalListeners.size > 0) {
+      console.log(`[SSE][NOTIFY] Notificando ${globalListeners.size} listeners globais`);
       globalListeners.forEach(callback => {
         try {
           callback(event);
         } catch (error) {
-          console.error('Erro ao chamar callback global:', error);
+          console.error('[SSE][ERROR] Erro ao chamar callback global:', error);
         }
       });
     }

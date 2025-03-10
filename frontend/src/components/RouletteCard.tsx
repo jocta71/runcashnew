@@ -115,11 +115,20 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
 
   // Handler para novos eventos de números de roleta
   const handleNewNumber = useCallback((event: RouletteNumberEvent) => {
-    console.log(`[DEPURAÇÃO][${name}] Novo número recebido via SSE: ${event.numero}`);
+    console.log(`[SSE][${name}] Novo número recebido via SSE: ${event.numero}`);
+    
+    if (event.roleta_nome !== name) {
+      console.log(`[SSE][${name}] Ignorando evento para outra roleta: ${event.roleta_nome}`);
+      return; // Ignorar eventos para outras roletas
+    }
     
     // Atualizar o estado apenas se for um número novo
     setLastNumbers(currentNumbers => {
-      if (currentNumbers.length === 0 || currentNumbers[0] !== event.numero) {
+      // Verificar se o número é realmente novo
+      const isNewNumber = currentNumbers.length === 0 || currentNumbers[0] !== event.numero;
+      console.log(`[SSE][${name}] É número novo? ${isNewNumber}. Atual: ${currentNumbers[0]}, Novo: ${event.numero}`);
+      
+      if (isNewNumber) {
         // Salvar o número anterior
         if (currentNumbers.length > 0) {
           setPreviousLastNumber(currentNumbers[0]);
@@ -130,6 +139,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
         
         // Criar o novo array de números
         const updatedNumbers = [event.numero, ...currentNumbers.slice(0, 19)];
+        console.log(`[SSE][${name}] Atualizando números: ${updatedNumbers.slice(0, 5).join(', ')}...`);
         
         toast({
           title: "Novo Número",
@@ -146,26 +156,27 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
 
   // Inscrever-se para receber eventos da roleta específica
   useEffect(() => {
-    // Comentando o código de inscrição nos eventos para desativar as atualizações automáticas
-    /*
     if (dataSeeded && eventServiceRef.current) {
-      console.log(`[DEPURAÇÃO][${name}] Inscrevendo para eventos da roleta`);
+      console.log(`[SSE][${name}] Inscrevendo para eventos da roleta: ${name}`);
       
-      // Inscrever-se para receber atualizações em tempo real
+      // Inscrever-se para receber atualizações de qualquer roleta (*) para fins de depuração
+      console.log(`[SSE][${name}] TAMBÉM inscrevendo para todos os eventos (*) para depuração`);
+      eventServiceRef.current.subscribe('*', (event) => {
+        console.log(`[SSE][GLOBAL] Evento recebido para ${event.roleta_nome}: ${event.numero}`);
+      });
+      
+      // Inscrever-se para receber atualizações em tempo real desta roleta específica
       eventServiceRef.current.subscribe(name, handleNewNumber);
       
       // Limpar inscrição quando o componente desmontar
       return () => {
         if (eventServiceRef.current) {
-          console.log(`[DEPURAÇÃO][${name}] Cancelando inscrição de eventos`);
+          console.log(`[SSE][${name}] Cancelando inscrição de eventos`);
+          eventServiceRef.current.unsubscribe('*', () => {});
           eventServiceRef.current.unsubscribe(name, handleNewNumber);
         }
       };
     }
-    */
-    
-    // Adicionando log para confirmar que as atualizações automáticas estão desativadas
-    console.log(`[DEPURAÇÃO][${name}] Atualizações automáticas desativadas por configuração`);
   }, [dataSeeded, name, handleNewNumber]);
 
   const verificarEstrategia = (numero: number) => {
