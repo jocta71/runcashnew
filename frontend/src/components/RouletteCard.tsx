@@ -146,56 +146,75 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     // Configurar assinatura do Supabase Realtime para a tabela roleta_numeros
     const setupRealtimeSubscription = () => {
       console.log(`[REALTIME][${name}] Configurando assinatura do Supabase Realtime...`);
+      console.log(`[REALTIME][${name}] URL do Supabase:`, supabase.getUrl());
       
-      // Inscrever-se para atualizações na tabela roleta_numeros
-      const subscription = supabase
-        .channel('roleta_numeros_changes')
-        .on('postgres_changes', { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'roleta_numeros' 
-        }, (payload) => {
-          console.log(`[REALTIME][${name}] Evento do Supabase recebido:`, payload);
-          
-          // Verificar se o novo número é para esta roleta
-          if (payload.new && payload.new.roleta_nome === name) {
-            const novoNumero = Number(payload.new.numero);
-            console.log(`[REALTIME][${name}] Novo número para esta roleta: ${novoNumero}`);
+      try {
+        // Teste de conexão com o Supabase
+        supabase.from('roleta_numeros').select('*', { count: 'exact' }).limit(1)
+          .then(response => {
+            console.log(`[REALTIME][${name}] Teste de conexão com Supabase:`, response);
+            if (response.error) {
+              console.error(`[REALTIME][${name}] Erro ao conectar com Supabase:`, response.error);
+            } else {
+              console.log(`[REALTIME][${name}] Conexão com Supabase OK. Total de registros:`, response.count);
+            }
+          });
+        
+        // Inscrever-se para atualizações na tabela roleta_numeros
+        console.log(`[REALTIME][${name}] Criando canal Realtime para roleta_numeros...`);
+        const subscription = supabase
+          .channel('roleta_numeros_changes')
+          .on('postgres_changes', { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'roleta_numeros' 
+          }, (payload) => {
+            console.log(`[REALTIME][${name}] Evento do Supabase recebido:`, payload);
             
-            // Atualizar o estado com o novo número
-            setLastNumbers(currentNumbers => {
-              // Verificar se é um número novo
-              if (currentNumbers.length === 0 || currentNumbers[0] !== novoNumero) {
-                console.log(`[REALTIME][${name}] Atualizando números com: ${novoNumero}`);
-                
-                // Salvar o número anterior
-                if (currentNumbers.length > 0) {
-                  setPreviousLastNumber(currentNumbers[0]);
+            // Verificar se o novo número é para esta roleta
+            if (payload.new && payload.new.roleta_nome === name) {
+              const novoNumero = Number(payload.new.numero);
+              console.log(`[REALTIME][${name}] Novo número para esta roleta: ${novoNumero}`);
+              
+              // Atualizar o estado com o novo número
+              setLastNumbers(currentNumbers => {
+                // Verificar se é um número novo
+                if (currentNumbers.length === 0 || currentNumbers[0] !== novoNumero) {
+                  console.log(`[REALTIME][${name}] Atualizando números com: ${novoNumero}`);
+                  
+                  // Salvar o número anterior
+                  if (currentNumbers.length > 0) {
+                    setPreviousLastNumber(currentNumbers[0]);
+                  }
+                  
+                  // Verificar estratégia para o novo número
+                  verificarEstrategia(novoNumero);
+                  
+                  // Criar o novo array de números
+                  const updatedNumbers = [novoNumero, ...currentNumbers.slice(0, 19)];
+                  
+                  toast({
+                    title: "Novo Número",
+                    description: `${novoNumero} (${name})`,
+                    variant: "default",
+                  });
+                  
+                  return updatedNumbers;
                 }
-                
-                // Verificar estratégia para o novo número
-                verificarEstrategia(novoNumero);
-                
-                // Criar o novo array de números
-                const updatedNumbers = [novoNumero, ...currentNumbers.slice(0, 19)];
-                
-                toast({
-                  title: "Novo Número",
-                  description: `${novoNumero} (${name})`,
-                  variant: "default",
-                });
-                
-                return updatedNumbers;
-              }
-              return currentNumbers;
-            });
-          }
-        })
-        .subscribe();
-      
-      // Guardar referência para limpar depois
-      supabaseSubscriptionRef.current = subscription;
-      console.log(`[REALTIME][${name}] Assinatura Realtime configurada com sucesso`);
+                return currentNumbers;
+              });
+            }
+          })
+          .subscribe((status) => {
+            console.log(`[REALTIME][${name}] Status da assinatura:`, status);
+          });
+        
+        // Guardar referência para limpar depois
+        supabaseSubscriptionRef.current = subscription;
+        console.log(`[REALTIME][${name}] Assinatura Realtime configurada com sucesso`);
+      } catch (error) {
+        console.error(`[REALTIME][${name}] Erro ao configurar Realtime:`, error);
+      }
     };
     
     // Configurar assinatura Realtime
