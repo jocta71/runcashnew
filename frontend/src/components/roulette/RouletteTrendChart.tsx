@@ -59,7 +59,7 @@ const RouletteTrendChart = ({ trend }: RouletteTrendChartProps) => {
   const avgValue = trend.reduce((sum, item) => sum + item.value, 0) / trend.length;
   
   return (
-    <div className="h-24 w-full">
+    <div className="h-20 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart 
           data={enhancedData}

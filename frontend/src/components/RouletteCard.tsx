@@ -491,7 +491,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
 
   return (
     <div 
-      className="bg-[#17161e]/90 backdrop-filter backdrop-blur-sm border border-white/10 rounded-xl p-4 space-y-3 animate-fade-in hover-scale cursor-pointer h-auto"
+      className="bg-[#17161e]/90 backdrop-filter backdrop-blur-sm border border-white/10 rounded-xl p-4 space-y-2 animate-fade-in hover-scale cursor-pointer h-auto max-h-[650px] overflow-hidden flex flex-col"
       onClick={handleDetailsClick}
     >
       <div className="flex items-center justify-end">
@@ -501,20 +501,28 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
           ) : (
             <span className="text-xs mr-2 text-yellow-400">Aguardando Supabase</span>
           )}
-          <TrendingUp size={20} className="text-[#00ff00]" />
+          <TrendingUp size={16} className="text-[#00ff00]" />
         </div>
       </div>
       
-      {memoizedNumbers}
-      {memoizedSuggestion}
-      {memoizedWinRate}
-      {memoizedTrendChart}
+      <div className="flex-shrink-0">
+        {memoizedNumbers}
+      </div>
+      <div className="flex-shrink-0">
+        {memoizedSuggestion}
+      </div>
+      <div className="flex-shrink-0">
+        {memoizedWinRate}
+      </div>
+      <div className="flex-shrink-0 h-20">
+        {memoizedTrendChart}
+      </div>
       
       {/* Insights Section - Versão redesenhada e simplificada */}
-      <div className="p-3 bg-[#1a1922] rounded-lg border border-[#00ff00]/20">
-        <div className="flex items-center justify-between mb-2">
-          <h4 className="text-sm font-medium text-white flex items-center">
-            <BarChart3 size={16} className="text-[#00ff00] mr-1.5" />
+      <div className="p-2 bg-[#1a1922] rounded-lg border border-[#00ff00]/20 flex-shrink-0">
+        <div className="flex items-center justify-between mb-1">
+          <h4 className="text-xs font-medium text-white flex items-center">
+            <BarChart3 size={14} className="text-[#00ff00] mr-1" />
             Análises Rápidas
           </h4>
           {!analyticsLoading && (
@@ -578,15 +586,15 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
           </div>
         </div>
         
-        <div className="grid grid-cols-3 gap-2 mb-3">
+        <div className="grid grid-cols-3 gap-2 mb-2">
           {/* Célula 1: Sequência Atual */}
-          <div className="bg-[#252431] p-2 rounded-lg flex flex-col justify-between">
-            <div className="flex items-center mb-1">
-              <History size={14} className="text-purple-400 mr-1.5" />
-              <span className="text-[10px] uppercase font-medium text-gray-400">Sequência</span>
+          <div className="bg-[#252431] p-1.5 rounded-lg flex flex-col justify-between">
+            <div className="flex items-center mb-0.5">
+              <History size={12} className="text-purple-400 mr-1" />
+              <span className="text-[9px] uppercase font-medium text-gray-400">Sequência</span>
             </div>
             <div className="text-right">
-              <span className="text-xs font-medium text-purple-400">
+              <span className="text-[10px] font-medium text-purple-400">
                 {!analyticsLoading && currentStreak.count > 0 
                   ? `${currentStreak.count}x ${currentStreak.value}`
                   : "---"}
@@ -595,13 +603,13 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
           </div>
           
           {/* Célula 2: Dúzia Ausente */}
-          <div className="bg-[#252431] p-2 rounded-lg flex flex-col justify-between">
-            <div className="flex items-center mb-1">
-              <Clock size={14} className="text-yellow-400 mr-1.5" />
-              <span className="text-[10px] uppercase font-medium text-gray-400">Dúzia</span>
+          <div className="bg-[#252431] p-1.5 rounded-lg flex flex-col justify-between">
+            <div className="flex items-center mb-0.5">
+              <Clock size={12} className="text-yellow-400 mr-1" />
+              <span className="text-[9px] uppercase font-medium text-gray-400">Dúzia</span>
             </div>
             <div className="text-right">
-              <span className="text-xs font-medium text-yellow-400">
+              <span className="text-[10px] font-medium text-yellow-400">
                 {!analyticsLoading && missingDozens.length > 0
                   ? `${missingDozens[0].dezena} (${missingDozens[0].ausencia}x)`
                   : "---"}
@@ -610,13 +618,13 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
           </div>
           
           {/* Célula 3: Recomendação */}
-          <div className="bg-[#252431] p-2 rounded-lg flex flex-col justify-between">
-            <div className="flex items-center mb-1">
-              <Star size={14} className="text-[#00ff00] mr-1.5" />
-              <span className="text-[10px] uppercase font-medium text-gray-400">Recomendação</span>
+          <div className="bg-[#252431] p-1.5 rounded-lg flex flex-col justify-between">
+            <div className="flex items-center mb-0.5">
+              <Star size={12} className="text-[#00ff00] mr-1" />
+              <span className="text-[9px] uppercase font-medium text-gray-400">Recomendação</span>
             </div>
             <div className="text-right">
-              <span className="text-xs font-medium text-[#00ff00]">
+              <span className="text-[10px] font-medium text-[#00ff00]">
                 {getColorName(lastNumbers[0] || 0).toUpperCase()}
               </span>
             </div>
