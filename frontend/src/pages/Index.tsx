@@ -112,17 +112,12 @@ const Index = () => {
     return (window as any).__REACT_COMPONENTS_FROZEN === true;
   };
   
-  // Verificar se estamos no modo de prevenção de recarregamento completo
-  const isPreventingFullReload = () => {
-    return (window as any).__PREVENT_FULL_RELOAD === true;
-  };
-  
   // Função para buscar roletas do banco de dados
   const fetchRoulettes = async () => {
     try {
-      // Se estamos no modo de prevenção de recarregamento completo, usar apenas dados em cache
-      if (isPreventingFullReload() && roulettes.length > 0) {
-        console.log('[MODO] Modo de atualização contínua ativo, mantendo dados atuais');
+      // Se os componentes estão congelados, usar apenas dados em cache
+      if (areComponentsFrozen() && roulettes.length > 0) {
+        console.log('[FREEZE] Componentes congelados, mantendo dados em cache');
         setIsLoading(false);
         setLoaded(true);
         return;
@@ -247,9 +242,9 @@ const Index = () => {
   
   // Efeito para carregar dados quando o componente montar
   useEffect(() => {
-    // Se estamos no modo de prevenção de recarregamento completo, manter apenas o estado atual
-    if (isPreventingFullReload() && roulettes.length > 0) {
-      console.log('[MODO] Index: Modo de atualização contínua ativo, mantendo dados atuais');
+    // Se os componentes estão congelados, não fazer nada além de usar o estado atual
+    if (areComponentsFrozen() && roulettes.length > 0) {
+      console.log('[FREEZE] Index: Componentes congelados, mantendo estado atual com', roulettes.length, 'roletas');
       setIsLoading(false);
       setLoaded(true);
       return;
@@ -432,9 +427,9 @@ const Index = () => {
     const handleReturnToPage = (event: any) => {
       console.log('[EVENTO] Index: Retorno à página detectado');
       
-      // Se estamos no modo de prevenção de recarregamento completo, manter apenas o estado atual
-      if (isPreventingFullReload()) {
-        console.log('[MODO] Index: Modo de atualização contínua ativo, mantendo interface estática');
+      // Se os componentes estão congelados, não fazer nada
+      if (areComponentsFrozen()) {
+        console.log('[EVENTO] Index: Componentes congelados, mantendo estado atual');
         
         // Garantir que a UI não mostre carregamento
         setIsLoading(false);
@@ -462,36 +457,14 @@ const Index = () => {
       }
     };
     
-    // Função para configurar manipulador para evento de saída da página
-    const handleLeavingPage = () => {
-      console.log('[EVENTO] Index: Saindo da página');
-      // Salvar dados no sessionStorage para garantir persistência
-      try {
-        sessionStorage.setItem('roulettes_state', JSON.stringify(roulettes));
-        console.log('[PERSISTÊNCIA] Estado salvo antes de sair:', roulettes.length);
-      } catch (error) {
-        console.error('[PERSISTÊNCIA] Erro ao salvar estado:', error);
-      }
-    };
-    
-    // Registrar manipuladores para os eventos personalizados
+    // Registrar manipulador para o evento personalizado
     window.addEventListener('app:returned-to-page', handleReturnToPage);
-    window.addEventListener('app:leaving-page', handleLeavingPage);
     
     // Limpar quando o componente desmontar
     return () => {
       window.removeEventListener('app:returned-to-page', handleReturnToPage);
-      window.removeEventListener('app:leaving-page', handleLeavingPage);
-      
-      // Salvar dados no sessionStorage para garantir persistência
-      try {
-        sessionStorage.setItem('roulettes_state', JSON.stringify(roulettes));
-        console.log('[PERSISTÊNCIA] Estado salvo ao desmontar:', roulettes.length);
-      } catch (error) {
-        console.error('[PERSISTÊNCIA] Erro ao salvar estado:', error);
-      }
     };
-  }, [roulettes, safeRoulettes.length]);
+  }, [roulettes]);
 
   return (
     <div className="min-h-screen flex bg-vegas-black">
@@ -586,25 +559,31 @@ const Index = () => {
           </div>
         </div>
         
-        <main className="pt-4 md:pt-[70px] pb-8 px-4 md:px-6 md:pl-[280px] md:pr-[340px] w-full min-h-screen bg-[#100f13]">
-          <>
-            <div className="mb-6 bg-gradient-to-r from-vegas-gold to-yellow-500 p-4 rounded-lg">
-              <h3 className="text-black font-bold mb-2">Atualize para o Plano Premium</h3>
-              <p className="text-black/80 mb-3">Acesse estatísticas em tempo real e muito mais!</p>
-              <button 
-                className="bg-black text-white px-4 py-2 rounded-md text-sm"
-                onClick={() => navigate('/planos')}
-              >
-                Ver Planos
-              </button>
+        <main className="pt-4 md:pt-[70px] pb-8 px-4 md:px-6 md:pl-[260px] md:pr-[260px] lg:pl-[240px] lg:pr-[240px] w-full min-h-screen bg-[#100f13]">
+          {isLoading ? (
+            <div className="flex justify-center items-center h-[200px]">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-vegas-gold"></div>
             </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mt-2 md:mt-6">
-              {filteredRoulettes.map((roulette, index) => (
-                <RouletteCard key={index} {...roulette} />
-              ))}
-            </div>
-          </>
+          ) : (
+            <>
+              <div className="mb-6 bg-gradient-to-r from-vegas-gold to-yellow-500 p-4 rounded-lg">
+                <h3 className="text-black font-bold mb-2">Atualize para o Plano Premium</h3>
+                <p className="text-black/80 mb-3">Acesse estatísticas em tempo real e muito mais!</p>
+                <button 
+                  className="bg-black text-white px-4 py-2 rounded-md text-sm"
+                  onClick={() => navigate('/planos')}
+                >
+                  Ver Planos
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-2 md:mt-4">
+                {filteredRoulettes.map((roulette, index) => (
+                  <RouletteCard key={index} {...roulette} />
+                ))}
+              </div>
+            </>
+          )}
           
           {/* Mobile Footer Space (to avoid content being hidden behind fixed elements) */}
           <div className="h-16 md:h-0"></div>
