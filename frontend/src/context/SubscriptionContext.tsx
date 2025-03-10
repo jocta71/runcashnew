@@ -101,91 +101,35 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Função para carregar a assinatura do usuário do Supabase
   const loadUserSubscription = async () => {
-    if (!user) {
-      setCurrentSubscription(null);
-      setCurrentPlan(availablePlans.find(plan => plan.type === PlanType.FREE) || null);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // Buscar a assinatura do usuário no Supabase
-      const { data, error } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .single();
-
-      if (error) {
-        // Log detalhado do erro para facilitar a depuração
-        console.error('Erro ao carregar assinatura:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
-          fullError: JSON.stringify(error, null, 2)
-        });
-        
-        // Mostrar um toast de erro apenas se não for o erro "not found" 
-        // (que é esperado para usuários sem assinatura)
-        if (error.code !== 'PGRST116') {
-          toast({
-            title: "Erro ao carregar assinatura",
-            description: `Detalhes: ${error.message || 'Erro desconhecido'}`,
-            variant: "destructive",
-          });
-        }
-        
-        // Se não encontrar assinatura, definir o plano gratuito como padrão
-        setCurrentSubscription(null);
-        setCurrentPlan(availablePlans.find(plan => plan.type === PlanType.FREE) || null);
-      } else if (data) {
-        // Converter dados do banco para o formato da interface
-        const subscription: UserSubscription = {
-          id: data.id,
-          userId: data.user_id,
-          planId: data.plan_id,
-          planType: data.plan_type as PlanType,
-          startDate: new Date(data.start_date),
-          endDate: data.end_date ? new Date(data.end_date) : null,
-          status: data.status,
-          paymentMethod: data.payment_method,
-          nextBillingDate: data.next_billing_date ? new Date(data.next_billing_date) : undefined
-        };
-        
-        setCurrentSubscription(subscription);
-        
-        // Encontrar o plano correspondente
-        const plan = availablePlans.find(p => p.id === subscription.planId);
-        setCurrentPlan(plan || availablePlans.find(p => p.type === PlanType.FREE) || null);
-      } else {
-        // Se não encontrar assinatura, definir o plano gratuito como padrão
-        setCurrentSubscription(null);
-        setCurrentPlan(availablePlans.find(plan => plan.type === PlanType.FREE) || null);
-      }
-    } catch (err) {
-      // Log detalhado do erro
-      console.error('Erro ao carregar dados da assinatura:', {
-        erro: err,
-        mensagem: err instanceof Error ? err.message : 'Erro desconhecido',
-        stack: err instanceof Error ? err.stack : undefined
-      });
+    // MODO TEMPORÁRIO: Sempre definir o plano gratuito para todos os usuários
+    // Isso é uma solução temporária enquanto a tabela de assinaturas não está configurada
+    
+    // Encontrar o plano gratuito
+    const freePlan = availablePlans.find(plan => plan.type === PlanType.FREE);
+    
+    // Se o usuário estiver logado, criar uma assinatura simulada
+    if (user) {
+      const mockSubscription: UserSubscription = {
+        id: `temp-${user.id}`,
+        userId: user.id,
+        planId: 'free',
+        planType: PlanType.FREE,
+        startDate: new Date(),
+        endDate: null,
+        status: 'active',
+      };
       
-      // Notificar o usuário
-      toast({
-        title: "Falha ao verificar assinatura",
-        description: "Ocorreu um erro ao verificar seu plano. Usando plano gratuito como fallback.",
-        variant: "destructive",
-      });
-      
-      // Em caso de erro, definir o plano gratuito como padrão
+      setCurrentSubscription(mockSubscription);
+    } else {
       setCurrentSubscription(null);
-      setCurrentPlan(availablePlans.find(plan => plan.type === PlanType.FREE) || null);
-    } finally {
-      setLoading(false);
     }
+    
+    // Definir o plano gratuito para todos
+    setCurrentPlan(freePlan || null);
+    setLoading(false);
+    
+    // Log para indicar que estamos usando o modo temporário
+    console.log('[ASSINATURA] Modo temporário ativado: todos os usuários têm plano gratuito');
   };
 
   // Carregar assinatura quando o usuário mudar
@@ -199,7 +143,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return currentPlan.allowedFeatures.includes(featureId);
   };
 
-  // Função para atualizar o plano usando Stripe
+  // Função para atualizar o plano - MODO TEMPORÁRIO
   const upgradePlan = async (planId: string): Promise<void> => {
     if (!user) {
       toast({
@@ -218,62 +162,20 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         throw new Error("Plano não encontrado");
       }
 
-      // Para o plano gratuito, atualizar diretamente sem pagamento
-      if (selectedPlan.type === PlanType.FREE) {
-        // Verificar se já existe uma assinatura ativa
-        if (currentSubscription) {
-          // Atualizar assinatura existente
-          const { error } = await supabase
-            .from('subscriptions')
-            .update({
-              plan_id: selectedPlan.id,
-              plan_type: selectedPlan.type,
-              status: 'active',
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', currentSubscription.id);
+      // MODO TEMPORÁRIO: Exibir mensagem explicando a situação
+      toast({
+        title: "Funcionalidade temporariamente indisponível",
+        description: "O sistema de assinaturas está em manutenção. Por enquanto, todos os usuários têm acesso ao plano gratuito.",
+        duration: 5000,
+      });
 
-          if (error) throw error;
-        } else {
-          // Criar nova assinatura
-          const { error } = await supabase
-            .from('subscriptions')
-            .insert({
-              user_id: user.id,
-              plan_id: selectedPlan.id,
-              plan_type: selectedPlan.type,
-              start_date: new Date().toISOString(),
-              status: 'active'
-            });
+      // Simular um pequeno atraso para feedback visual
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-          if (error) throw error;
-        }
-
-        // Atualizar estado local
-        const newSubscription: UserSubscription = {
-          id: currentSubscription?.id || `sub_${Date.now()}`,
-          userId: user.id,
-          planId: selectedPlan.id,
-          planType: selectedPlan.type,
-          startDate: new Date(),
-          endDate: null,
-          status: 'active'
-        };
-
-        setCurrentSubscription(newSubscription);
-        setCurrentPlan(selectedPlan);
-
-        toast({
-          title: "Plano atualizado com sucesso",
-          description: `Seu plano foi atualizado para ${selectedPlan.name}.`,
-        });
-        
-        return;
-      }
-
-      // Para planos pagos, redirecionar para o checkout do Stripe via backend
-      const checkoutUrl = await createCheckoutSession(planId, user.id);
-      window.location.href = checkoutUrl;
+      // Definir plano localmente (apenas para interface, sem persistência)
+      // No modo temporário, sempre voltamos para o plano gratuito
+      const freePlan = availablePlans.find(plan => plan.type === PlanType.FREE);
+      setCurrentPlan(freePlan || null);
     } catch (error) {
       console.error('Erro ao atualizar plano:', error);
       toast({
@@ -286,12 +188,12 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
-  // Função para cancelar a assinatura
+  // Função para cancelar assinatura - MODO TEMPORÁRIO
   const cancelSubscription = async (): Promise<void> => {
-    if (!user || !currentSubscription) {
+    if (!user) {
       toast({
         title: "Erro ao cancelar assinatura",
-        description: "Você não possui uma assinatura ativa para cancelar.",
+        description: "Você precisa estar logado para realizar esta ação.",
         variant: "destructive"
       });
       return;
@@ -299,27 +201,17 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     setLoading(true);
     try {
-      // Atualizar status da assinatura para cancelado
-      const { error } = await supabase
-        .from('subscriptions')
-        .update({
-          status: 'canceled',
-          end_date: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', currentSubscription.id);
-
-      if (error) throw error;
-
-      // Atualizar estado local
-      const freePlan = availablePlans.find(plan => plan.type === PlanType.FREE);
-      setCurrentSubscription(null);
-      setCurrentPlan(freePlan || null);
-
+      // MODO TEMPORÁRIO: Exibir mensagem explicando a situação
       toast({
-        title: "Assinatura cancelada",
-        description: "Sua assinatura foi cancelada com sucesso. Você agora está no plano gratuito.",
+        title: "Funcionalidade temporariamente indisponível",
+        description: "O sistema de assinaturas está em manutenção. Por enquanto, todos os usuários têm acesso ao plano gratuito.",
+        duration: 5000,
       });
+
+      // Simular um pequeno atraso para feedback visual
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // No modo temporário, não fazemos nada realmente, pois todos estão no plano gratuito
     } catch (error) {
       console.error('Erro ao cancelar assinatura:', error);
       toast({
