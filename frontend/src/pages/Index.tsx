@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Search, Wallet, Menu, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '@/components/Sidebar';
@@ -201,10 +201,26 @@ const Index = () => {
     const currentTime = Date.now();
     const cacheExpiration = 5 * 60 * 1000; // 5 minutos
     
+    // Verificar se o componente está remontando após navegação ou perda de foco
+    const isRevisit = sessionStorage.getItem('index_component_visited') === 'true';
+    
     // Se os dados foram carregados recentemente e temos roletas disponíveis, não carrega novamente
-    if (alreadyLoaded && currentTime - parseInt(alreadyLoaded) < cacheExpiration && safeRoulettes.length > 0) {
+    if (alreadyLoaded && 
+        currentTime - parseInt(alreadyLoaded) < cacheExpiration && 
+        safeRoulettes.length > 0) {
       console.log('[CACHE] Usando dados em cache, último carregamento há', 
         Math.round((currentTime - parseInt(alreadyLoaded)) / 1000), 'segundos');
+      setIsLoading(false);
+      setLoaded(true);
+      
+      // Registrar que a página já foi visitada
+      sessionStorage.setItem('index_component_visited', 'true');
+      return;
+    }
+    
+    // Se estamos revisitando a página (após navegação) e temos dados
+    if (isRevisit && safeRoulettes.length > 0) {
+      console.log('[OTIMIZAÇÃO] Mantendo dados existentes após revisita da página');
       setIsLoading(false);
       setLoaded(true);
       return;
@@ -215,24 +231,66 @@ const Index = () => {
     fetchRoulettes().then(() => {
       // Salvar timestamp do carregamento
       localStorage.setItem('data_loaded_timestamp', Date.now().toString());
+      // Registrar que a página já foi visitada
+      sessionStorage.setItem('index_component_visited', 'true');
     });
     
-    // Não precisamos mais fazer polling, pois agora recebemos eventos em tempo real
-    // O EventService já foi inicializado e cada RouletteCard se inscreveu para receber atualizações específicas
+    // Adicionar manipulador para visibilidade da página
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[VISIBILIDADE] Página visível novamente, verificando necessidade de atualização');
+        
+        // Verificar se faz muito tempo desde a última atualização
+        const lastUpdate = localStorage.getItem('data_loaded_timestamp');
+        if (lastUpdate) {
+          const timeSinceUpdate = Date.now() - parseInt(lastUpdate);
+          const updateThreshold = 10 * 60 * 1000; // 10 minutos
+          
+          // Se passou muito tempo, atualizar em segundo plano
+          if (timeSinceUpdate > updateThreshold) {
+            console.log('[ATUALIZAÇÃO] Dados muito antigos, atualizando em segundo plano');
+            fetchRoulettes().then(() => {
+              localStorage.setItem('data_loaded_timestamp', Date.now().toString());
+            });
+          }
+        }
+      }
+    };
+    
+    // Registrar manipulador de visibilidade
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Remover manipulador ao desmontar
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
   
+  // Memoizar o valor de safeRoulettes para evitar recálculos
   // Verificar que roulettes existe e é um array
-  const safeRoulettes = Array.isArray(roulettes) ? roulettes : [];
-  console.log("[DEBUG] Roletas após processamento:", {
-    totalRoulettes: safeRoulettes.length,
-    rouletteNames: safeRoulettes.map(r => r.name),
-    isLoading: isLoading,
-    filterQuery: search
-  });
+  const safeRoulettes = useMemo(() => {
+    return Array.isArray(roulettes) ? roulettes : [];
+  }, [roulettes]);
   
-  const filteredRoulettes = safeRoulettes.filter(roulette => 
-    roulette.name.toLowerCase().includes(search.toLowerCase())
-  );
+  // Reduzir logs para evitar poluição do console
+  const shouldLog = useRef(true);
+  
+  if (shouldLog.current) {
+    console.log("[DEBUG] Roletas após processamento:", {
+      totalRoulettes: safeRoulettes.length,
+      rouletteNames: safeRoulettes.map(r => r.name),
+      isLoading: isLoading,
+      filterQuery: search
+    });
+    shouldLog.current = false;
+  }
+  
+  // Memoizar resultados filtrados para evitar recálculos
+  const filteredRoulettes = useMemo(() => {
+    return safeRoulettes.filter(roulette => 
+      roulette.name.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [safeRoulettes, search]);
   
   const topRoulettes = useMemo(() => {
     if (safeRoulettes.length === 0) return [];
