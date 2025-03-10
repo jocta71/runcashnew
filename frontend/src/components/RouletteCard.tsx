@@ -514,87 +514,87 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       <div className="flex-shrink-0">
         {memoizedWinRate}
       </div>
-      <div className="flex-shrink-0 h-20">
+      <div className="flex-shrink-0 h-16">
         {memoizedTrendChart}
       </div>
       
       {/* Insights Section - Versão redesenhada e simplificada */}
-      <div className="p-2 bg-[#1a1922] rounded-lg border border-[#00ff00]/20 flex-shrink-0">
-        <div className="flex items-center justify-between mb-1">
-          <h4 className="text-xs font-medium text-white flex items-center">
-            <BarChart3 size={14} className="text-[#00ff00] mr-1" />
+      <div className="p-1.5 bg-[#1a1922] rounded-lg border border-[#00ff00]/20 flex-shrink-0">
+        <div className="flex items-center justify-between mb-0.5">
+          <h4 className="text-[10px] font-medium text-white flex items-center">
+            <BarChart3 size={12} className="text-[#00ff00] mr-1" />
             Análises Rápidas
           </h4>
           {!analyticsLoading && (
-            <span className="text-xs text-gray-400 bg-[#252431] px-2 py-0.5 rounded-full">
+            <span className="text-[9px] text-gray-400 bg-[#252431] px-1.5 py-0.5 rounded-full">
               {lastNumbers.length} jogadas
             </span>
           )}
         </div>
         
-        <div className="grid grid-cols-2 gap-2 mb-3">
+        <div className="grid grid-cols-2 gap-1.5 mb-2">
           {/* Mini-card 1: Distribuição de cores */}
-          <div className="p-2 bg-[#252431] rounded-lg">
-            <div className="flex items-center mb-1.5">
-              <PieChart size={14} className="text-[#00ff00] mr-1" />
-              <span className="text-[10px] uppercase font-medium text-gray-400">Cores</span>
+          <div className="p-1.5 bg-[#252431] rounded-lg">
+            <div className="flex items-center mb-1">
+              <PieChart size={12} className="text-[#00ff00] mr-1" />
+              <span className="text-[9px] uppercase font-medium text-gray-400">Cores</span>
             </div>
             
             {!analyticsLoading && colorDistribution.length > 0 ? (
-              <div className="flex space-x-1">
+              <div className="flex space-x-0.5">
                 {colorDistribution.map((item, idx) => (
                   <div 
                     key={idx} 
-                    className="flex-1 h-5 rounded-sm flex items-center justify-center"
+                    className="flex-1 h-4 rounded-sm flex items-center justify-center"
                     style={{
                       backgroundColor: item.cor === 'vermelho' ? '#ef4444' : 
                                       item.cor === 'preto' ? '#1e1e1e' : '#10b981',
                       opacity: 0.7 + (item.porcentagem / 100) * 0.3
                     }}
                   >
-                    <span className="text-[10px] font-bold text-white">
+                    <span className="text-[8px] font-bold text-white">
                       {Math.round(item.porcentagem)}%
                     </span>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="h-5 bg-gray-700/30 rounded-sm animate-pulse"></div>
+              <div className="h-4 bg-gray-700/30 rounded-sm animate-pulse"></div>
             )}
           </div>
           
           {/* Mini-card 2: Taxa de Acerto */}
-          <div className="p-2 bg-[#252431] rounded-lg">
-            <div className="flex items-center mb-1.5">
-              <Target size={14} className="text-[#00ff00] mr-1" />
-              <span className="text-[10px] uppercase font-medium text-gray-400">Acertos</span>
+          <div className="p-1.5 bg-[#252431] rounded-lg">
+            <div className="flex items-center mb-1">
+              <Target size={12} className="text-[#00ff00] mr-1" />
+              <span className="text-[9px] uppercase font-medium text-gray-400">Acertos</span>
             </div>
             
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1">
               <div 
-                className="flex-1 h-5 bg-gray-700/30 rounded-sm overflow-hidden"
+                className="flex-1 h-4 bg-gray-700/30 rounded-sm overflow-hidden"
               >
                 <div 
                   className="h-full bg-gradient-to-r from-blue-500 to-[#00ff00]"
                   style={{ width: `${Math.min(100, Math.max(1, ((wins / (wins + losses)) * 100)))}%` }}
                 ></div>
               </div>
-              <span className="text-sm font-bold text-[#00ff00]">
+              <span className="text-[9px] font-bold text-[#00ff00]">
                 {((wins / (wins + losses)) * 100).toFixed(0)}%
               </span>
             </div>
           </div>
         </div>
         
-        <div className="grid grid-cols-3 gap-2 mb-2">
+        <div className="grid grid-cols-3 gap-1.5 mb-1">
           {/* Célula 1: Sequência Atual */}
-          <div className="bg-[#252431] p-1.5 rounded-lg flex flex-col justify-between">
+          <div className="bg-[#252431] p-1 rounded-lg flex flex-col justify-between">
             <div className="flex items-center mb-0.5">
-              <History size={12} className="text-purple-400 mr-1" />
-              <span className="text-[9px] uppercase font-medium text-gray-400">Sequência</span>
+              <History size={10} className="text-purple-400 mr-0.5" />
+              <span className="text-[8px] uppercase font-medium text-gray-400">Sequência</span>
             </div>
             <div className="text-right">
-              <span className="text-[10px] font-medium text-purple-400">
+              <span className="text-[9px] font-medium text-purple-400">
                 {!analyticsLoading && currentStreak.count > 0 
                   ? `${currentStreak.count}x ${currentStreak.value}`
                   : "---"}
@@ -603,13 +603,13 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
           </div>
           
           {/* Célula 2: Dúzia Ausente */}
-          <div className="bg-[#252431] p-1.5 rounded-lg flex flex-col justify-between">
+          <div className="bg-[#252431] p-1 rounded-lg flex flex-col justify-between">
             <div className="flex items-center mb-0.5">
-              <Clock size={12} className="text-yellow-400 mr-1" />
-              <span className="text-[9px] uppercase font-medium text-gray-400">Dúzia</span>
+              <Clock size={10} className="text-yellow-400 mr-0.5" />
+              <span className="text-[8px] uppercase font-medium text-gray-400">Dúzia</span>
             </div>
             <div className="text-right">
-              <span className="text-[10px] font-medium text-yellow-400">
+              <span className="text-[9px] font-medium text-yellow-400">
                 {!analyticsLoading && missingDozens.length > 0
                   ? `${missingDozens[0].dezena} (${missingDozens[0].ausencia}x)`
                   : "---"}
@@ -618,13 +618,13 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
           </div>
           
           {/* Célula 3: Recomendação */}
-          <div className="bg-[#252431] p-1.5 rounded-lg flex flex-col justify-between">
+          <div className="bg-[#252431] p-1 rounded-lg flex flex-col justify-between">
             <div className="flex items-center mb-0.5">
-              <Star size={12} className="text-[#00ff00] mr-1" />
-              <span className="text-[9px] uppercase font-medium text-gray-400">Recomendação</span>
+              <Star size={10} className="text-[#00ff00] mr-0.5" />
+              <span className="text-[8px] uppercase font-medium text-gray-400">Recomendação</span>
             </div>
             <div className="text-right">
-              <span className="text-[10px] font-medium text-[#00ff00]">
+              <span className="text-[9px] font-medium text-[#00ff00]">
                 {getColorName(lastNumbers[0] || 0).toUpperCase()}
               </span>
             </div>

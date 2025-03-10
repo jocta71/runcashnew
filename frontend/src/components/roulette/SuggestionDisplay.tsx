@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { WandSparkles, Eye, EyeOff } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -26,12 +25,12 @@ const SuggestionDisplay = ({
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <WandSparkles size={18} className="text-[#00ff00]" />
-          <span className="text-sm text-[#00ff00] font-medium">Sugestão de Jogada</span>
-          <span className="text-xs text-[#00ff00]/70">({numberGroups[selectedGroup as keyof typeof numberGroups].name})</span>
+        <div className="flex items-center gap-1">
+          <WandSparkles size={14} className="text-[#00ff00]" />
+          <span className="text-[10px] text-[#00ff00] font-medium">Sugestão de Jogada</span>
+          <span className="text-[9px] text-[#00ff00]/70">({numberGroups[selectedGroup as keyof typeof numberGroups].name})</span>
         </div>
         <TooltipProvider>
           <Tooltip>
@@ -40,7 +39,7 @@ const SuggestionDisplay = ({
                 onClick={toggleVisibility} 
                 className="text-[#00ff00] hover:text-[#00ff00]/80 transition-colors"
               >
-                {isBlurred ? <EyeOff size={18} /> : <Eye size={18} />}
+                {isBlurred ? <EyeOff size={14} /> : <Eye size={14} />}
               </button>
             </TooltipTrigger>
             <TooltipContent>
@@ -49,7 +48,7 @@ const SuggestionDisplay = ({
           </Tooltip>
         </TooltipProvider>
       </div>
-      <div className="flex gap-2">
+      <div className="flex gap-1">
         {suggestion.map((num, i) => (
           <RouletteNumber
             key={i}
