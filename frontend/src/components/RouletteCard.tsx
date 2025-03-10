@@ -45,35 +45,44 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
   const ENABLE_POLLING = false; // Desativado por padrão
   const POLLING_INTERVAL = 15000; // 15 segundos
 
+  // Verificar se o nome da roleta é válido
+  const roletaNome = name || "Roleta Desconhecida";
+  console.log(`[DEPURAÇÃO][${roletaNome}] Renderizando card com dados:`, { 
+    name: roletaNome, 
+    initialNumbersLength: initialLastNumbers?.length || 0,
+    wins, 
+    losses 
+  });
+
   useEffect(() => {
-    console.log(`[DEPURAÇÃO][${name}] Inicializando componente RouletteCard`);
+    console.log(`[DEPURAÇÃO][${roletaNome}] Inicializando componente RouletteCard`);
     
     const checkAndSeedData = async () => {
       try {
-        console.log(`[DEPURAÇÃO][${name}] Buscando dados iniciais no Supabase...`);
+        console.log(`[DEPURAÇÃO][${roletaNome}] Buscando dados iniciais no Supabase...`);
         setIsLoading(true);
         
         // Buscar números iniciais do Supabase
-        console.log(`[DEPURAÇÃO][${name}] Chamando fetchRouletteLatestNumbersByName...`);
-        const numbers = await fetchRouletteLatestNumbersByName(name, 20);
+        console.log(`[DEPURAÇÃO][${roletaNome}] Chamando fetchRouletteLatestNumbersByName...`);
+        const numbers = await fetchRouletteLatestNumbersByName(roletaNome, 20);
         
-        console.log(`[DEPURAÇÃO][${name}] Números recebidos:`, numbers);
+        console.log(`[DEPURAÇÃO][${roletaNome}] Números recebidos:`, numbers);
         
         if (numbers && numbers.length > 0) {
           setLastNumbers(numbers.map(n => Number(n)));
           setDataSeeded(true);
           setUsingSupabaseData(true);
           setIsLoading(false);
-          console.log(`[DEPURAÇÃO][${name}] Dados carregados com sucesso do Supabase`);
+          console.log(`[DEPURAÇÃO][${roletaNome}] Dados carregados com sucesso do Supabase`);
         } else {
-          console.log(`[DEPURAÇÃO][${name}] Nenhum dado encontrado no Supabase, usando dados iniciais`);
+          console.log(`[DEPURAÇÃO][${roletaNome}] Nenhum dado encontrado no Supabase, usando dados iniciais`);
           setLastNumbers(initialLastNumbers || []);
           setDataSeeded(true);
           setUsingSupabaseData(false);
           setIsLoading(false);
         }
       } catch (error) {
-        console.error(`[ERRO][${name}] Erro ao buscar dados:`, error);
+        console.error(`[ERRO][${roletaNome}] Erro ao buscar dados:`, error);
         setLastNumbers(initialLastNumbers || []);
         setDataSeeded(true);
         setUsingSupabaseData(false);
@@ -87,11 +96,11 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     const startPolling = () => {
       // Verificar se o polling está habilitado
       if (!ENABLE_POLLING) {
-        console.log(`[POLLING][${name}] Polling desativado por configuração`);
+        console.log(`[POLLING][${roletaNome}] Polling desativado por configuração`);
         return;
       }
       
-      console.log(`[POLLING][${name}] Iniciando polling como fallback para SSE`);
+      console.log(`[POLLING][${roletaNome}] Iniciando polling como fallback para SSE`);
       
       // Limpar intervalo anterior se existir
       if (pollingIntervalRef.current) {
@@ -101,8 +110,8 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       // Criar novo intervalo de polling
       pollingIntervalRef.current = window.setInterval(async () => {
         try {
-          console.log(`[POLLING][${name}] Verificando novos números...`);
-          const latestNumbers = await fetchRouletteLatestNumbersByName(name, 1);
+          console.log(`[POLLING][${roletaNome}] Verificando novos números...`);
+          const latestNumbers = await fetchRouletteLatestNumbersByName(roletaNome, 1);
           
           if (latestNumbers && latestNumbers.length > 0) {
             const latestNumber = Number(latestNumbers[0]);
@@ -110,7 +119,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
             // Comparar com o número atual
             setLastNumbers(currentNumbers => {
               if (currentNumbers.length === 0 || currentNumbers[0] !== latestNumber) {
-                console.log(`[POLLING][${name}] Novo número encontrado via polling: ${latestNumber}`);
+                console.log(`[POLLING][${roletaNome}] Novo número encontrado via polling: ${latestNumber}`);
                 
                 // Salvar o número anterior
                 if (currentNumbers.length > 0) {
@@ -125,7 +134,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
                 
                 toast({
                   title: "Novo Número (via Polling)",
-                  description: `${latestNumber} (${name})`,
+                  description: `${latestNumber} (${roletaNome})`,
                   variant: "default",
                 });
                 
@@ -135,7 +144,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
             });
           }
         } catch (error) {
-          console.error(`[POLLING][${name}] Erro ao buscar novos números:`, error);
+          console.error(`[POLLING][${roletaNome}] Erro ao buscar novos números:`, error);
         }
       }, POLLING_INTERVAL);
     };
@@ -145,23 +154,23 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     
     // Configurar assinatura do Supabase Realtime para a tabela roleta_numeros
     const setupRealtimeSubscription = () => {
-      console.log(`[REALTIME][${name}] Configurando assinatura do Supabase Realtime...`);
-      console.log(`[REALTIME][${name}] URL do Supabase:`, supabase.getUrl());
+      console.log(`[REALTIME][${roletaNome}] Configurando assinatura do Supabase Realtime...`);
+      console.log(`[REALTIME][${roletaNome}] URL do Supabase:`, supabase.getUrl());
       
       try {
         // Teste de conexão com o Supabase
         supabase.from('roleta_numeros').select('*', { count: 'exact' }).limit(1)
           .then(response => {
-            console.log(`[REALTIME][${name}] Teste de conexão com Supabase:`, response);
+            console.log(`[REALTIME][${roletaNome}] Teste de conexão com Supabase:`, response);
             if (response.error) {
-              console.error(`[REALTIME][${name}] Erro ao conectar com Supabase:`, response.error);
+              console.error(`[REALTIME][${roletaNome}] Erro ao conectar com Supabase:`, response.error);
             } else {
-              console.log(`[REALTIME][${name}] Conexão com Supabase OK. Total de registros:`, response.count);
+              console.log(`[REALTIME][${roletaNome}] Conexão com Supabase OK. Total de registros:`, response.count);
             }
           });
         
         // Inscrever-se para atualizações na tabela roleta_numeros
-        console.log(`[REALTIME][${name}] Criando canal Realtime para roleta_numeros...`);
+        console.log(`[REALTIME][${roletaNome}] Criando canal Realtime para roleta_numeros...`);
         const subscription = supabase
           .channel('roleta_numeros_changes')
           .on('postgres_changes', { 
@@ -169,18 +178,18 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
             schema: 'public', 
             table: 'roleta_numeros' 
           }, (payload) => {
-            console.log(`[REALTIME][${name}] Evento do Supabase recebido:`, payload);
+            console.log(`[REALTIME][${roletaNome}] Evento do Supabase recebido:`, payload);
             
             // Verificar se o novo número é para esta roleta
-            if (payload.new && payload.new.roleta_nome === name) {
+            if (payload.new && payload.new.roleta_nome === roletaNome) {
               const novoNumero = Number(payload.new.numero);
-              console.log(`[REALTIME][${name}] Novo número para esta roleta: ${novoNumero}`);
+              console.log(`[REALTIME][${roletaNome}] Novo número para esta roleta: ${novoNumero}`);
               
               // Atualizar o estado com o novo número
               setLastNumbers(currentNumbers => {
                 // Verificar se é um número novo
                 if (currentNumbers.length === 0 || currentNumbers[0] !== novoNumero) {
-                  console.log(`[REALTIME][${name}] Atualizando números com: ${novoNumero}`);
+                  console.log(`[REALTIME][${roletaNome}] Atualizando números com: ${novoNumero}`);
                   
                   // Salvar o número anterior
                   if (currentNumbers.length > 0) {
@@ -195,7 +204,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
                   
                   toast({
                     title: "Novo Número",
-                    description: `${novoNumero} (${name})`,
+                    description: `${novoNumero} (${roletaNome})`,
                     variant: "default",
                   });
                   
@@ -206,14 +215,14 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
             }
           })
           .subscribe((status) => {
-            console.log(`[REALTIME][${name}] Status da assinatura:`, status);
+            console.log(`[REALTIME][${roletaNome}] Status da assinatura:`, status);
           });
         
         // Guardar referência para limpar depois
         supabaseSubscriptionRef.current = subscription;
-        console.log(`[REALTIME][${name}] Assinatura Realtime configurada com sucesso`);
+        console.log(`[REALTIME][${roletaNome}] Assinatura Realtime configurada com sucesso`);
       } catch (error) {
-        console.error(`[REALTIME][${name}] Erro ao configurar Realtime:`, error);
+        console.error(`[REALTIME][${roletaNome}] Erro ao configurar Realtime:`, error);
       }
     };
     
@@ -221,7 +230,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     setupRealtimeSubscription();
     
     return () => {
-      console.log(`[DEPURAÇÃO][${name}] Desmontando componente RouletteCard`);
+      console.log(`[DEPURAÇÃO][${roletaNome}] Desmontando componente RouletteCard`);
       
       // Limpar intervalo de polling quando o componente for desmontado
       if (pollingIntervalRef.current) {
@@ -231,16 +240,16 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       
       // Limpar assinatura do Supabase Realtime
       if (supabaseSubscriptionRef.current) {
-        console.log(`[REALTIME][${name}] Removendo assinatura do Supabase Realtime`);
+        console.log(`[REALTIME][${roletaNome}] Removendo assinatura do Supabase Realtime`);
         supabase.removeChannel(supabaseSubscriptionRef.current);
         supabaseSubscriptionRef.current = null;
       }
     };
-  }, [name, initialLastNumbers]);
+  }, [roletaNome, initialLastNumbers]);
 
   const verificarEstrategia = (numero: number) => {
     // Placeholder para verificação de estratégia
-    console.log(`[${name}] Verificando estratégia para número: ${numero}`);
+    console.log(`[${roletaNome}] Verificando estratégia para número: ${numero}`);
   };
 
   useEffect(() => {
@@ -332,7 +341,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       onClick={handleDetailsClick}
     >
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">{name}</h3>
+        <h3 className="text-lg font-semibold">{roletaNome}</h3>
         <div className="flex items-center">
           {usingSupabaseData ? (
             <span className="text-xs mr-2 text-[#00ff00]">Dados do Supabase</span>
@@ -389,7 +398,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
 
       <div className="pt-2 flex flex-col h-full">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-[#00ff00]">{name}</h2>
+          <h2 className="text-lg font-semibold text-[#00ff00]">{roletaNome}</h2>
           <Button
             variant="outline"
             size="sm"
@@ -422,7 +431,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       <RouletteStatsModal
         open={statsOpen}
         onOpenChange={setStatsOpen}
-        name={name}
+        name={roletaNome}
         lastNumbers={lastNumbers}
         wins={wins}
         losses={losses}

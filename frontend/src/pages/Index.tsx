@@ -103,70 +103,94 @@ const Index = () => {
         
         if (allowedData.length === 0) {
           console.warn('[DEBUG] ALERTA: O filtro de roletas permitidas removeu todas as roletas. Verifique os IDs em allowedRoulettes.ts');
-        }
-        
-        // Para cada roleta, buscar os últimos números
-        const formattedDataPromises = allowedData.map(async (item) => {
-          // Buscar os últimos 20 números para cada roleta
-          console.log(`[DEBUG] Buscando números para roleta '${item.nome}' (ID: ${item.id})...`);
-          const lastNumbers = await fetchRouletteLatestNumbersByName(item.nome, 20);
-          console.log(`[DEBUG] Números obtidos para '${item.nome}':`, lastNumbers);
-          
-          return {
-            name: item.nome,
-            lastNumbers: lastNumbers.length > 0 ? lastNumbers : (Array.isArray(item.numeros) ? item.numeros : []),
-            wins: item.vitorias || 0,
-            losses: item.derrotas || 0,
-            trend: generateTrendFromWinRate(item.vitorias, item.derrotas),
-            suggestion: item.sugestao_display || '',
-            status: item.estado_estrategia || 'NEUTRAL'
-          };
-        });
-        
-        const formattedData = await Promise.all(formattedDataPromises);
-        console.log('[DEBUG] Roletas formatadas finais:', formattedData.map(r => r.name));
-        
-        setRoulettes(formattedData);
-        setLoaded(true);
-        
-        if (formattedData.length > 0) {
-          toast({
-            title: 'Dados Carregados',
-            description: `${formattedData.length} roletas carregadas do Supabase`,
-            variant: 'default',
-          });
+          setRoulettesWithFallback([]);
         } else {
-          toast({
-            title: 'Nenhuma roleta encontrada',
-            description: 'Não foram encontradas roletas no Supabase.',
-            variant: 'destructive',
+          // Para cada roleta, buscar os últimos números
+          const formattedDataPromises = allowedData.map(async (item) => {
+            // Buscar os últimos 20 números para cada roleta
+            console.log(`[DEBUG] Buscando números para roleta '${item.nome}' (ID: ${item.id})...`);
+            const lastNumbers = await fetchRouletteLatestNumbersByName(item.nome, 20);
+            console.log(`[DEBUG] Números obtidos para '${item.nome}':`, lastNumbers);
+            
+            return {
+              name: item.nome,
+              lastNumbers: lastNumbers.length > 0 ? lastNumbers : (Array.isArray(item.numeros) ? item.numeros : []),
+              wins: item.vitorias || 0,
+              losses: item.derrotas || 0,
+              trend: generateTrendFromWinRate(item.vitorias, item.derrotas),
+              suggestion: item.sugestao_display || '',
+              status: item.estado_estrategia || 'NEUTRAL'
+            };
           });
+          
+          const formattedData = await Promise.all(formattedDataPromises);
+          console.log('[DEBUG] Roletas formatadas finais:', formattedData.map(r => r.name));
+          
+          setRoulettesWithFallback(formattedData);
         }
       } else {
         // Se não há roletas no Supabase, mostramos um array vazio
         console.log('Nenhuma roleta encontrada no Supabase.');
-        setRoulettes([]);
-        setLoaded(true);
-        
-        toast({
-          title: 'Nenhuma roleta encontrada',
-          description: 'Não foram encontradas roletas no Supabase.',
-          variant: 'destructive',
-        });
+        setRoulettesWithFallback([]);
       }
     } catch (error) {
       console.error('Erro ao buscar roletas do Supabase:', error);
       // Em caso de erro, mostramos um array vazio
-      setRoulettes([]);
-      setLoaded(true);
-      
-      toast({
-        title: 'Erro de Conexão',
-        description: 'Não foi possível conectar ao Supabase.',
-        variant: 'destructive',
-      });
+      setRoulettesWithFallback([]);
     } finally {
       setIsLoading(false);
+      setLoaded(true);
+    }
+  };
+  
+  // Função para garantir que sempre temos roletas para exibir
+  const setRoulettesWithFallback = (data: Roulette[]) => {
+    if (data && data.length > 0) {
+      setRoulettes(data);
+      toast({
+        title: 'Dados Carregados',
+        description: `${data.length} roletas carregadas do Supabase`,
+        variant: 'default',
+      });
+    } else {
+      console.log('[FALLBACK] Usando roletas fictícias para evitar tela em branco');
+      // Criar algumas roletas fictícias para evitar tela em branco
+      const fallbackRoulettes: Roulette[] = [
+        {
+          name: 'Immersive Roulette',
+          lastNumbers: [3, 17, 32, 0, 15, 19, 4, 21, 2, 25],
+          wins: 150,
+          losses: 70,
+          trend: generateTrendFromWinRate(150, 70),
+          suggestion: 'VERMELHO',
+          status: 'NEUTRAL'
+        },
+        {
+          name: 'Auto-Roulette',
+          lastNumbers: [26, 3, 35, 12, 28, 6, 14, 31, 9, 20],
+          wins: 120,
+          losses: 60,
+          trend: generateTrendFromWinRate(120, 60),
+          suggestion: 'PRETO',
+          status: 'NEUTRAL'
+        },
+        {
+          name: 'Lightning Roulette',
+          lastNumbers: [7, 11, 30, 18, 29, 22, 5, 16, 1, 20],
+          wins: 180,
+          losses: 90,
+          trend: generateTrendFromWinRate(180, 90),
+          suggestion: 'ÍMPARES',
+          status: 'NEUTRAL'
+        }
+      ];
+      
+      setRoulettes(fallbackRoulettes);
+      toast({
+        title: 'Usando Dados Offline',
+        description: 'Não foi possível carregar dados reais do servidor',
+        variant: 'destructive',
+      });
     }
   };
   
@@ -179,17 +203,28 @@ const Index = () => {
     // O EventService já foi inicializado e cada RouletteCard se inscreveu para receber atualizações específicas
   }, []);
   
-  const filteredRoulettes = roulettes.filter(roulette => 
+  // Verificar que roulettes existe e é um array
+  const safeRoulettes = Array.isArray(roulettes) ? roulettes : [];
+  console.log("[DEBUG] Roletas após processamento:", {
+    totalRoulettes: safeRoulettes.length,
+    rouletteNames: safeRoulettes.map(r => r.name),
+    isLoading: isLoading,
+    filterQuery: search
+  });
+  
+  const filteredRoulettes = safeRoulettes.filter(roulette => 
     roulette.name.toLowerCase().includes(search.toLowerCase())
   );
   
   const topRoulettes = useMemo(() => {
-    return [...roulettes].sort((a, b) => {
+    if (safeRoulettes.length === 0) return [];
+    
+    return [...safeRoulettes].sort((a, b) => {
       const aWinRate = a.wins / (a.wins + a.losses) * 100;
       const bWinRate = b.wins / (b.wins + b.losses) * 100;
       return bWinRate - aWinRate;
     }).slice(0, 3);
-  }, [roulettes]);
+  }, [safeRoulettes]);
 
   // Função para depurar diretamente os dados do Supabase
   const debugSupabaseData = async () => {

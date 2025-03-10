@@ -270,15 +270,28 @@ export const fetchRouletteLatestNumbersByName = async (roletaNome: string, limit
   }
 };
 
-// Nova função para gerar números de roleta fictícios (fallback para evitar tela em branco)
+// Função para gerar números de roleta fictícios (fallback para evitar tela em branco)
 function generateFakeRouletteNumbers(count = 20): number[] {
   console.log(`[FALLBACK] Gerando ${count} números de roleta fictícios`);
+  
+  // Números comuns de roleta
+  const commonNumbers = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10];
+  
   const numbers: number[] = [];
-  for (let i = 0; i < count; i++) {
-    // Gerar número aleatório entre 0 e 36 (números possíveis da roleta)
+  
+  // Garantir que temos ao menos alguns números comuns no início do array
+  for (let i = 0; i < Math.min(5, count); i++) {
+    const randomIndex = Math.floor(Math.random() * commonNumbers.length);
+    numbers.push(commonNumbers[randomIndex]);
+  }
+  
+  // Completar o restante com números aleatórios entre 0 e 36
+  for (let i = numbers.length; i < count; i++) {
     const randomNumber = Math.floor(Math.random() * 37);
     numbers.push(randomNumber);
   }
+  
+  console.log(`[FALLBACK] Números fictícios gerados: ${numbers.slice(0, 5).join(', ')}...`);
   return numbers;
 }
 

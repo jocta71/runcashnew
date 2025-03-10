@@ -3,6 +3,7 @@
  * Estes IDs devem corresponder aos configurados no scraper
  */
 export const ROLETAS_PERMITIDAS = [
+  "*",  // Permitir todas as roletas
   "2010016",  // Immersive Roulette
   "2380335",  // Brazilian Mega Roulette
   "2010065",  // Bucharest Auto-Roulette
