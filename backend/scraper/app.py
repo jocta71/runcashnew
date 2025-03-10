@@ -31,6 +31,9 @@ contagem_erros_consecutivos = 0
 MAX_ERROS_CONSECUTIVOS = 5
 driver_global = None
 
+# Configuração de nível de log mais restrito
+logger.setLevel(logging.INFO)  # Pode mudar para logging.WARNING para ainda menos logs
+
 # Verificar se estamos em ambiente de produção (Render, etc.)
 IS_PRODUCTION = os.environ.get('RENDER', False) or os.environ.get('PRODUCTION', False)
 
@@ -420,7 +423,8 @@ def extrair_id_roleta(elemento_roleta):
         match = re.search(r'cy-live-casino-grid-item-(\d+)', classes)
         if match:
             id_roleta = match.group(1)
-            logger.info(f"ID da roleta extraído: {id_roleta}")
+            # Log em debug em vez de info para reduzir ruído
+            logger.debug(f"ID da roleta extraído: {id_roleta}")
             return id_roleta
         
         # ID padrão usando o texto do título se não encontrar ID específico
@@ -439,7 +443,8 @@ def obter_ultimos_numeros(roleta_id, limite=1000):
     try:
         url = f"{supabase_url}/rest/v1/roleta_numeros"
         
-        logger.info(f"Consultando números para roleta {roleta_id} em: {url}")
+        # Log em debug em vez de info para reduzir ruído
+        logger.debug(f"Consultando números para roleta {roleta_id}")
         
         response = supabase.table("roleta_numeros") \
             .select("numero") \
@@ -451,10 +456,10 @@ def obter_ultimos_numeros(roleta_id, limite=1000):
         if response.data:
             # Extrair apenas os números e converter para lista
             numeros = [item['numero'] for item in response.data]
-            logger.info(f"Obtidos {len(numeros)} números para a roleta ID {roleta_id}")
+            logger.debug(f"Obtidos {len(numeros)} números para a roleta ID {roleta_id}")
             return numeros
         else:
-            logger.info(f"Nenhum número encontrado para a roleta ID {roleta_id}")
+            logger.debug(f"Nenhum número encontrado para a roleta ID {roleta_id}")
             return []
     except Exception as e:
         logger.error(f"Erro ao obter números da roleta {roleta_id}: {str(e)}")
@@ -483,12 +488,12 @@ def inserir_novo_numero(roleta_id, roleta_nome, numero):
             "created_at": datetime.now().isoformat()
         }
         
-        url = f"{supabase_url}/rest/v1/roleta_numeros"
-        logger.info(f"Inserindo número {numero_int} para roleta {roleta_nome} em: {url}")
+        # Log em debug em vez de info para reduzir ruído
+        logger.debug(f"Inserindo número {numero_int} para roleta {roleta_nome}")
         
         # Inserir na tabela roleta_numeros
         response = supabase.table("roleta_numeros").insert(data).execute()
-        logger.info(f"Número {numero_int} inserido para a roleta {roleta_nome} (ID: {roleta_id})")
+        logger.info(f"NOVO NÚMERO: {numero_int} para {roleta_nome}")
         
         # Notificar clientes SSE sobre o novo número
         event_data = {
@@ -499,7 +504,6 @@ def inserir_novo_numero(roleta_id, roleta_nome, numero):
             "timestamp": datetime.now().isoformat()
         }
         event_manager.notify_clients(event_data)
-        logger.info(f"Evento SSE enviado para novo número {numero_int} da roleta {roleta_nome}")
         
         return True
     except Exception as e:
@@ -593,22 +597,22 @@ def scrape_roletas(driver=None):
             try:
                 # Verificar saúde do scraper a cada 5 minutos
                 if time.time() - tempo_ultima_verificacao_saude > 300:  # 5 minutos
-                    logger.info("Realizando verificação de saúde do scraper...")
+                    logger.debug("Realizando verificação de saúde do scraper...")
                     driver_interno = verificar_saude_scraper(driver_interno)
                     tempo_ultima_verificacao_saude = time.time()
                 
-                logger.info(f"Iniciando ciclo {ciclo} de scraping")
+                logger.debug(f"Iniciando ciclo {ciclo} de scraping")
                 
                 # Encontrar todas as roletas na página com retry
                 def encontrar_roletas():
                     elementos = driver_interno.find_elements(By.CSS_SELECTOR, ".cy-live-casino-grid-item")
-                    logger.info(f"Encontradas {len(elementos)} roletas na página")
+                    logger.debug(f"Encontradas {len(elementos)} roletas na página")
                     return elementos
                 
                 elementos_roletas = executar_com_retry(encontrar_roletas, max_tentativas=3, delay_inicial=2)
                 
                 # Lista para armazenar roletas permitidas encontradas neste ciclo
-                roletas_encontradas = []
+                roletas_permitidas = []
                 
                 # Processar cada roleta
                 for elemento_roleta in elementos_roletas:
@@ -618,15 +622,15 @@ def scrape_roletas(driver=None):
                         
                         # Verificar se a roleta está na lista de permitidas
                         if not roleta_permitida_por_id(id_roleta):
-                            logger.debug(f"Roleta com ID {id_roleta} ignorada (não está na lista de permitidas)")
+                            logger.debug(f"Roleta com ID {id_roleta} ignorada (não permitida)")
                             continue
                         
                         # Extrair título da roleta apenas para roletas permitidas
                         titulo_elemento = elemento_roleta.find_element(By.CSS_SELECTOR, ".cy-live-casino-grid-item-title")
                         titulo_roleta = titulo_elemento.text.strip()
                         
-                        roletas_encontradas.append(f"{titulo_roleta} (ID: {id_roleta})")
-                        logger.info(f"Processando roleta permitida: {titulo_roleta} (ID: {id_roleta})")
+                        roletas_permitidas.append(titulo_roleta)
+                        logger.info(f"PROCESSANDO: {titulo_roleta} (ID: {id_roleta})")
                         
                         # Inicializar analisador para a roleta se não existir
                         if titulo_roleta not in analisadores_mesas:
@@ -635,40 +639,34 @@ def scrape_roletas(driver=None):
                             numeros_existentes = obter_ultimos_numeros(id_roleta)
                             if numeros_existentes:
                                 analisadores_mesas[titulo_roleta].add_numbers(numeros_existentes)
-                                logger.info(f"Carregados {len(numeros_existentes)} números existentes para o analisador de {titulo_roleta}")
+                                logger.debug(f"Carregados {len(numeros_existentes)} números para {titulo_roleta}")
                         
                         # Extrair números da roleta - usando a nova função otimizada
                         numeros = extrair_numeros_js(driver_interno, elemento_roleta)
                         
                         # Processar novos números
                         if processar_novos_numeros(id_roleta, titulo_roleta, numeros):
-                            logger.info(f"Novos números processados para {titulo_roleta}: {numeros}")
+                            logger.info(f"EXTRAÍDO: {numeros} para {titulo_roleta}")
                             # Atualizar timestamp de atividade
                             ultima_atividade_scraper = time.time()
                             contagem_erros_consecutivos = 0
                         
                         # Adicionar números ao analisador
                         if analisadores_mesas[titulo_roleta].add_numbers(numeros):
-                            logger.info(f"Novos números adicionados ao analisador para {titulo_roleta}: {numeros}")
-                            
-                            # Atualizar dados de estratégia se necessário
-                            dados_estrategia = analisadores_mesas[titulo_roleta].get_data().get("estrategia", {})
-                            atualizar_dados_estrategia(id_roleta, titulo_roleta, dados_estrategia)
+                            logger.debug(f"Números adicionados ao analisador para {titulo_roleta}")
                     
                     except Exception as e:
                         logger.error(f"Erro ao processar roleta: {str(e)}")
                         erros_ciclo += 1
                 
                 # Registrar as roletas permitidas encontradas neste ciclo
-                if roletas_encontradas:
-                    logger.info(f"Roletas permitidas encontradas neste ciclo: {len(roletas_encontradas)}")
-                    for roleta in roletas_encontradas:
-                        logger.info(f"  - {roleta}")
+                if roletas_permitidas:
+                    logger.debug(f"Roletas ativas: {', '.join(roletas_permitidas)}")
                 else:
                     logger.warning("Nenhuma roleta permitida encontrada neste ciclo")
                     # Se não encontrou roletas em 3 ciclos consecutivos, tentar recarregar a página
                     if erros_ciclo >= max_erros_ciclo:
-                        logger.warning(f"Muitos erros consecutivos ({erros_ciclo}). Recarregando página...")
+                        logger.warning(f"Muitos erros consecutivos. Recarregando página...")
                         executar_com_retry(navegar_para_casino, max_tentativas=3, delay_inicial=5)
                         erros_ciclo = 0
                 
@@ -680,7 +678,9 @@ def scrape_roletas(driver=None):
                 if MAX_CICLOS != 0:
                     ciclo += 1
                 else:
-                    logger.info(f"Ciclo {ciclo} completado, continuando indefinidamente...")
+                    # Mostrar resumo a cada 10 ciclos
+                    if ciclo % 10 == 0:
+                        logger.info(f"CICLO {ciclo} COMPLETO - Sistema saudável")
                     ciclo += 1
                     
                 # Resetar contador de erros se o ciclo foi bem-sucedido

@@ -7,14 +7,14 @@ load_dotenv()
 
 # Configurar logging
 logger = logging.getLogger('roulette_scraper')
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.INFO)  # Manteremos INFO como padrão, mas ajustaremos o formato
 
-# Criar um handler para console
+# Criar um handler para console com formato mais limpo
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.INFO)
 
-# Criar um formatador
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# Criar um formatador mais conciso - apenas hora:minuto:segundo e a mensagem
+formatter = logging.Formatter('%(asctime)s - %(message)s', '%H:%M:%S')
 console_handler.setFormatter(formatter)
 
 # Adicionar o handler ao logger
@@ -54,12 +54,13 @@ def roleta_permitida_por_id(id_roleta):
     
     # Se a variável não estiver definida, usar a lista de roletas conhecidas
     if not roletas_permitidas:
-        logger.info(f"Usando lista interna de roletas conhecidas: {roletas_conhecidas}")
+        # Reduzir verbosidade - apenas log em debug
+        logger.debug(f"Usando lista interna de roletas")
         return id_roleta in roletas_conhecidas
     
     # Se a variável tiver o valor "*", permitir todas as roletas
     if roletas_permitidas == "*":
-        logger.info("Modo permissivo: todas as roletas são permitidas")
+        logger.debug("Modo permissivo: todas as roletas são permitidas")
         return True
     
     # Dividir a string por vírgulas para obter a lista de roletas permitidas
