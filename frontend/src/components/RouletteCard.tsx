@@ -579,62 +579,61 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
           </div>
         </div>
         
-        <div className="space-y-2">
-          {/* Sequência Atual */}
-          {!analyticsLoading && currentStreak.count > 0 && (
-            <div className="flex items-center justify-between bg-[#252431] p-2 rounded-lg">
-              <div className="flex items-center">
-                <History size={14} className="text-purple-400 mr-1.5" />
-                <span className="text-xs text-gray-300">Sequência</span>
-              </div>
-              <div className="flex items-center">
-                <span className="text-xs font-medium text-purple-400">
-                  {currentStreak.count}x {currentStreak.value}
-                </span>
-              </div>
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          {/* Célula 1: Sequência Atual */}
+          <div className="bg-[#252431] p-2 rounded-lg flex flex-col justify-between">
+            <div className="flex items-center mb-1">
+              <History size={14} className="text-purple-400 mr-1.5" />
+              <span className="text-[10px] uppercase font-medium text-gray-400">Sequência</span>
             </div>
-          )}
-          
-          {/* Dúzia Ausente */}
-          {!analyticsLoading && missingDozens.length > 0 && (
-            <div className="flex items-center justify-between bg-[#252431] p-2 rounded-lg">
-              <div className="flex items-center">
-                <Clock size={14} className="text-yellow-400 mr-1.5" />
-                <span className="text-xs text-gray-300">Dúzia ausente</span>
-              </div>
-              <div className="flex items-center">
-                <span className="text-xs font-medium text-yellow-400">
-                  {missingDozens[0].dezena} ({missingDozens[0].ausencia}x)
-                </span>
-              </div>
+            <div className="text-right">
+              <span className="text-xs font-medium text-purple-400">
+                {!analyticsLoading && currentStreak.count > 0 
+                  ? `${currentStreak.count}x ${currentStreak.value}`
+                  : "---"}
+              </span>
             </div>
-          )}
+          </div>
           
-          {/* Tendência e Recomendação */}
-          <div className="flex items-center justify-between bg-[#252431] p-2 rounded-lg">
-            <div className="flex items-center">
+          {/* Célula 2: Dúzia Ausente */}
+          <div className="bg-[#252431] p-2 rounded-lg flex flex-col justify-between">
+            <div className="flex items-center mb-1">
+              <Clock size={14} className="text-yellow-400 mr-1.5" />
+              <span className="text-[10px] uppercase font-medium text-gray-400">Dúzia</span>
+            </div>
+            <div className="text-right">
+              <span className="text-xs font-medium text-yellow-400">
+                {!analyticsLoading && missingDozens.length > 0
+                  ? `${missingDozens[0].dezena} (${missingDozens[0].ausencia}x)`
+                  : "---"}
+              </span>
+            </div>
+          </div>
+          
+          {/* Célula 3: Recomendação */}
+          <div className="bg-[#252431] p-2 rounded-lg flex flex-col justify-between">
+            <div className="flex items-center mb-1">
               <Star size={14} className="text-[#00ff00] mr-1.5" />
-              <span className="text-xs text-gray-300">Recomendação</span>
+              <span className="text-[10px] uppercase font-medium text-gray-400">Recomendação</span>
             </div>
-            <div className="flex items-center">
+            <div className="text-right">
               <span className="text-xs font-medium text-[#00ff00]">
                 {getColorName(lastNumbers[0] || 0).toUpperCase()}
               </span>
             </div>
           </div>
-          
-          {/* Botão Análise Completa */}
-          <button 
-            className="w-full flex items-center justify-center bg-[#00ff00]/10 hover:bg-[#00ff00]/20 text-[#00ff00] py-2 px-4 rounded-lg transition-colors mt-2"
-            onClick={(e) => {
-              e.stopPropagation(); // Evitar que o click propague para o card
-              setStatsOpen(true);
-            }}
-          >
-            <BarChart3 size={16} className="mr-1.5" />
-            <span className="text-xs font-medium">Ver Análise Completa</span>
-          </button>
         </div>
+        
+        <button 
+          className="w-full flex items-center justify-center bg-[#00ff00]/10 hover:bg-[#00ff00]/20 text-[#00ff00] py-2 px-4 rounded-lg transition-colors mt-2"
+          onClick={(e) => {
+            e.stopPropagation(); // Evitar que o click propague para o card
+            setStatsOpen(true);
+          }}
+        >
+          <BarChart3 size={16} className="mr-1.5" />
+          <span className="text-xs font-medium">Ver Análise Completa</span>
+        </button>
       </div>
       
       {memoizedActionButtons}
