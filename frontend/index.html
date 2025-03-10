@@ -7,12 +7,38 @@
     <meta name="description" content="Lovable Generated Project" />
     <meta name="author" content="Lovable" />
     <meta property="og:image" content="/og-image.png" />
+    <style>
+      /* Estilos para prevenir o flash ao retornar */
+      .no-transition, .no-transition * {
+        transition: none !important;
+        animation: none !important;
+      }
+      
+      /* Este overlay será mostrado durante o período de congelamento */
+      #freeze-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        z-index: 9999;
+        pointer-events: none;
+      }
+    </style>
     <script>
       // Prevenir o recarregamento automático quando a página perde e recupera o foco
       (function() {
         // Guarda a última vez que a página foi carregada
         let lastLoadTime = Date.now();
         let preventReload = true; // Adiciona flag para controle explícito
+        
+        // Variável para controlar o estado de congelamento da página
+        let pageFrozen = false;
+        
+        // Snapshot do último estado da página
+        let lastPageSnapshot = null;
         
         // Armazenar estado em memória global
         window.__STATE_CACHE = window.__STATE_CACHE || {
@@ -21,41 +47,179 @@
           isInitialized: false
         };
         
-        // Função para prevenir recarregamento completo mas permitir atualizações de números
-        window.preventFullReload = function() {
-          console.log('[MODO] Ativando modo de atualização contínua');
-          window.__PREVENT_FULL_RELOAD = true;
-          window.__REACT_COMPONENTS_FROZEN = false; // Garantir que não estão congelados
+        // Sistema avançado de anti-flash/anti-piscar
+        const createFreezeOverlay = () => {
+          // Criar um overlay transparente para impedir interações durante transição
+          const overlay = document.createElement('div');
+          overlay.id = 'freeze-overlay';
+          document.body.appendChild(overlay);
           
-          // Salvar marcação no sessionStorage
+          return overlay;
+        };
+        
+        // Função para tirar snapshot do DOM atual
+        const takePageSnapshot = () => {
           try {
-            sessionStorage.setItem('prevent_full_reload', 'true');
-            sessionStorage.removeItem('components_frozen'); // Garantir que não estão congelados
+            const contentArea = document.querySelector('#root');
+            if (!contentArea) return null;
+            
+            return {
+              html: contentArea.innerHTML,
+              scrollPosition: {
+                x: window.scrollX,
+                y: window.scrollY
+              },
+              timestamp: Date.now()
+            };
           } catch (e) {
-            console.error('[MODO] Erro ao salvar estado:', e);
+            console.error('[SNAPSHOT] Erro ao capturar estado da página:', e);
+            return null;
           }
         };
         
-        // Função para voltar ao modo normal
-        window.resumeNormalMode = function() {
-          console.log('[MODO] Voltando ao modo normal');
-          window.__PREVENT_FULL_RELOAD = false;
+        // Função para restaurar o snapshot exato da página
+        const restorePageSnapshot = (snapshot) => {
+          if (!snapshot) return false;
           
           try {
-            sessionStorage.removeItem('prevent_full_reload');
+            const contentArea = document.querySelector('#root');
+            if (!contentArea) return false;
+            
+            // Desativar todas as transições e animações durante a restauração
+            document.body.classList.add('no-transition');
+            
+            // Substituir o conteúdo com o snapshot
+            contentArea.innerHTML = snapshot.html;
+            
+            // Restaurar a posição de rolagem
+            window.scrollTo(snapshot.scrollPosition.x, snapshot.scrollPosition.y);
+            
+            // Reativar transições após um breve delay
+            setTimeout(() => {
+              document.body.classList.remove('no-transition');
+            }, 100);
+            
+            return true;
           } catch (e) {
-            console.error('[MODO] Erro ao remover estado:', e);
+            console.error('[SNAPSHOT] Erro ao restaurar estado da página:', e);
+            return false;
           }
         };
         
-        // Verificar se já estamos no modo de prevenção
+        // Função para congelar completamente os componentes React durante recargas
+        window.freezeReactComponents = function(takeSnapshot = true) {
+          if (pageFrozen) return; // Evitar congelamento duplo
+          
+          console.log('[FREEZE] Congelando componentes React e interface');
+          window.__REACT_COMPONENTS_FROZEN = true;
+          pageFrozen = true;
+          
+          // Desativar transições para evitar flash
+          document.body.classList.add('no-transition');
+          
+          // Tornar o overlay visível
+          const overlay = document.getElementById('freeze-overlay') || createFreezeOverlay();
+          overlay.style.display = 'block';
+          
+          // Capturar um snapshot do estado atual da página se solicitado
+          if (takeSnapshot) {
+            lastPageSnapshot = takePageSnapshot();
+            console.log('[SNAPSHOT] Estado da página capturado');
+          }
+          
+          // Quando a página é congelada, salvamos uma marcação no sessionStorage
+          try {
+            sessionStorage.setItem('components_frozen', 'true');
+            sessionStorage.setItem('freeze_timestamp', Date.now().toString());
+            
+            // Salvar o snapshot também no sessionStorage para persistir entre recargas
+            if (lastPageSnapshot) {
+              sessionStorage.setItem('page_snapshot', JSON.stringify(lastPageSnapshot));
+            }
+          } catch (e) {
+            console.error('[FREEZE] Erro ao salvar estado:', e);
+          }
+        };
+        
+        // Função para descongelar componentes
+        window.unfreezeReactComponents = function() {
+          if (!pageFrozen) return; // Não fazer nada se não estiver congelado
+          
+          console.log('[FREEZE] Descongelando componentes React e interface');
+          window.__REACT_COMPONENTS_FROZEN = false;
+          pageFrozen = false;
+          
+          // Remover o overlay
+          const overlay = document.getElementById('freeze-overlay');
+          if (overlay) overlay.style.display = 'none';
+          
+          // Reativar transições
+          setTimeout(() => {
+            document.body.classList.remove('no-transition');
+          }, 100);
+          
+          try {
+            sessionStorage.removeItem('components_frozen');
+            sessionStorage.removeItem('page_snapshot');
+          } catch (e) {
+            console.error('[FREEZE] Erro ao remover estado:', e);
+          }
+        };
+        
+        // Sistema de restauração imediata para evitar qualquer flash
+        const attemptImmediateRestore = () => {
+          try {
+            // Verificar se há um snapshot no sessionStorage
+            const snapshotStr = sessionStorage.getItem('page_snapshot');
+            if (snapshotStr) {
+              const snapshot = JSON.parse(snapshotStr);
+              const contentArea = document.querySelector('#root');
+              
+              if (contentArea && snapshot && Date.now() - snapshot.timestamp < 3600000) {
+                // Aplicar o snapshot imediatamente para evitar flash
+                console.log('[RESTORE] Restaurando estado visual imediatamente');
+                contentArea.innerHTML = snapshot.html;
+                
+                // Também devemos congelar os componentes
+                window.__REACT_COMPONENTS_FROZEN = true;
+                pageFrozen = true;
+                
+                return true;
+              }
+            }
+          } catch (e) {
+            console.error('[RESTORE] Erro na restauração imediata:', e);
+          }
+          return false;
+        };
+        
+        // Restaurar imediatamente se possível
+        attemptImmediateRestore();
+        
+        // Verificar se já estamos congelados
         try {
-          if (sessionStorage.getItem('prevent_full_reload') === 'true') {
-            window.__PREVENT_FULL_RELOAD = true;
-            console.log('[MODO] Iniciado em modo de atualização contínua');
+          if (sessionStorage.getItem('components_frozen') === 'true') {
+            window.__REACT_COMPONENTS_FROZEN = true;
+            pageFrozen = true;
+            console.log('[FREEZE] Componentes iniciados em estado congelado');
+            
+            // Se o congelamento foi há muito tempo, descongelar
+            const freezeTime = parseInt(sessionStorage.getItem('freeze_timestamp') || '0');
+            const now = Date.now();
+            const oneHour = 60 * 60 * 1000;
+            
+            if (now - freezeTime > oneHour) {
+              console.log('[FREEZE] Congelamento expirado, descongelando');
+              window.unfreezeReactComponents();
+            } else {
+              // Criar o overlay se ainda estamos congelados
+              const overlay = createFreezeOverlay();
+              overlay.style.display = 'block';
+              document.body.classList.add('no-transition');
+            }
           }
         } catch (e) {
-          console.error('[MODO] Erro ao verificar modo:', e);
+          console.error('[FREEZE] Erro ao verificar estado de congelamento:', e);
         }
         
         // Sempre que a página é recarregada, verificamos se é um recarregamento "natural"
@@ -69,8 +233,22 @@
             history.pushState(null, document.title, location.href);
             console.log('[NAVEGAÇÃO] Prevenido recarregamento automático ao voltar para aba');
             
-            // Ativar modo de prevenção de recarregamento completo
-            window.preventFullReload();
+            // Congelar componentes React para evitar recarregamento interno
+            window.freezeReactComponents(false); // Não tirar snapshot aqui, já temos um
+            
+            // Restaurar o último snapshot se existir
+            if (lastPageSnapshot) {
+              restorePageSnapshot(lastPageSnapshot);
+            } else {
+              try {
+                const snapshotStr = sessionStorage.getItem('page_snapshot');
+                if (snapshotStr) {
+                  restorePageSnapshot(JSON.parse(snapshotStr));
+                }
+              } catch (e) {
+                console.error('[RESTORE] Erro ao restaurar snapshot:', e);
+              }
+            }
           }
           
           // Atualizar o tempo de carregamento
@@ -91,8 +269,17 @@
             history.pushState(null, document.title, location.href);
             preventReload = true;
             
-            // Ativar modo de prevenção de recarregamento completo
-            window.preventFullReload();
+            // Congelar componentes React e restaurar snapshot
+            window.freezeReactComponents(false);
+            
+            try {
+              const snapshotStr = sessionStorage.getItem('page_snapshot');
+              if (snapshotStr) {
+                restorePageSnapshot(JSON.parse(snapshotStr));
+              }
+            } catch (e) {
+              console.error('[RESTORE] Erro ao restaurar snapshot:', e);
+            }
           }
         });
         
@@ -108,8 +295,11 @@
             if (timeSinceLastLoad > 1000 && timeSinceLastLoad < 3600000) {
               console.log('[VISIBILIDADE] Prevenindo recarregamento após', Math.round(timeSinceLastLoad / 1000), 'segundos');
               
-              // Ativar modo de prevenção de recarregamento completo
-              window.preventFullReload();
+              // Tirar snapshot antes de congelar
+              lastPageSnapshot = takePageSnapshot();
+              
+              // Congelar componentes React para evitar recarregamento interno
+              window.freezeReactComponents(false);
               
               // Disparar evento personalizado para notificar componentes
               window.dispatchEvent(new CustomEvent('app:returned-to-page', {
@@ -125,6 +315,9 @@
             }
           } else {
             console.log('[VISIBILIDADE] Página ocultada');
+            
+            // Tirar snapshot antes de sair
+            lastPageSnapshot = takePageSnapshot();
             
             // Disparar evento personalizado para notificar componentes
             window.dispatchEvent(new CustomEvent('app:leaving-page'));
@@ -143,8 +336,11 @@
           if (preventReload) {
             console.log('[NAVEGAÇÃO] Prevenindo unload');
             
-            // Ativar modo de prevenção de recarregamento completo
-            window.preventFullReload();
+            // Tirar snapshot antes de potencialmente sair
+            lastPageSnapshot = takePageSnapshot();
+            
+            // Congelar estado antes de potencialmente sair
+            window.freezeReactComponents(false);
             
             // Mensagem não será mostrada em browsers modernos por segurança
             e.preventDefault();
@@ -156,10 +352,16 @@
         document.addEventListener('DOMContentLoaded', function() {
           console.log('[CICLO] DOM totalmente carregado');
           
+          // Criar o overlay para prevenção de flash
+          createFreezeOverlay();
+          
           // Força o browser a recarregar o cache na inicialização
           window.addEventListener('pagehide', function() {
             console.log('[NAVEGAÇÃO] Página ocultada, preparando para possível retorno');
-            window.preventFullReload();
+            
+            // Tirar snapshot antes de ocultar
+            lastPageSnapshot = takePageSnapshot();
+            window.freezeReactComponents(false);
           });
         });
       })();
