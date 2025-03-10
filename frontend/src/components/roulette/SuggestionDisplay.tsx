@@ -25,35 +25,26 @@ const SuggestionDisplay = ({
   };
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-0.5">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1">
-          <WandSparkles size={14} className="text-[#00ff00]" />
-          <span className="text-[10px] text-[#00ff00] font-medium">Sugestão de Jogada</span>
-          <span className="text-[9px] text-[#00ff00]/70">({numberGroups[selectedGroup as keyof typeof numberGroups].name})</span>
+        <div className="flex items-center gap-0.5">
+          <WandSparkles size={10} className="text-[#00ff00]" />
+          <span className="text-[8px] text-[#00ff00] font-medium">Sugestão</span>
+          <span className="text-[7px] text-[#00ff00]/70">({numberGroups[selectedGroup as keyof typeof numberGroups].name})</span>
         </div>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button 
-                onClick={toggleVisibility} 
-                className="text-[#00ff00] hover:text-[#00ff00]/80 transition-colors"
-              >
-                {isBlurred ? <EyeOff size={14} /> : <Eye size={14} />}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{isBlurred ? "Mostrar números" : "Ocultar números"}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <button 
+          onClick={toggleVisibility} 
+          className="text-[#00ff00] hover:text-[#00ff00]/80 transition-colors"
+        >
+          {isBlurred ? <EyeOff size={10} /> : <Eye size={10} />}
+        </button>
       </div>
-      <div className="flex gap-1">
+      <div className="flex gap-0.5">
         {suggestion.map((num, i) => (
           <RouletteNumber
             key={i}
             number={num}
-            className={`border border-[#00ff00] ${getSuggestionColor(num)} ${isBlurred ? 'blur-sm' : 'animate-pulse'}`}
+            className={`w-4 h-4 text-[7px] border border-[#00ff00] ${getSuggestionColor(num)} ${isBlurred ? 'blur-sm' : 'animate-pulse'}`}
           />
         ))}
       </div>

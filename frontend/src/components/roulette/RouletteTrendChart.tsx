@@ -59,24 +59,24 @@ const RouletteTrendChart = ({ trend }: RouletteTrendChartProps) => {
   const avgValue = trend.reduce((sum, item) => sum + item.value, 0) / trend.length;
   
   return (
-    <div className="h-16 w-full">
+    <div className="h-12 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart 
           data={enhancedData}
-          margin={{ top: 2, right: 2, left: 0, bottom: 2 }}
+          margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
         >
           <defs>
             <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#00ff00" stopOpacity={0.8}/>
+              <stop offset="5%" stopColor="#00ff00" stopOpacity={0.6}/>
               <stop offset="95%" stopColor="#00ff00" stopOpacity={0.1}/>
             </linearGradient>
           </defs>
           
           <CartesianGrid 
-            strokeDasharray="3 3" 
+            strokeDasharray="2 2" 
             vertical={false} 
             stroke="#333"
-            opacity={0.3}
+            opacity={0.2}
           />
           
           <XAxis 
@@ -86,37 +86,22 @@ const RouletteTrendChart = ({ trend }: RouletteTrendChartProps) => {
           />
           
           <YAxis 
-            domain={['dataMin - 2', 'dataMax + 2']} 
+            domain={['dataMin - 1', 'dataMax + 1']} 
             hide={true} 
             padding={{ top: 0, bottom: 0 }}
           />
           
           <Tooltip content={<CustomTooltip />} />
           
-          <ReferenceLine 
-            y={avgValue} 
-            stroke="#666" 
-            strokeDasharray="3 3" 
-            opacity={0.4}
-          />
-          
           <Area
             type="monotone"
             dataKey="value"
             stroke="#00ff00"
-            strokeWidth={1.5}
+            strokeWidth={1}
             fillOpacity={1}
             fill="url(#colorGradient)"
             dot={false}
-            activeDot={{ r: 3, fill: '#00ff00', stroke: '#FFF' }}
-          />
-          
-          <Line
-            type="monotone"
-            dataKey="sma5"
-            stroke="#ff8800"
-            strokeWidth={1}
-            dot={false}
+            activeDot={{ r: 2, fill: '#00ff00', stroke: '#FFF' }}
           />
         </AreaChart>
       </ResponsiveContainer>

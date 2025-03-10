@@ -32,7 +32,7 @@ const RouletteNumber = memo(({ number, className = '' }: RouletteNumberProps) =>
 
   return (
     <div
-      className={`w-8 h-8 rounded-full ${colorClass} flex items-center justify-center text-sm font-medium ${className}`}
+      className={`w-5 h-5 rounded-full ${colorClass} flex items-center justify-center text-[9px] font-medium ${className}`}
     >
       {convertedNumber}
     </div>
