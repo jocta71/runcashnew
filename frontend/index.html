@@ -12,12 +12,13 @@
       (function() {
         // Guarda a última vez que a página foi carregada
         let lastLoadTime = Date.now();
+        let preventReload = true; // Adiciona flag para controle explícito
         
         // Sempre que a página é recarregada, verificamos se é um recarregamento "natural"
         window.addEventListener('load', function() {
           const currentTime = Date.now();
-          // Se o recarregamento ocorreu menos de 2 segundos após mudança de visibilidade, foi automático
-          if (currentTime - lastLoadTime < 2000 && document.visibilityState === 'visible') {
+          // Se o recarregamento ocorreu menos de 5 segundos após mudança de visibilidade, foi automático
+          if (preventReload && currentTime - lastLoadTime < 5000 && document.visibilityState === 'visible') {
             // Impedir o recarregamento
             history.pushState(null, document.title, location.href);
             console.log('Prevented auto-reload on tab/window focus');
@@ -25,28 +26,55 @@
           
           // Atualizar o tempo de carregamento
           lastLoadTime = currentTime;
+          preventReload = true; // Reativar a prevenção
         });
         
         // Cache para a função bfcache
         window.addEventListener('pageshow', function(event) {
           if (event.persisted) {
             // Impedir recarregamento quando vier do cache do navegador
+            console.log('Page from cache, preventing reload');
             history.pushState(null, document.title, location.href);
-            console.log('Prevented reload from bfcache');
+            preventReload = true;
           }
         });
         
         // Prevenir recarregamento quando a página ganha foco novamente
         document.addEventListener('visibilitychange', function() {
           if (document.visibilityState === 'visible') {
+            console.log('Page visible again, timestamp updated');
             lastLoadTime = Date.now();
+            
+            // Impedir recarregamento explicitamente
+            if (preventReload) {
+              history.pushState(null, document.title, location.href);
+            }
           }
         });
         
         // Adicionar evento para histórico
         window.addEventListener('popstate', function(event) {
-          history.pushState(null, document.title, location.href);
+          // Redireciona para a mesma página atual, evitando navegação para trás/frente
           console.log('Navigation prevented');
+          history.pushState(null, document.title, location.href);
+        });
+        
+        // Impedir o comportamento padrão de recarregar ao voltar para a página
+        window.addEventListener('beforeunload', function(e) {
+          if (preventReload) {
+            console.log('Preventing unload');
+            // Mensagem não será mostrada em browsers modernos por segurança
+            e.preventDefault();
+            e.returnValue = '';
+          }
+        });
+
+        // Solução mais forte para Safari/iOS
+        document.addEventListener('DOMContentLoaded', function() {
+          // Força o browser a recarregar o cache na inicialização
+          window.addEventListener('pagehide', function() {
+            console.log('Page hidden, preparing for possible return');
+          });
         });
       })();
     </script>

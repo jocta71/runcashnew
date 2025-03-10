@@ -196,8 +196,26 @@ const Index = () => {
   
   // Efeito para carregar dados quando o componente montar
   useEffect(() => {
+    // Verificar se os dados já foram carregados anteriormente para evitar recarregamentos desnecessários
+    const alreadyLoaded = localStorage.getItem('data_loaded_timestamp');
+    const currentTime = Date.now();
+    const cacheExpiration = 5 * 60 * 1000; // 5 minutos
+    
+    // Se os dados foram carregados recentemente e temos roletas disponíveis, não carrega novamente
+    if (alreadyLoaded && currentTime - parseInt(alreadyLoaded) < cacheExpiration && safeRoulettes.length > 0) {
+      console.log('[CACHE] Usando dados em cache, último carregamento há', 
+        Math.round((currentTime - parseInt(alreadyLoaded)) / 1000), 'segundos');
+      setIsLoading(false);
+      setLoaded(true);
+      return;
+    }
+    
     // Buscar dados iniciais das roletas apenas uma vez quando o componente montar
-    fetchRoulettes();
+    console.log('[FETCH] Buscando dados do zero...');
+    fetchRoulettes().then(() => {
+      // Salvar timestamp do carregamento
+      localStorage.setItem('data_loaded_timestamp', Date.now().toString());
+    });
     
     // Não precisamos mais fazer polling, pois agora recebemos eventos em tempo real
     // O EventService já foi inicializado e cada RouletteCard se inscreveu para receber atualizações específicas
