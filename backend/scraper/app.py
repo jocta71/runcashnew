@@ -493,10 +493,18 @@ def garantir_roleta_existe(roleta_id, roleta_nome):
         if not response.data:
             logger.info(f"Roleta {roleta_nome} (ID: {roleta_id}) não encontrada na tabela roletas. Inserindo...")
             
+            # Determinar o tipo de roleta com base no nome
+            tipo_roleta = "ao_vivo"  # Valor padrão
+            if "auto" in roleta_nome.lower() or "speed" in roleta_nome.lower():
+                tipo_roleta = "automatica"
+            elif "lightning" in roleta_nome.lower():
+                tipo_roleta = "especial"
+            
             # Preparar dados para inserção
             dados_roleta = {
                 "id": roleta_uuid,
                 "nome": roleta_nome,
+                "tipo": tipo_roleta,
                 "provedor": "Evolution Gaming",  # Valor padrão
                 "ativa": True
             }
