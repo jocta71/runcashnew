@@ -691,6 +691,171 @@ def simulate_roulette_data():
             logger.error(f"[SIMULAÇÃO] Erro ao simular dados: {str(e)}")
             time.sleep(10)  # Aguardar e tentar novamente
 
+@app.route('/api/start-simulator', methods=['GET'])
+def start_simulator():
+    """Endpoint para iniciar manualmente o simulador de dados, para fins de diagnóstico"""
+    try:
+        # Verificar se já existe um simulador ativo
+        if hasattr(sys, 'simulator_thread_running') and sys.simulator_thread_running:
+            logger.info("Simulador já está ativo, gerando um novo evento de teste")
+            
+            # Gerar um evento de teste mesmo assim
+            roleta_nome = "Lightning Roulette"
+            numero = random.randint(0, 36)
+            roleta_id = "LightningTable01"
+            
+            # Criar o evento
+            event_data = {
+                "type": "new_number",
+                "roleta": roleta_nome,
+                "numero": numero,
+                "timestamp": time.time(),
+                "simulado": True,
+                "manual_trigger": True
+            }
+            
+            # Notificar clientes
+            if len(event_manager.clients) > 0:
+                logger.info(f"[TESTE MANUAL] Notificando {len(event_manager.clients)} clientes sobre novo número")
+                
+                # Notificar diretamente
+                for client_queue in event_manager.clients[:]:
+                    try:
+                        client_queue.put(event_data)
+                        logger.info(f"[TESTE MANUAL] Evento enviado para um cliente")
+                    except Exception as e:
+                        logger.error(f"[TESTE MANUAL] Erro ao enviar evento para cliente: {str(e)}")
+                
+                # Também via gerenciador
+                event_manager.notify_clients(event_data)
+                
+                return jsonify({
+                    "success": True, 
+                    "message": "Evento de teste enviado para o simulador existente",
+                    "clients": len(event_manager.clients),
+                    "data": event_data
+                })
+            else:
+                return jsonify({
+                    "success": False,
+                    "message": "Simulador ativo mas não há clientes conectados",
+                    "clients": 0
+                })
+        
+        # Iniciar novo simulador se não existir
+        simulator_thread = threading.Thread(target=simulate_roulette_data)
+        simulator_thread.daemon = True
+        simulator_thread.start()
+        
+        # Marcar como iniciado
+        sys.simulator_thread_running = True
+        logger.info("Simulador iniciado manualmente via endpoint")
+        
+        return jsonify({
+            "success": True,
+            "message": "Simulador iniciado com sucesso",
+            "clients": len(event_manager.clients)
+        })
+    
+    except Exception as e:
+        logger.error(f"Erro ao iniciar simulador manualmente: {str(e)}")
+        return jsonify({
+            "success": False,
+            "message": f"Erro: {str(e)}"
+        }), 500
+
+# Função para forçar um evento único simulado
+@app.route('/api/force-event', methods=['GET'])
+def force_event():
+    """Endpoint para forçar a geração de um evento simulado imediatamente"""
+    try:
+        # Selecionar roleta e número aleatório
+        roletas_simuladas = [
+            {"id": "vctlz3AoNaGCzxJi", "nome": "Auto-Roulette"},
+            {"id": "LightningTable01", "nome": "Lightning Roulette"},
+            {"id": "7x0b1tgh7agmf6hv", "nome": "Roulette Live"}
+        ]
+        
+        roleta = random.choice(roletas_simuladas)
+        roleta_id = roleta["id"]
+        roleta_nome = roleta["nome"]
+        numero = random.randint(0, 36)
+        
+        # Criar evento
+        event_data = {
+            "type": "new_number",
+            "roleta": roleta_nome,
+            "numero": numero,
+            "timestamp": time.time(),
+            "simulado": True,
+            "forced": True
+        }
+        
+        # Inserir no Supabase
+        try:
+            inserir_novo_numero(roleta_id, roleta_nome, numero)
+            logger.info(f"[EVENTO FORÇADO] Número {numero} inserido no Supabase para {roleta_nome}")
+        except Exception as e:
+            logger.error(f"[EVENTO FORÇADO] Erro ao inserir no Supabase: {str(e)}")
+        
+        # Verificar clientes conectados
+        if len(event_manager.clients) > 0:
+            # Envio direto para garantir a entrega
+            for client_queue in event_manager.clients[:]:
+                try:
+                    client_queue.put(event_data)
+                    logger.info(f"[EVENTO FORÇADO] Enviado para um cliente")
+                except Exception as e:
+                    logger.error(f"[EVENTO FORÇADO] Erro ao enviar: {str(e)}")
+            
+            # Envio via gerenciador
+            event_manager.notify_clients(event_data)
+            
+            return jsonify({
+                "success": True,
+                "message": f"Evento forçado: {numero} em {roleta_nome}",
+                "clients": len(event_manager.clients),
+                "data": event_data
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "message": "Evento gerado mas não há clientes conectados",
+                "data": event_data,
+                "clients": 0
+            })
+    
+    except Exception as e:
+        logger.error(f"Erro ao forçar evento: {str(e)}")
+        return jsonify({
+            "success": False,
+            "message": f"Erro: {str(e)}"
+        }), 500
+
+@app.route('/api/status', methods=['GET'])
+def get_status():
+    """Endpoint para verificar o status do simulador e do sistema SSE"""
+    try:
+        status = {
+            "timestamp": datetime.now().isoformat(),
+            "simulator_running": hasattr(sys, 'simulator_thread_running') and sys.simulator_thread_running,
+            "scraper_running": hasattr(sys, 'scraper_thread_running') and sys.scraper_thread_running,
+            "clients_connected": len(event_manager.clients),
+            "environment": {
+                "production": IS_PRODUCTION,
+                "simulate_data": os.environ.get('SIMULATE_DATA') == 'true',
+                "disable_scraper": os.environ.get('DISABLE_SCRAPER') == 'true',
+            },
+            "queue_size": event_manager.event_queue.qsize() if hasattr(event_manager.event_queue, 'qsize') else -1
+        }
+        
+        return jsonify(status)
+    except Exception as e:
+        logger.error(f"Erro ao obter status: {str(e)}")
+        return jsonify({
+            "error": str(e)
+        }), 500
+
 def main():
     """Função principal"""
     try:
@@ -723,26 +888,56 @@ def main():
 if __name__ == "__main__":
     # Marcar a thread do scraper como iniciada
     sys.scraper_thread_running = False
+    sys.simulator_thread_running = False
     
-    # Iniciar o scraper em um thread separado
-    if not os.environ.get('FLASK_ENV') == 'development' and not os.environ.get('DISABLE_SCRAPER') == 'true':
-        if os.environ.get('SIMULATE_DATA') == 'true':
-            logger.info("Iniciando simulador de dados em thread separada")
-            # Iniciar o simulador diretamente em vez de através da função main
+    # Forçar simulação se estiver configurada
+    simulate_data = os.environ.get('SIMULATE_DATA') == 'true'
+    disable_scraper = os.environ.get('DISABLE_SCRAPER') == 'true'
+    is_dev = os.environ.get('FLASK_ENV') == 'development'
+    
+    logger.info(f"Configuração: SIMULATE_DATA={simulate_data}, DISABLE_SCRAPER={disable_scraper}, DEV={is_dev}")
+    
+    # Iniciar o simulador em thread separado se estiver configurado
+    if simulate_data and not is_dev:
+        logger.info("Iniciando simulador de dados em thread separada (SIMULATE_DATA=true)")
+        try:
+            # Iniciar o simulador diretamente
             simulator_thread = threading.Thread(target=simulate_roulette_data)
             simulator_thread.daemon = True
             simulator_thread.start()
-            sys.scraper_thread_running = True
+            sys.simulator_thread_running = True
             logger.info("Thread do simulador iniciada com sucesso")
-        else:
+        except Exception as e:
+            logger.error(f"Erro ao iniciar simulador: {str(e)}")
+    
+    # Iniciar o scraper se não estiver desabilitado e não estiver em modo de simulação
+    if not disable_scraper and not simulate_data and not is_dev:
+        logger.info("Iniciando scraper em thread separada")
+        try:
             scraper_thread = threading.Thread(target=main)
             scraper_thread.daemon = True
             scraper_thread.start()
             sys.scraper_thread_running = True
-            logger.info("Scraper iniciado em thread separada")
-    else:
-        logger.info("Scraper não iniciado automaticamente (modo desenvolvimento ou desabilitado)")
+            logger.info("Thread do scraper iniciada com sucesso")
+        except Exception as e:
+            logger.error(f"Erro ao iniciar scraper: {str(e)}")
+    
+    # Inicializar um simulador de backup (10s) caso nenhum outro método tenha sido iniciado
+    if not sys.simulator_thread_running and not sys.scraper_thread_running:
+        logger.info("Iniciando simulador de backup após 10 segundos")
+        
+        def start_delayed_simulator():
+            logger.info("Aguardando 10 segundos para iniciar simulador de backup...")
+            time.sleep(10)
+            logger.info("Iniciando simulador de backup")
+            sys.simulator_thread_running = True
+            simulate_roulette_data()
+        
+        backup_thread = threading.Thread(target=start_delayed_simulator)
+        backup_thread.daemon = True
+        backup_thread.start()
     
     # Iniciar o servidor Flask
     port = int(os.environ.get('PORT', 5000))
+    logger.info(f"Iniciando servidor Flask na porta {port}")
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
