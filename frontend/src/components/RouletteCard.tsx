@@ -1,4 +1,4 @@
-import { TrendingUp, ChartBar } from 'lucide-react';
+import { TrendingUp, ChartBar, ArrowUp, ArrowDown, Eye, EyeOff, BarChart3, PlayCircle, PieChart, History, Clock, Target, Percent, Heart, Star, AlertTriangle, BarChart } from 'lucide-react';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from '@/components/ui/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -511,96 +511,129 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       {memoizedWinRate}
       {memoizedTrendChart}
       
-      {/* Insights Section */}
-      <div className="p-2 bg-[#1a1922] rounded-lg border border-[#00ff00]/20">
-        <h4 className="text-xs font-medium text-[#00ff00] mb-1.5 flex items-center">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00] mr-1.5"></span>
-          Insights & Estatísticas
-        </h4>
-        <div className="space-y-1.5">
-          {lastNumbers.length > 0 && (
-            <>
-              {/* Tendência de cores */}
-              <div className="flex items-center text-xs">
-                <div className={`w-3 h-3 rounded-full mr-1.5 ${getRouletteNumberColor(lastNumbers[0]).replace('text-white', '')}`}></div>
-                <span className="text-gray-300">
-                  {getColorName(lastNumbers[0])} apareceu nas últimas {getColorStreak(lastNumbers)} rodadas
-                </span>
-              </div>
-              
-              {/* Dica de aposta */}
-              <div className="flex items-center text-xs">
-                <div className="w-3 h-3 rounded-full bg-[#00ff00] mr-1.5"></div>
-                <span className="text-gray-300">
-                  {getInsightMessage(lastNumbers, wins, losses)}
-                </span>
-              </div>
-              
-              {/* Estatística da sessão */}
-              <div className="flex items-center text-xs">
-                <div className="w-3 h-3 rounded-full bg-blue-500 mr-1.5"></div>
-                <span className="text-gray-300">
-                  Taxa de acerto: {((wins / (wins + losses)) * 100).toFixed(1)}% nos últimos 20 números
-                </span>
-              </div>
-              
-              {/* Novas Estatísticas - Distribuição de Cores */}
-              {!analyticsLoading && colorDistribution.length > 0 && (
-                <div className="flex items-center text-xs mt-2 pt-2 border-t border-gray-700">
-                  <div className="flex space-x-1 mr-2">
-                    {colorDistribution.map((item, idx) => (
-                      <div 
-                        key={idx} 
-                        className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold ${
-                          item.cor === 'vermelho' ? 'bg-red-600' : 
-                          item.cor === 'preto' ? 'bg-black' : 'bg-green-600'
-                        }`}
-                        title={`${item.cor}: ${item.porcentagem.toFixed(1)}%`}
-                      >
-                        {Math.round(item.porcentagem)}%
-                      </div>
-                    ))}
-                  </div>
-                  <span className="text-gray-300">
-                    Distribuição de cores
-                  </span>
-                </div>
-              )}
-              
-              {/* Sequência Atual */}
-              {!analyticsLoading && currentStreak.count > 0 && (
-                <div className="flex items-center text-xs">
-                  <div className="w-3 h-3 rounded-full bg-purple-500 mr-1.5"></div>
-                  <span className="text-gray-300">
-                    Sequência: {currentStreak.count}x {currentStreak.value} {currentStreak.type === 'cor' ? '' : ' (' + currentStreak.type + ')'}
-                  </span>
-                </div>
-              )}
-              
-              {/* Dúzias Ausentes */}
-              {!analyticsLoading && missingDozens.length > 0 && (
-                <div className="flex items-center text-xs">
-                  <div className="w-3 h-3 rounded-full bg-yellow-500 mr-1.5"></div>
-                  <span className="text-gray-300">
-                    Dúzia {missingDozens[0].dezena} ausente há {missingDozens[0].ausencia} jogadas
-                  </span>
-                </div>
-              )}
-              
-              {/* Botão para ver análise completa */}
-              <div className="mt-2 pt-2 border-t border-gray-700">
-                <button 
-                  className="w-full text-center text-xs font-medium text-[#00ff00] py-1 px-2 rounded bg-[#00ff00]/10 hover:bg-[#00ff00]/20 transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation(); // Evitar que o click propague para o card
-                    setStatsOpen(true);
-                  }}
-                >
-                  Ver análise completa
-                </button>
-              </div>
-            </>
+      {/* Insights Section - Versão redesenhada e simplificada */}
+      <div className="p-3 bg-[#1a1922] rounded-lg border border-[#00ff00]/20">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-sm font-medium text-white flex items-center">
+            <BarChart3 size={16} className="text-[#00ff00] mr-1.5" />
+            Análises Rápidas
+          </h4>
+          {!analyticsLoading && (
+            <span className="text-xs text-gray-400 bg-[#252431] px-2 py-0.5 rounded-full">
+              {lastNumbers.length} jogadas
+            </span>
           )}
+        </div>
+        
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          {/* Mini-card 1: Distribuição de cores */}
+          <div className="p-2 bg-[#252431] rounded-lg">
+            <div className="flex items-center mb-1.5">
+              <PieChart size={14} className="text-[#00ff00] mr-1" />
+              <span className="text-[10px] uppercase font-medium text-gray-400">Cores</span>
+            </div>
+            
+            {!analyticsLoading && colorDistribution.length > 0 ? (
+              <div className="flex space-x-1">
+                {colorDistribution.map((item, idx) => (
+                  <div 
+                    key={idx} 
+                    className="flex-1 h-5 rounded-sm flex items-center justify-center"
+                    style={{
+                      backgroundColor: item.cor === 'vermelho' ? '#ef4444' : 
+                                      item.cor === 'preto' ? '#1e1e1e' : '#10b981',
+                      opacity: 0.7 + (item.porcentagem / 100) * 0.3
+                    }}
+                  >
+                    <span className="text-[10px] font-bold text-white">
+                      {Math.round(item.porcentagem)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="h-5 bg-gray-700/30 rounded-sm animate-pulse"></div>
+            )}
+          </div>
+          
+          {/* Mini-card 2: Taxa de Acerto */}
+          <div className="p-2 bg-[#252431] rounded-lg">
+            <div className="flex items-center mb-1.5">
+              <Target size={14} className="text-[#00ff00] mr-1" />
+              <span className="text-[10px] uppercase font-medium text-gray-400">Acertos</span>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <div 
+                className="flex-1 h-5 bg-gray-700/30 rounded-sm overflow-hidden"
+              >
+                <div 
+                  className="h-full bg-gradient-to-r from-blue-500 to-[#00ff00]"
+                  style={{ width: `${Math.min(100, Math.max(1, ((wins / (wins + losses)) * 100)))}%` }}
+                ></div>
+              </div>
+              <span className="text-sm font-bold text-[#00ff00]">
+                {((wins / (wins + losses)) * 100).toFixed(0)}%
+              </span>
+            </div>
+          </div>
+        </div>
+        
+        <div className="space-y-2">
+          {/* Sequência Atual */}
+          {!analyticsLoading && currentStreak.count > 0 && (
+            <div className="flex items-center justify-between bg-[#252431] p-2 rounded-lg">
+              <div className="flex items-center">
+                <History size={14} className="text-purple-400 mr-1.5" />
+                <span className="text-xs text-gray-300">Sequência</span>
+              </div>
+              <div className="flex items-center">
+                <span className="text-xs font-medium text-purple-400">
+                  {currentStreak.count}x {currentStreak.value}
+                </span>
+              </div>
+            </div>
+          )}
+          
+          {/* Dúzia Ausente */}
+          {!analyticsLoading && missingDozens.length > 0 && (
+            <div className="flex items-center justify-between bg-[#252431] p-2 rounded-lg">
+              <div className="flex items-center">
+                <Clock size={14} className="text-yellow-400 mr-1.5" />
+                <span className="text-xs text-gray-300">Dúzia ausente</span>
+              </div>
+              <div className="flex items-center">
+                <span className="text-xs font-medium text-yellow-400">
+                  {missingDozens[0].dezena} ({missingDozens[0].ausencia}x)
+                </span>
+              </div>
+            </div>
+          )}
+          
+          {/* Tendência e Recomendação */}
+          <div className="flex items-center justify-between bg-[#252431] p-2 rounded-lg">
+            <div className="flex items-center">
+              <Star size={14} className="text-[#00ff00] mr-1.5" />
+              <span className="text-xs text-gray-300">Recomendação</span>
+            </div>
+            <div className="flex items-center">
+              <span className="text-xs font-medium text-[#00ff00]">
+                {getColorName(lastNumbers[0] || 0).toUpperCase()}
+              </span>
+            </div>
+          </div>
+          
+          {/* Botão Análise Completa */}
+          <button 
+            className="w-full flex items-center justify-center bg-[#00ff00]/10 hover:bg-[#00ff00]/20 text-[#00ff00] py-2 px-4 rounded-lg transition-colors mt-2"
+            onClick={(e) => {
+              e.stopPropagation(); // Evitar que o click propague para o card
+              setStatsOpen(true);
+            }}
+          >
+            <BarChart3 size={16} className="mr-1.5" />
+            <span className="text-xs font-medium">Ver Análise Completa</span>
+          </button>
         </div>
       </div>
       
