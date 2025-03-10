@@ -643,7 +643,7 @@ def simulate_roulette_data():
         logger.error(f"[SIMULAÇÃO] Erro ao gerar evento inicial: {str(e)}")
     
     # Pequena pausa antes de iniciar o ciclo principal
-    time.sleep(5)
+    time.sleep(1)  # Reduzido de 5 para 1 segundo
     
     # Ciclo principal de simulação
     while True:
@@ -682,14 +682,14 @@ def simulate_roulette_data():
             else:
                 logger.warning("[SIMULAÇÃO] Nenhum cliente conectado para receber o evento")
             
-            # Aguardar intervalo mais curto para testes (10-30 segundos)
-            intervalo = random.randint(10, 30)
+            # Intervalo ULTRA RÁPIDO (1-3 segundos)
+            intervalo = random.randint(1, 3)
             logger.info(f"[SIMULAÇÃO] Aguardando {intervalo} segundos até o próximo número")
             time.sleep(intervalo)
             
         except Exception as e:
             logger.error(f"[SIMULAÇÃO] Erro ao simular dados: {str(e)}")
-            time.sleep(10)  # Aguardar e tentar novamente
+            time.sleep(5)  # Reduzido de 10 para 5 segundos
 
 @app.route('/api/start-simulator', methods=['GET'])
 def start_simulator():
