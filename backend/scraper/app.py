@@ -1053,6 +1053,8 @@ def main():
         # Iniciar thread de monitoramento do scraper
         def monitor_scraper_health():
             """Thread para monitorar a saúde do scraper e reiniciá-lo se necessário"""
+            global ultima_atividade_scraper
+            
             logger.info("Iniciando thread de monitoramento do scraper")
             
             while True:
@@ -1075,7 +1077,6 @@ def main():
                         logger.info("Novo thread de scraping iniciado após inatividade")
                         
                         # Atualizar timestamp para evitar múltiplas reinicializações
-                        global ultima_atividade_scraper
                         ultima_atividade_scraper = time.time()
                     
                     # Verificar a cada 5 minutos
