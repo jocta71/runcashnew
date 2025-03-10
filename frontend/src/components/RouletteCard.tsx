@@ -38,6 +38,9 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
   
   // Referência ao serviço de eventos
   const eventServiceRef = useRef<EventService | null>(null);
+  
+  // Referência para o intervalo de polling
+  const pollingIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
     console.log(`[DEPURAÇÃO][${name}] Inicializando componente RouletteCard`);
@@ -58,59 +61,91 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
         console.log(`[DEPURAÇÃO][${name}] Números recebidos:`, numbers);
         
         if (numbers && numbers.length > 0) {
-          console.log(`[DEPURAÇÃO][${name}] ${numbers.length} números encontrados:`, numbers);
-          setLastNumbers(numbers);
+          setLastNumbers(numbers.map(n => Number(n)));
+          setDataSeeded(true);
           setUsingSupabaseData(true);
-          setDataSeeded(true);
-          
-          toast({
-            title: `Dados carregados: ${name}`,
-            description: `${numbers.length} números encontrados: ${numbers.slice(0, 3).join(', ')}...`,
-            variant: 'default',
-          });
+          setIsLoading(false);
+          console.log(`[DEPURAÇÃO][${name}] Dados carregados com sucesso do Supabase`);
         } else {
-          console.log(`[DEPURAÇÃO][${name}] Nenhum número encontrado no Supabase`);
-          
-          // Usar os dados iniciais como fallback apenas se realmente não houver dados no Supabase
-          if (initialLastNumbers && initialLastNumbers.length > 0) {
-            console.log(`[DEPURAÇÃO][${name}] Usando dados iniciais:`, initialLastNumbers);
-            setLastNumbers(initialLastNumbers);
-          } else {
-            console.log(`[DEPURAÇÃO][${name}] Nenhum dado inicial disponível. Usando array vazio.`);
-            setLastNumbers([]);
-          }
-          
-          setUsingSupabaseData(false);
+          console.log(`[DEPURAÇÃO][${name}] Nenhum dado encontrado no Supabase, usando dados iniciais`);
+          setLastNumbers(initialLastNumbers || []);
           setDataSeeded(true);
-          
-          toast({
-            title: `Sem dados: ${name}`,
-            description: 'Nenhum número encontrado no Supabase',
-            variant: 'destructive',
-          });
+          setUsingSupabaseData(false);
+          setIsLoading(false);
         }
       } catch (error) {
         console.error(`[ERRO][${name}] Erro ao buscar dados:`, error);
-        
-        // Usar os dados iniciais como fallback em caso de erro
-        if (initialLastNumbers && initialLastNumbers.length > 0) {
-          setLastNumbers(initialLastNumbers);
-        }
-        
-        setUsingSupabaseData(false);
+        setLastNumbers(initialLastNumbers || []);
         setDataSeeded(true);
-        
-        toast({
-          title: `Erro: ${name}`,
-          description: `Erro ao buscar dados: ${error}`,
-          variant: 'destructive',
-        });
-      } finally {
+        setUsingSupabaseData(false);
         setIsLoading(false);
       }
     };
 
     checkAndSeedData();
+    
+    // Configurar polling como fallback para SSE - buscar novos números a cada 15 segundos
+    const startPolling = () => {
+      console.log(`[POLLING][${name}] Iniciando polling como fallback para SSE`);
+      
+      // Limpar intervalo anterior se existir
+      if (pollingIntervalRef.current) {
+        window.clearInterval(pollingIntervalRef.current);
+      }
+      
+      // Criar novo intervalo de polling
+      pollingIntervalRef.current = window.setInterval(async () => {
+        try {
+          console.log(`[POLLING][${name}] Verificando novos números...`);
+          const latestNumbers = await fetchRouletteLatestNumbersByName(name, 1);
+          
+          if (latestNumbers && latestNumbers.length > 0) {
+            const latestNumber = Number(latestNumbers[0]);
+            
+            // Comparar com o número atual
+            setLastNumbers(currentNumbers => {
+              if (currentNumbers.length === 0 || currentNumbers[0] !== latestNumber) {
+                console.log(`[POLLING][${name}] Novo número encontrado via polling: ${latestNumber}`);
+                
+                // Salvar o número anterior
+                if (currentNumbers.length > 0) {
+                  setPreviousLastNumber(currentNumbers[0]);
+                }
+                
+                // Verificar estratégia para o novo número
+                verificarEstrategia(latestNumber);
+                
+                // Criar o novo array de números
+                const updatedNumbers = [latestNumber, ...currentNumbers.slice(0, 19)];
+                
+                toast({
+                  title: "Novo Número (via Polling)",
+                  description: `${latestNumber} (${name})`,
+                  variant: "default",
+                });
+                
+                return updatedNumbers;
+              }
+              return currentNumbers;
+            });
+          }
+        } catch (error) {
+          console.error(`[POLLING][${name}] Erro ao buscar novos números:`, error);
+        }
+      }, 15000); // Verificar a cada 15 segundos
+    };
+    
+    // Iniciar polling
+    startPolling();
+    
+    return () => {
+      console.log(`[DEPURAÇÃO][${name}] Desmontando componente RouletteCard`);
+      // Limpar intervalo de polling quando o componente for desmontado
+      if (pollingIntervalRef.current) {
+        window.clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
   }, [name, initialLastNumbers]);
 
   // Handler para novos eventos de números de roleta
