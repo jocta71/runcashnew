@@ -1,47 +1,49 @@
-import { memo } from 'react';
+import React, { memo, useEffect } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { getRouletteNumberColor } from '@/utils/rouletteUtils';
 
 interface LastNumbersProps {
   numbers: number[];
   isLoading: boolean;
 }
 
-// Função simplificada para obter cor do número
-const getNumberColor = (num: number): string => {
-  if (num === 0) {
-    return "bg-green-600 text-white";
-  } else if ([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(num)) {
-    return "bg-red-600 text-white";
-  } else {
-    return "bg-gray-900 text-white";
-  }
-};
-
-// Componente extremamente simplificado, sem estado, sem efeitos
 const LastNumbers = memo(({ numbers, isLoading }: LastNumbersProps) => {
-  // Filtragem básica de números
-  const validNumbers = numbers.filter(n => n >= 0 && n <= 36);
+  // Validar números para garantir que são válidos
+  const validNumbers = numbers.filter(num => num >= 0 && num <= 36);
   
-  // Estado de carregamento
+  // Log para depuração
+  useEffect(() => {
+    console.log('[LastNumbers] Renderizando com números:', validNumbers);
+    console.log('[LastNumbers] Estado de carregamento:', isLoading);
+  }, [validNumbers, isLoading]);
+  
+  // Renderizar estado de carregamento
   if (isLoading) {
+    console.log('[LastNumbers] Renderizando estado de carregamento');
     return (
       <div className="flex flex-wrap gap-1.5 my-2">
-        <div className="text-sm">Carregando números...</div>
+        {Array(20).fill(0).map((_, i) => (
+          <Skeleton key={i} className="w-7 h-7 rounded-full" />
+        ))}
       </div>
     );
   }
   
-  // Sem números
+  // Renderizar mensagem se não houver números válidos
   if (validNumbers.length === 0) {
+    console.log('[LastNumbers] Sem números válidos para exibir');
     return <div className="text-sm text-gray-400 my-2">Nenhum número disponível</div>;
   }
   
-  // Apenas renderizar números
+  // Renderizar números
+  console.log('[LastNumbers] Renderizando números:', validNumbers.slice(0, 5));
   return (
     <div className="flex flex-wrap gap-1.5 my-2" data-testid="last-numbers">
       {validNumbers.map((num, idx) => (
         <div
           key={`${num}-${idx}`}
-          className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${getNumberColor(num)}`}
+          className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${getRouletteNumberColor(num)}`}
+          data-number={num}
         >
           {num}
         </div>

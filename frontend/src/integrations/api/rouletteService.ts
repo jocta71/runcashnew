@@ -208,25 +208,15 @@ export const fetchAllRoulettes = async (): Promise<RouletteData[]> => {
   }
 };
 
-// Nova interface para retornar números e timestamps
-export interface RouletteNumbersResult {
-  numbers: number[];
-  timestamps?: string[];
-}
-
-// Função modificada para buscar números mais recentes por nome da roleta, com opção de retornar timestamps
-export const fetchRouletteLatestNumbersByName = async (
-  roletaNome: string, 
-  limit = 10,
-  includeTimestamps = false
-): Promise<RouletteNumbersResult> => {
+// Nova função para buscar números mais recentes por nome da roleta
+export const fetchRouletteLatestNumbersByName = async (roletaNome: string, limit = 10): Promise<number[]> => {
   try {
     console.log(`[DEPURAÇÃO] Buscando números para roleta '${roletaNome}'...`);
     console.log(`[DEPURAÇÃO] URL: ${SUPABASE_URL}/rest/v1/roleta_numeros?roleta_nome=eq.${encodeURIComponent(roletaNome)}`);
     
     // Buscar diretamente do Supabase usando o nome da roleta
     const response = await fetch(
-      `${SUPABASE_URL}/rest/v1/roleta_numeros?roleta_nome=eq.${encodeURIComponent(roletaNome)}&select=id,timestamp,roleta_id,roleta_nome,numero&order=timestamp.desc&limit=${limit}`,
+      `${SUPABASE_URL}/rest/v1/roleta_numeros?roleta_nome=eq.${encodeURIComponent(roletaNome)}&select=id,created_at,roleta_id,roleta_nome,numero&order=created_at.desc&limit=${limit}`,
       {
         headers: {
           'apikey': SUPABASE_KEY,
@@ -247,7 +237,7 @@ export const fetchRouletteLatestNumbersByName = async (
     
     if (!Array.isArray(data)) {
       console.error(`[ERRO] Resposta não é um array para roleta '${roletaNome}':`, data);
-      return { numbers: [] };
+      return [];
     }
     
     console.log(`[DEPURAÇÃO] Encontrados ${data.length} registros para roleta '${roletaNome}'`);
@@ -261,22 +251,15 @@ export const fetchRouletteLatestNumbersByName = async (
         return num;
       });
       
-      // Se solicitado, também extrair timestamps
-      const result: RouletteNumbersResult = { numbers };
-      
-      if (includeTimestamps) {
-        result.timestamps = data.map(item => item.timestamp || item.created_at);
-      }
-      
-      console.log(`[DEPURAÇÃO] Retornando ${numbers.length} números para roleta '${roletaNome}'`, result);
-      return result;
+      console.log(`[DEPURAÇÃO] Números extraídos para '${roletaNome}':`, numbers);
+      return numbers;
     }
     
-    console.log(`[DEPURAÇÃO] Nenhum registro encontrado para roleta '${roletaNome}'`);
-    return { numbers: [] };
+    console.warn(`[AVISO] Nenhum número encontrado para roleta '${roletaNome}'`);
+    return [];
   } catch (error) {
     console.error(`[ERRO] Exceção ao buscar números para roleta '${roletaNome}':`, error);
-    return { numbers: [] };
+    return [];
   }
 };
 
@@ -303,7 +286,7 @@ export const fetchRouletteLatestNumbers = async (roletaId: string, limit = 10): 
           
           // Se encontrou o nome, usar a função de busca por nome
           if (roletaNome) {
-            return await fetchRouletteLatestNumbersByName(roletaNome, limit).then(result => result.numbers);
+            return await fetchRouletteLatestNumbersByName(roletaNome, limit);
           }
         }
       }
