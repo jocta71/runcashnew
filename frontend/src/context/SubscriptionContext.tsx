@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Plan, PlanType, UserSubscription } from '@/types/plans';
 import { useAuth } from './AuthContext';
@@ -97,7 +97,91 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const { toast } = useToast();
   const [currentSubscription, setCurrentSubscription] = useState<UserSubscription | null>(null);
   const [currentPlan, setCurrentPlan] = useState<Plan | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [subscriptionDetails, setSubscriptionDetails] = useState<SubscriptionDetails | null>(null);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+
+  // Função para obter os detalhes da assinatura
+  const fetchSubscriptionDetails = useCallback(async () => {
+    if (!user) {
+      setCurrentPlan(null);
+      setSubscriptionDetails(null);
+      return;
+    }
+
+    try {
+      // Verificar se temos dados da assinatura em sessionStorage
+      const storedSubscription = sessionStorage.getItem('subscription_data');
+      if (storedSubscription) {
+        const subscriptionData = JSON.parse(storedSubscription);
+        setCurrentPlan(subscriptionData.plan || null);
+        setSubscriptionDetails(subscriptionData.details || null);
+        return; // Retorna imediatamente se temos dados em cache
+      }
+
+      // Apenas define loading=true se não temos dados em cache
+      setLoading(true);
+      
+      // Buscar assinatura atual do usuário
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        // Verificar se a assinatura está ativa
+        const now = new Date();
+        const expiresAt = new Date(data.expires_at);
+        
+        // Se a data de expiração é no futuro, a assinatura está ativa
+        if (expiresAt > now) {
+          setCurrentPlan(data.plan_id as Plan);
+          setSubscriptionDetails({
+            id: data.id,
+            createdAt: new Date(data.created_at),
+            expiresAt: expiresAt,
+            status: data.status,
+            planId: data.plan_id,
+            customerId: data.customer_id
+          });
+          
+          // Armazenar em sessionStorage para acesso rápido futuro
+          sessionStorage.setItem('subscription_data', JSON.stringify({
+            plan: data.plan_id,
+            details: {
+              id: data.id,
+              createdAt: new Date(data.created_at),
+              expiresAt: expiresAt,
+              status: data.status,
+              planId: data.plan_id,
+              customerId: data.customer_id
+            }
+          }));
+        } else {
+          // Assinatura expirada
+          setCurrentPlan(null);
+          setSubscriptionDetails(null);
+        }
+      } else {
+        // Nenhuma assinatura encontrada
+        setCurrentPlan(null);
+        setSubscriptionDetails(null);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar detalhes da assinatura:', error);
+      setCurrentPlan(null);
+      setSubscriptionDetails(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
 
   // Função para carregar a assinatura do usuário do Supabase
   const loadUserSubscription = async () => {

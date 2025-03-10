@@ -17,9 +17,10 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   // Verificar se a rota atual está na lista de isentas
   const isExemptRoute = planExemptRoutes.some(route => location.pathname.startsWith(route));
 
-  // Show loading while checking authentication or subscription
+  // Remover completamente a tela de carregamento
   if (authLoading || subscriptionLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
+    // Não mostrar nada durante o carregamento
+    return null;
   }
 
   // Redirect to login if not authenticated

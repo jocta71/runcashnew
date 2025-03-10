@@ -12,9 +12,10 @@ interface AuthRouteProps {
 const AuthRoute = ({ children }: AuthRouteProps) => {
   const { user, loading } = useAuth();
 
-  // Mostrar tela de carregamento enquanto verifica a autenticação
+  // Remover completamente a tela de carregamento
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
+    // Não mostrar nada durante o carregamento
+    return null;
   }
 
   // Redirecionar para a página inicial se já estiver autenticado

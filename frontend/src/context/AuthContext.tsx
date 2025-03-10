@@ -18,23 +18,45 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    // Função para recuperar o estado de autenticação armazenado
+    const checkAuthState = async () => {
+      try {
+        // Verificar se temos dados de usuário em sessionStorage
+        const storedUser = sessionStorage.getItem('user');
+        if (storedUser) {
+          const userData = JSON.parse(storedUser);
+          setUser(userData);
+          return; // Retorna imediatamente se temos dados em cache
+        }
+
+        // Apenas define loading=true se não temos dados em cache
+        setLoading(true);
+        
+        // Verificar estado de autenticação no Supabase
+        const { data } = await supabase.auth.getSession();
+        
+        if (data.session) {
+          const { user } = data.session;
+          setUser(user);
+          // Armazenar em sessionStorage para acesso rápido futuro
+          sessionStorage.setItem('user', JSON.stringify(user));
+        }
+      } catch (error) {
+        console.error('Erro ao verificar autenticação:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkAuthState();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
       setUser(session?.user ?? null);
-      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -159,7 +181,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await supabase.auth.signOut();
       // Limpar o estado do usuário e sessão após logout
       setUser(null);
-      setSession(null);
     } catch (error) {
       console.error('Error signing out:', error);
       toast({
@@ -171,7 +192,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const value = {
-    session,
+    session: null,
     user,
     loading,
     signIn,
