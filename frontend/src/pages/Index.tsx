@@ -107,9 +107,22 @@ const Index = () => {
     };
   }, []);
   
+  // Verificar se os componentes estão congelados (bloqueados pelo sistema anti-recarregamento)
+  const areComponentsFrozen = () => {
+    return (window as any).__REACT_COMPONENTS_FROZEN === true;
+  };
+  
   // Função para buscar roletas do banco de dados
   const fetchRoulettes = async () => {
     try {
+      // Se os componentes estão congelados, usar apenas dados em cache
+      if (areComponentsFrozen() && roulettes.length > 0) {
+        console.log('[FREEZE] Componentes congelados, mantendo dados em cache');
+        setIsLoading(false);
+        setLoaded(true);
+        return;
+      }
+      
       // Verificar se já temos dados em cache
       if (roulettes.length > 0) {
         console.log('[PERSISTÊNCIA] Usando dados em cache, roletas já carregadas:', roulettes.length);
@@ -229,6 +242,14 @@ const Index = () => {
   
   // Efeito para carregar dados quando o componente montar
   useEffect(() => {
+    // Se os componentes estão congelados, não fazer nada além de usar o estado atual
+    if (areComponentsFrozen() && roulettes.length > 0) {
+      console.log('[FREEZE] Index: Componentes congelados, mantendo estado atual com', roulettes.length, 'roletas');
+      setIsLoading(false);
+      setLoaded(true);
+      return;
+    }
+  
     // Verificar se os dados já foram carregados anteriormente para evitar recarregamentos desnecessários
     const alreadyLoaded = localStorage.getItem('data_loaded_timestamp');
     const currentTime = Date.now();
@@ -400,6 +421,50 @@ const Index = () => {
       });
     }
   };
+
+  // Tratamento para eventos de retorno à página
+  useEffect(() => {
+    const handleReturnToPage = (event: any) => {
+      console.log('[EVENTO] Index: Retorno à página detectado');
+      
+      // Se os componentes estão congelados, não fazer nada
+      if (areComponentsFrozen()) {
+        console.log('[EVENTO] Index: Componentes congelados, mantendo estado atual');
+        
+        // Garantir que a UI não mostre carregamento
+        setIsLoading(false);
+        setLoaded(true);
+        return;
+      }
+      
+      // Se já temos dados, apenas verificar idade
+      if (roulettes.length > 0) {
+        const lastUpdate = localStorage.getItem('data_loaded_timestamp');
+        if (lastUpdate) {
+          const timeSinceUpdate = Date.now() - parseInt(lastUpdate);
+          const updateThreshold = 15 * 60 * 1000; // 15 minutos
+          
+          // Se passou muito tempo, atualizar silenciosamente em segundo plano
+          if (timeSinceUpdate > updateThreshold) {
+            console.log('[EVENTO] Index: Dados antigos, atualizando silenciosamente em segundo plano');
+            fetchRoulettes().then(() => {
+              localStorage.setItem('data_loaded_timestamp', Date.now().toString());
+            });
+          } else {
+            console.log('[EVENTO] Index: Dados ainda recentes, mantendo estado');
+          }
+        }
+      }
+    };
+    
+    // Registrar manipulador para o evento personalizado
+    window.addEventListener('app:returned-to-page', handleReturnToPage);
+    
+    // Limpar quando o componente desmontar
+    return () => {
+      window.removeEventListener('app:returned-to-page', handleReturnToPage);
+    };
+  }, [roulettes]);
 
   return (
     <div className="min-h-screen flex bg-vegas-black">

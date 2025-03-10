@@ -82,6 +82,11 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
   // Função para verificar se a página está visível
   const isDocumentVisible = () => document.visibilityState === 'visible';
   
+  // Verificar se os componentes estão congelados (bloqueados pelo sistema anti-recarregamento)
+  const areComponentsFrozen = () => {
+    return (window as any).__REACT_COMPONENTS_FROZEN === true;
+  };
+  
   // Persistir o estado sempre que lastNumbers mudar
   useEffect(() => {
     if (lastNumbers.length > 0) {
@@ -93,11 +98,87 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     }
   }, [lastNumbers, roletaNome]);
 
+  // Tratamento para eventos de retorno à página
+  useEffect(() => {
+    const handleReturnToPage = (event: any) => {
+      console.log(`[EVENTO][${roletaNome}] Retorno à página detectado, tempo fora:`, 
+        Math.round(event.detail.timeAway / 1000), 'segundos');
+        
+      // Se os componentes estão congelados, não fazer nada
+      if (areComponentsFrozen()) {
+        console.log(`[EVENTO][${roletaNome}] Componentes congelados, mantendo estado atual`);
+        return;
+      }
+      
+      // Verificar se precisamos atualizar dados
+      const lastUpdated = persistentState[roletaNome]?.lastUpdated || 0;
+      const now = Date.now();
+      const tenMinutes = 10 * 60 * 1000;
+      
+      if (now - lastUpdated > tenMinutes && document.visibilityState === 'visible') {
+        console.log(`[EVENTO][${roletaNome}] Atualizando dados antigos silenciosamente`);
+        
+        // Atualização silenciosa em segundo plano, sem alterar UI
+        fetchRouletteLatestNumbersByName(roletaNome, 20)
+          .then(numbers => {
+            if (!isMounted.current) return;
+            
+            if (numbers && numbers.length > 0) {
+              const processedNumbers = numbers.map(n => Number(n));
+              
+              // Comparar com os dados atuais para verificar se há novidades
+              if (JSON.stringify(processedNumbers) !== JSON.stringify(lastNumbers)) {
+                console.log(`[EVENTO][${roletaNome}] Novos dados disponíveis, atualizando silenciosamente`);
+                setLastNumbers(processedNumbers);
+              } else {
+                console.log(`[EVENTO][${roletaNome}] Dados iguais, mantendo estado atual`);
+              }
+              
+              // Atualizar estado persistente de qualquer forma
+              persistentState[roletaNome] = {
+                lastNumbers: processedNumbers,
+                lastUpdated: Date.now(),
+                hasLoaded: true
+              };
+            }
+          })
+          .catch(error => {
+            console.error(`[ERRO][${roletaNome}] Erro ao atualizar dados:`, error);
+          });
+      }
+    };
+    
+    // Registrar manipulador para o evento personalizado
+    window.addEventListener('app:returned-to-page', handleReturnToPage);
+    
+    // Limpar quando o componente desmontar
+    return () => {
+      window.removeEventListener('app:returned-to-page', handleReturnToPage);
+    };
+  }, [roletaNome, lastNumbers]);
+
   // Inicialização - Carrega dados apenas se necessário
   useEffect(() => {
     console.log(`[CICLO][${roletaNome}] Componente montado`);
     
+    // Se os componentes estão congelados, não fazer nada além de carregar do estado persistente
+    if (areComponentsFrozen()) {
+      console.log(`[CICLO][${roletaNome}] Componentes congelados, usando apenas estado persistente`);
+      
+      if (persistentState[roletaNome]?.lastNumbers?.length > 0) {
+        setLastNumbers(persistentState[roletaNome].lastNumbers);
+        setIsLoading(false);
+        setDataSeeded(true);
+        return;
+      }
+    }
+    
     const needsUpdate = () => {
+      // Se estamos congelados, não atualizar
+      if (areComponentsFrozen()) {
+        return false;
+      }
+      
       // Se já temos estado persistente e foi atualizado recentemente, não precisamos atualizar
       if (persistentState[roletaNome]?.hasLoaded) {
         const lastUpdated = persistentState[roletaNome].lastUpdated;

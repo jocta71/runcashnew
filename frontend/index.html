@@ -14,55 +14,147 @@
         let lastLoadTime = Date.now();
         let preventReload = true; // Adiciona flag para controle explícito
         
+        // Armazenar estado em memória global
+        window.__STATE_CACHE = window.__STATE_CACHE || {
+          components: {},
+          lastUpdated: Date.now(),
+          isInitialized: false
+        };
+        
+        // Função para congelar completamente os componentes React durante recargas
+        window.freezeReactComponents = function() {
+          console.log('[FREEZE] Congelando componentes React');
+          window.__REACT_COMPONENTS_FROZEN = true;
+          
+          // Quando a página é congelada, salvamos uma marcação no sessionStorage
+          try {
+            sessionStorage.setItem('components_frozen', 'true');
+            sessionStorage.setItem('freeze_timestamp', Date.now().toString());
+          } catch (e) {
+            console.error('[FREEZE] Erro ao salvar estado:', e);
+          }
+        };
+        
+        // Função para descongelar componentes
+        window.unfreezeReactComponents = function() {
+          console.log('[FREEZE] Descongelando componentes React');
+          window.__REACT_COMPONENTS_FROZEN = false;
+          
+          try {
+            sessionStorage.removeItem('components_frozen');
+          } catch (e) {
+            console.error('[FREEZE] Erro ao remover estado:', e);
+          }
+        };
+        
+        // Verificar se já estamos congelados
+        try {
+          if (sessionStorage.getItem('components_frozen') === 'true') {
+            window.__REACT_COMPONENTS_FROZEN = true;
+            console.log('[FREEZE] Componentes iniciados em estado congelado');
+            
+            // Se o congelamento foi há muito tempo, descongelar
+            const freezeTime = parseInt(sessionStorage.getItem('freeze_timestamp') || '0');
+            const now = Date.now();
+            const oneHour = 60 * 60 * 1000;
+            
+            if (now - freezeTime > oneHour) {
+              console.log('[FREEZE] Congelamento expirado, descongelando');
+              window.unfreezeReactComponents();
+            }
+          }
+        } catch (e) {
+          console.error('[FREEZE] Erro ao verificar estado de congelamento:', e);
+        }
+        
         // Sempre que a página é recarregada, verificamos se é um recarregamento "natural"
         window.addEventListener('load', function() {
+          console.log('[CICLO] Evento load disparado');
           const currentTime = Date.now();
+          
           // Se o recarregamento ocorreu menos de 5 segundos após mudança de visibilidade, foi automático
           if (preventReload && currentTime - lastLoadTime < 5000 && document.visibilityState === 'visible') {
             // Impedir o recarregamento
             history.pushState(null, document.title, location.href);
-            console.log('Prevented auto-reload on tab/window focus');
+            console.log('[NAVEGAÇÃO] Prevenido recarregamento automático ao voltar para aba');
+            
+            // Congelar componentes React para evitar recarregamento interno
+            window.freezeReactComponents();
           }
           
           // Atualizar o tempo de carregamento
           lastLoadTime = currentTime;
           preventReload = true; // Reativar a prevenção
+          
+          // Marca que a página foi carregada pelo menos uma vez
+          window.__STATE_CACHE.isInitialized = true;
         });
         
         // Cache para a função bfcache
         window.addEventListener('pageshow', function(event) {
+          console.log('[CICLO] Evento pageshow disparado, persisted:', event.persisted);
+          
           if (event.persisted) {
             // Impedir recarregamento quando vier do cache do navegador
-            console.log('Page from cache, preventing reload');
+            console.log('[NAVEGAÇÃO] Página recuperada do cache, prevenindo recarregamento');
             history.pushState(null, document.title, location.href);
             preventReload = true;
+            
+            // Congelar componentes React
+            window.freezeReactComponents();
           }
         });
         
         // Prevenir recarregamento quando a página ganha foco novamente
         document.addEventListener('visibilitychange', function() {
+          console.log('[VISIBILIDADE] Mudança de visibilidade:', document.visibilityState);
+          
           if (document.visibilityState === 'visible') {
-            console.log('Page visible again, timestamp updated');
+            console.log('[VISIBILIDADE] Página visível novamente');
+            const timeSinceLastLoad = Date.now() - lastLoadTime;
+            
+            // Se ficou invisível por mais de 1 segundo, mas menos que 1 hora
+            if (timeSinceLastLoad > 1000 && timeSinceLastLoad < 3600000) {
+              console.log('[VISIBILIDADE] Prevenindo recarregamento após', Math.round(timeSinceLastLoad / 1000), 'segundos');
+              
+              // Congelar componentes React para evitar recarregamento interno
+              window.freezeReactComponents();
+              
+              // Disparar evento personalizado para notificar componentes
+              window.dispatchEvent(new CustomEvent('app:returned-to-page', {
+                detail: { timeAway: timeSinceLastLoad }
+              }));
+            }
+            
             lastLoadTime = Date.now();
             
             // Impedir recarregamento explicitamente
             if (preventReload) {
               history.pushState(null, document.title, location.href);
             }
+          } else {
+            console.log('[VISIBILIDADE] Página ocultada');
+            
+            // Disparar evento personalizado para notificar componentes
+            window.dispatchEvent(new CustomEvent('app:leaving-page'));
           }
         });
         
         // Adicionar evento para histórico
         window.addEventListener('popstate', function(event) {
           // Redireciona para a mesma página atual, evitando navegação para trás/frente
-          console.log('Navigation prevented');
+          console.log('[NAVEGAÇÃO] Navegação prevenida');
           history.pushState(null, document.title, location.href);
         });
         
         // Impedir o comportamento padrão de recarregar ao voltar para a página
         window.addEventListener('beforeunload', function(e) {
           if (preventReload) {
-            console.log('Preventing unload');
+            console.log('[NAVEGAÇÃO] Prevenindo unload');
+            
+            // Congelar estado antes de potencialmente sair
+            window.freezeReactComponents();
+            
             // Mensagem não será mostrada em browsers modernos por segurança
             e.preventDefault();
             e.returnValue = '';
@@ -71,9 +163,12 @@
 
         // Solução mais forte para Safari/iOS
         document.addEventListener('DOMContentLoaded', function() {
+          console.log('[CICLO] DOM totalmente carregado');
+          
           // Força o browser a recarregar o cache na inicialização
           window.addEventListener('pagehide', function() {
-            console.log('Page hidden, preparing for possible return');
+            console.log('[NAVEGAÇÃO] Página ocultada, preparando para possível retorno');
+            window.freezeReactComponents();
           });
         });
       })();
