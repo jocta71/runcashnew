@@ -195,12 +195,12 @@ export const fetchAllRoulettes = async (): Promise<RouletteData[]> => {
     
   } catch (error) {
     console.error('Erro ao buscar roletas:', error);
-    
+
     // Fallback para a API apenas se o Supabase falhar
-    try {
+  try {
       console.log('Tentando buscar roletas pela API como fallback...');
       const response = await api.get<RouletteData[]>('/roletas');
-      return response.data;
+    return response.data;
     } catch (apiError) {
       console.error('Erro ao buscar roletas pela API:', apiError);
       return [];

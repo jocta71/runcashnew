@@ -1,41 +1,16 @@
-FROM python:3.11-slim
+FROM node:18-slim
 
 WORKDIR /app
 
-# Instalar Google Chrome e suas dependências
-RUN apt-get update && apt-get install -y \
-    wget \
-    unzip \
-    gnupg \
-    libgconf-2-4 \
-    libgtk-3-0 \
-    libxss1 \
-    libnss3 \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+COPY api/package*.json ./
 
-# Instalar Chrome
-RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list \
-    && apt-get update \
-    && apt-get install -y google-chrome-stable \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+RUN npm install --omit=dev
 
-# Configurar variáveis de ambiente para o Chrome
-ENV CHROME_BIN=/usr/bin/google-chrome
-ENV CHROME_PATH=/usr/lib/google-chrome
+COPY api/ ./
 
-# Copiar arquivos de requisitos e instalar dependências
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install gunicorn
+ENV PORT=3000
+ENV NODE_ENV=production
 
-# Copiar o código da aplicação
-COPY . .
+EXPOSE 3000
 
-# Porta para o servidor Flask
-EXPOSE 8080
-
-# Comando para rodar a aplicação com Gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "scraper.app:app", "--timeout", "0", "--workers", "1", "--threads", "2"] 
+CMD ["node", "index.js"] 

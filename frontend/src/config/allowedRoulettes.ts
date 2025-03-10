@@ -9,8 +9,7 @@ export const ROLETAS_PERMITIDAS = [
   "2010096",  // Speed Auto Roulette
   "2010017",  // Auto-Roulette
   "2010098",  // Auto-Roulette VIP,
-  // Adicionando um valor especial que permitirá aceitar qualquer ID
-  "*" // Permite todas as roletas
+
 ];
 
 /**

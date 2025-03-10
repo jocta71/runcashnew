@@ -1,60 +1,6 @@
-# Arquivos do Git
+node_modules
+npm-debug.log
+.env
 .git
 .gitignore
-
-# Arquivos Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Arquivos de ambiente
-.env
-.env.*
-.venv
-venv/
-ENV/
-
-# Logs e dados temporários
-logs/
-*.log
-*.tmp
-*.pid
-
-# Arquivos específicos do ambiente de desenvolvimento
-.DS_Store
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# Arquivos de cache
-.pylintrc
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Outros
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnp/
-.pnp.js
 scraper/ 
