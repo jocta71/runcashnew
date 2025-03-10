@@ -53,6 +53,7 @@ Se você usou o deploy automático com o arquivo `render.yaml`, a maioria das va
    - `RENDER`: true
    - `PRODUCTION`: true
    - `DISABLE_SCRAPER`: false (mude para true se o scraper não funcionar)
+   - `SIMULATE_DATA`: true (ativa a simulação de dados quando o scraper real não funciona)
    - `SCRAPE_INTERVAL_MINUTES`: 5
    - `MAX_CICLOS`: 0
 
@@ -79,8 +80,17 @@ No seu projeto frontend na Vercel:
 
 O Render pode ter limitações para executar o Chrome em modo headless. Se o scraper não estiver funcionando:
 
-1. Defina a variável de ambiente `DISABLE_SCRAPER` como "true"
-2. Considere usar um serviço separado para o scraping (como uma função cron em outro provedor)
+1. Verifique os logs para identificar erros específicos
+2. Ative a simulação de dados definindo `SIMULATE_DATA` como "true"
+3. Opcionalmente, desabilite o scraper definindo `DISABLE_SCRAPER` como "true"
+
+#### Modo de Simulação
+
+O modo de simulação gera números aleatórios para roletas predefinidas em intervalos aleatórios (30-120 segundos). Isso é útil para:
+
+- Testar a aplicação quando o scraper real não funciona
+- Desenvolvimento e testes sem precisar interagir com o site externo
+- Garantir que o frontend receba eventos mesmo quando há problemas com o Selenium
 
 ### Monitorando Logs
 

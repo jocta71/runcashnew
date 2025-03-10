@@ -128,13 +128,57 @@ def sse():
 # Endpoint de verificação de saúde para o Render
 @app.route('/health')
 def health_check():
-    return jsonify({
-        "status": "ok",
+    """Endpoint de verificação de saúde para monitoramento"""
+    driver_status = "N/A"
+    if hasattr(sys, 'scraper_thread_running'):
+        driver_status = "Running" if sys.scraper_thread_running else "Not running"
+    
+    status = {
+        "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "service": "runcash-backend",
-        "environment": "production" if IS_PRODUCTION else "development",
-        "scraper_running": hasattr(sys, 'scraper_thread_running') and sys.scraper_thread_running
-    })
+        "scraper": driver_status,
+        "clients_connected": len(event_manager.clients)
+    }
+    return jsonify(status)
+
+@app.route('/api/test/event', methods=['POST'])
+def generate_test_event():
+    """Endpoint para gerar eventos de teste manualmente"""
+    try:
+        # Verificar autenticação (apenas para uso de desenvolvimento)
+        if not IS_PRODUCTION or request.headers.get('X-API-Key') == os.environ.get('API_KEY'):
+            data = request.json if request.is_json else {}
+            
+            # Usar os dados enviados ou gerar aleatórios
+            roleta_nome = data.get('roleta', 'Roulette Live')
+            numero = data.get('numero', random.randint(0, 36))
+            roleta_id = data.get('roleta_id', '7x0b1tgh7agmf6hv')
+            
+            # Criar o evento
+            event_data = {
+                "type": "new_number",
+                "roleta": roleta_nome,
+                "numero": numero,
+                "timestamp": time.time(),
+                "simulado": True,
+                "manual": True
+            }
+            
+            # Inserir no Supabase
+            try:
+                inserir_novo_numero(roleta_id, roleta_nome, numero)
+            except Exception as e:
+                logger.error(f"Erro ao inserir número simulado no Supabase: {str(e)}")
+            
+            # Notificar clientes
+            event_manager.notify_clients(event_data)
+            
+            return jsonify({"success": True, "message": "Evento simulado enviado", "data": event_data})
+        else:
+            return jsonify({"success": False, "message": "Não autorizado"}), 401
+    except Exception as e:
+        logger.error(f"Erro ao gerar evento de teste: {str(e)}")
+        return jsonify({"success": False, "message": str(e)}), 500
 
 # Endpoint para ver as roletas ativas atualmente
 @app.route('/api/roletas')
@@ -165,29 +209,41 @@ analisadores_mesas = {}
 def configurar_driver():
     """Configura o driver do Selenium com opções para ambiente de cloud"""
     chrome_options = Options()
-    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--headless=new")  # Versão mais recente do modo headless
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
     
-    # Configurações adicionais específicas para o Render
+    # Configurações adicionais específicas para o Render e ambientes cloud
     if IS_PRODUCTION:
         chrome_options.add_argument("--disable-extensions")
         chrome_options.add_argument("--disable-setuid-sandbox")
         chrome_options.add_argument("--remote-debugging-port=9222")
-        chrome_options.add_argument("--single-process")
+        chrome_options.add_argument("--disable-software-rasterizer")
+        chrome_options.add_argument("--disable-features=VizDisplayCompositor")
+        chrome_options.add_argument("--ignore-certificate-errors")
+        chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36")
         
-        # Tentar usar o driver do Chrome instalado no ambiente
-        try:
-            # No Render, o Chrome pode estar em um local específico
-            service = Service("/usr/bin/chromium-browser")
-            driver = webdriver.Chrome(service=service, options=chrome_options)
-            logger.info("Driver do Chrome inicializado com caminho explícito em produção")
-            return driver
-        except Exception as e:
-            logger.warning(f"Erro ao inicializar Chrome com caminho explícito: {str(e)}")
-            logger.info("Tentando método alternativo...")
+        # Caminhos possíveis para o Chrome/Chromium no Render
+        chrome_paths = [
+            "/usr/bin/chromium-browser",
+            "/usr/bin/chromium",
+            "/usr/bin/google-chrome",
+            "/usr/bin/chrome",
+        ]
+        
+        # Tentar cada caminho possível
+        for chrome_path in chrome_paths:
+            try:
+                if os.path.exists(chrome_path):
+                    logger.info(f"Chrome encontrado em: {chrome_path}")
+                    service = Service(chrome_path)
+                    driver = webdriver.Chrome(service=service, options=chrome_options)
+                    logger.info("Driver do Chrome inicializado com caminho explícito em produção")
+                    return driver
+            except Exception as e:
+                logger.warning(f"Erro ao inicializar Chrome com {chrome_path}: {str(e)}")
     
     # Método padrão para desenvolvimento local ou fallback
     try:
@@ -497,6 +553,55 @@ def scrape_roletas(driver=None):
             except Exception as e:
                 logger.error(f"Erro ao fechar driver: {str(e)}")
 
+# Função para simular dados quando o scraper não funcionar
+def simulate_roulette_data():
+    """Simula dados de roleta para testes quando o scraper não funciona"""
+    logger.info("Iniciando simulação de dados de roleta para testes")
+    
+    # IDs e nomes de roletas comuns para simulação
+    roletas_simuladas = [
+        {"id": "vctlz3AoNaGCzxJi", "nome": "Auto-Roulette"},
+        {"id": "LightningTable01", "nome": "Lightning Roulette"},
+        {"id": "7x0b1tgh7agmf6hv", "nome": "Roulette Live"}
+    ]
+    
+    while True:
+        try:
+            # Selecionar uma roleta aleatória
+            roleta = random.choice(roletas_simuladas)
+            roleta_id = roleta["id"]
+            roleta_nome = roleta["nome"]
+            
+            # Gerar número aleatório (0-36)
+            numero = random.randint(0, 36)
+            
+            # Registrar log
+            logger.info(f"[SIMULAÇÃO] Novo número: {numero} para {roleta_nome} (ID: {roleta_id})")
+            
+            # Inserir no Supabase
+            try:
+                inserir_novo_numero(roleta_id, roleta_nome, numero)
+                
+                # Notificar clientes
+                event_data = {
+                    "type": "new_number",
+                    "roleta": roleta_nome,
+                    "numero": numero,
+                    "timestamp": time.time(),
+                    "simulado": True
+                }
+                event_manager.notify_clients(event_data)
+                
+            except Exception as e:
+                logger.error(f"[SIMULAÇÃO] Erro ao inserir número simulado: {str(e)}")
+            
+            # Aguardar intervalo aleatório (30-120 segundos)
+            time.sleep(random.randint(30, 120))
+            
+        except Exception as e:
+            logger.error(f"[SIMULAÇÃO] Erro ao simular dados: {str(e)}")
+            time.sleep(60)  # Aguardar 1 minuto e tentar novamente
+
 def main():
     """Função principal"""
     try:
@@ -507,6 +612,12 @@ def main():
         except Exception as e:
             logger.error(f"Erro ao verificar tabela roleta_numeros: {str(e)}")
             logger.warning("A tabela pode não existir ou há um problema de conexão")
+        
+        # Se estivermos em produção e a simulação estiver ativada
+        if IS_PRODUCTION and os.environ.get('SIMULATE_DATA') == 'true':
+            logger.info("Modo de simulação de dados ativado")
+            simulate_roulette_data()
+            return
         
         # Se estivermos em produção e em ambiente cloud como o Render, 
         # pode ser necessário desabilitar o scraping com Selenium
@@ -524,13 +635,20 @@ if __name__ == "__main__":
     # Marcar a thread do scraper como iniciada
     sys.scraper_thread_running = False
     
-    # Iniciar o scraper em um thread separado se não estiver em ambiente de desenvolvimento
+    # Iniciar o scraper em um thread separado
     if not os.environ.get('FLASK_ENV') == 'development' and not os.environ.get('DISABLE_SCRAPER') == 'true':
-        scraper_thread = threading.Thread(target=main)
-        scraper_thread.daemon = True
-        scraper_thread.start()
-        sys.scraper_thread_running = True
-        logger.info("Scraper iniciado em thread separada")
+        if os.environ.get('SIMULATE_DATA') == 'true':
+            logger.info("Iniciando simulador de dados em thread separada")
+            simulator_thread = threading.Thread(target=simulate_roulette_data)
+            simulator_thread.daemon = True
+            simulator_thread.start()
+            sys.scraper_thread_running = True
+        else:
+            scraper_thread = threading.Thread(target=main)
+            scraper_thread.daemon = True
+            scraper_thread.start()
+            sys.scraper_thread_running = True
+            logger.info("Scraper iniciado em thread separada")
     else:
         logger.info("Scraper não iniciado automaticamente (modo desenvolvimento ou desabilitado)")
     
