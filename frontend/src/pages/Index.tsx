@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Search, Wallet, Menu, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '@/components/Sidebar';
@@ -32,7 +32,6 @@ interface ChatMessage {
 }
 
 interface Roulette {
-  id: string;
   name: string;
   lastNumbers: number[];
   wins: number;
@@ -70,103 +69,21 @@ const Index = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
   
-  // Refs para manter o estado durante recargas
-  const roulettesRef = useRef<Record<string, Roulette>>({});
-  const lastUpdateRef = useRef<number>(Date.now());
-  
   // Inicializar o serviço de eventos quando o componente montar
   useEffect(() => {
+    // Comentando a inicialização do EventService para desativar as atualizações em tempo real
+    /*
     // Inicializar o EventService para começar a receber atualizações em tempo real
-    const eventService = EventService;
-    
-    // Registrar listener global para todos os eventos de roleta
-    const handleRouletteEvent = (event: RouletteNumberEvent) => {
-      console.log(`Evento recebido: ${event.type} - ${event.roleta_nome} - ${event.numero}`);
-      
-      // Atualizar os dados da roleta com o novo número
-      updateRouletteWithNewNumber(event.roleta_id, event.roleta_nome, event.numero);
-    };
-    
-    // Registrar para todos os eventos (usando '*' como wildcard)
-    eventService.registerListener('*', handleRouletteEvent);
-    
-    // Verificar se há algum evento em cache para processar imediatamente
-    const cachedEvents = eventService.getCachedEvents();
-    if (cachedEvents.length > 0) {
-      console.log(`Processando ${cachedEvents.length} eventos em cache`);
-      // Processar eventos do mais antigo para o mais recente
-      cachedEvents.reverse().forEach(event => {
-        handleRouletteEvent(event);
-      });
-    }
+    const eventService = EventService.getInstance();
     
     // Limpar quando o componente desmontar
     return () => {
-      eventService.unregisterListener('*', handleRouletteEvent);
+      // O serviço é um singleton, então não queremos destruí-lo completamente
+      // apenas limpar recursos específicos deste componente se necessário
     };
-  }, []);
-  
-  // Função para atualizar uma roleta com um novo número
-  const updateRouletteWithNewNumber = useCallback((roletaId: string, roletaNome: string, numero: number) => {
-    // Atualizar o estado sem perder dados anteriores
-    setRoulettes(prevRoulettes => {
-      // Encontrar a roleta pelo ID ou nome
-      const existingRouletteIndex = prevRoulettes.findIndex(r => 
-        r.id === roletaId || r.name === roletaNome
-      );
-      
-      if (existingRouletteIndex >= 0) {
-        // Roleta existe, atualizar dados
-        const updatedRoulettes = [...prevRoulettes];
-        const roleta = {...updatedRoulettes[existingRouletteIndex]};
-        
-        // Adicionar o novo número à lista de últimos números
-        roleta.lastNumbers = [numero, ...roleta.lastNumbers.slice(0, 19)];
-        
-        // Atualizar estatísticas baseadas na estratégia
-        if (roleta.status === 'BUY') {
-          // Verificar se ganhou ou perdeu baseado na estratégia
-          const isWin = numero % 2 === 0; // Exemplo: estratégia para números pares
-          if (isWin) {
-            roleta.wins++;
-          } else {
-            roleta.losses++;
-          }
-          
-          // Atualizar tendência
-          roleta.trend = generateTrendFromWinRate(roleta.wins, roleta.losses);
-        }
-        
-        // Salvar na ref para persistência
-        roulettesRef.current[roletaId] = roleta;
-        
-        // Atualizar a lista
-        updatedRoulettes[existingRouletteIndex] = roleta;
-        lastUpdateRef.current = Date.now();
-        
-        return updatedRoulettes;
-      } else if (roletaId && roletaNome) {
-        // Roleta não existe, adicionar nova se tiver ID e nome
-        const newRoulette: Roulette = {
-          id: roletaId,
-          name: roletaNome,
-          lastNumbers: [numero],
-          wins: 0,
-          losses: 0,
-          trend: generateTrendFromWinRate(0, 0),
-          suggestion: '',
-          status: 'NEUTRAL'
-        };
-        
-        // Salvar na ref para persistência
-        roulettesRef.current[roletaId] = newRoulette;
-        lastUpdateRef.current = Date.now();
-        
-        return [...prevRoulettes, newRoulette];
-      }
-      
-      return prevRoulettes;
-    });
+    */
+    
+    console.log("[DEBUG] Atualizações em tempo real desativadas - EventService não inicializado");
   }, []);
   
   // Função para buscar roletas do banco de dados
@@ -201,17 +118,12 @@ const Index = () => {
           const lastNumbers = await fetchRouletteLatestNumbersByName(item.nome, 20);
           console.log(`[DEBUG] Números obtidos para '${item.nome}':`, lastNumbers);
           
-          // Verificar se temos dados persistidos para esta roleta
-          const persistedRoulette = roulettesRef.current[item.id];
-          
           return {
-            id: item.id,
             name: item.nome,
             lastNumbers: lastNumbers.length > 0 ? lastNumbers : (Array.isArray(item.numeros) ? item.numeros : []),
-            // Preservar contadores de wins/losses se existirem na memória
-            wins: persistedRoulette?.wins ?? item.vitorias ?? 0,
-            losses: persistedRoulette?.losses ?? item.derrotas ?? 0,
-            trend: persistedRoulette?.trend ?? generateTrendFromWinRate(item.vitorias, item.derrotas),
+            wins: item.vitorias || 0,
+            losses: item.derrotas || 0,
+            trend: generateTrendFromWinRate(item.vitorias, item.derrotas),
             suggestion: item.sugestao_display || '',
             status: item.estado_estrategia || 'NEUTRAL'
           };

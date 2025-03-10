@@ -117,14 +117,9 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
   const handleNewNumber = useCallback((event: RouletteNumberEvent) => {
     console.log(`[DEPURAÇÃO][${name}] Novo número recebido via SSE: ${event.numero}`);
     
-    // Atualizar o estado apenas se for uma roleta relevante
-    if (event.roleta_nome === name || name.includes(event.roleta_nome)) {
-      setLastNumbers(currentNumbers => {
-        // Ignorar duplicações
-        if (currentNumbers.length > 0 && currentNumbers[0] === event.numero) {
-          return currentNumbers;
-        }
-        
+    // Atualizar o estado apenas se for um número novo
+    setLastNumbers(currentNumbers => {
+      if (currentNumbers.length === 0 || currentNumbers[0] !== event.numero) {
         // Salvar o número anterior
         if (currentNumbers.length > 0) {
           setPreviousLastNumber(currentNumbers[0]);
@@ -143,12 +138,16 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
         });
         
         return updatedNumbers;
-      });
-    }
+      }
+      
+      return currentNumbers;
+    });
   }, [name]);
 
   // Inscrever-se para receber eventos da roleta específica
   useEffect(() => {
+    // Comentando o código de inscrição nos eventos para desativar as atualizações automáticas
+    /*
     if (dataSeeded && eventServiceRef.current) {
       console.log(`[DEPURAÇÃO][${name}] Inscrevendo para eventos da roleta`);
       
@@ -163,6 +162,10 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
         }
       };
     }
+    */
+    
+    // Adicionando log para confirmar que as atualizações automáticas estão desativadas
+    console.log(`[DEPURAÇÃO][${name}] Atualizações automáticas desativadas por configuração`);
   }, [dataSeeded, name, handleNewNumber]);
 
   const verificarEstrategia = (numero: number) => {
@@ -234,98 +237,140 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     <RouletteTrendChart trend={trend} />
   ), [trend]);
 
+  const memoizedActionButtons = useMemo(() => (
+    <RouletteActionButtons 
+      onDetailsClick={handleDetailsClick}
+      onPlayClick={handlePlayClick}
+    />
+  ), []);
+
+  // Função para determinar a cor do número da roleta
   const getRouletteNumberColor = (num: number) => {
-    // Vermelho: 1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36
-    const redNumbers = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
-    if (num === 0) return 'bg-green-600'; // Verde para 0
-    return redNumbers.includes(num) ? 'bg-red-600' : 'bg-black'; // Vermelho ou preto
+    num = Number(num); // Garantir que o número está no formato correto
+    if (num === 0) {
+      return 'bg-green-600 text-white'; // Verde para o zero
+    } else if ([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36].includes(num)) {
+      return 'bg-red-600 text-white'; // Vermelho para números específicos
+    } else {
+      return 'bg-black text-white'; // Preto para os demais números
+    }
   };
 
   return (
-    <div className="bg-[#1A191F] rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 relative">
-      <div 
-        className="w-full h-full cursor-pointer" 
-        onClick={() => navigate(`/roleta/${name.toLowerCase().replace(/\s+/g, '-')}`)}
-      >
-        <div className="p-4 border-b border-gray-800">
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="text-lg font-bold text-white">{name}</h3>
-            <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-600 text-white">
-              Ativo
-            </span>
-          </div>
-          
+    <div 
+      className="bg-[#17161e]/90 backdrop-filter backdrop-blur-sm border border-white/10 rounded-xl p-4 space-y-3 animate-fade-in hover-scale cursor-pointer h-auto"
+      onClick={handleDetailsClick}
+    >
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">{name}</h3>
+        <div className="flex items-center">
           {usingSupabaseData ? (
-            <div className="bg-green-900/20 border border-green-500/30 rounded-md px-2 py-1 text-xs text-green-400 mb-2">
-              Dados em tempo real
-            </div>
+            <span className="text-xs mr-2 text-[#00ff00]">Dados do Supabase</span>
           ) : (
-            <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-md px-2 py-1 text-xs text-yellow-400 mb-2">
-              Dados de exemplo
-            </div>
+            <span className="text-xs mr-2 text-yellow-400">Aguardando Supabase</span>
           )}
-          
-          {memoizedNumbers}
+          <TrendingUp size={20} className="text-[#00ff00]" />
         </div>
-        
-        <div className="p-4 border-b border-gray-800">
-          <div className="flex items-start justify-between mb-2">
-            <h4 className="text-md font-semibold text-white">Sugestão</h4>
-            <button onClick={(e) => {e.stopPropagation(); generateSuggestion();}} className="text-xs text-vegas-gold hover:text-vegas-gold/80">
-              Atualizar
-            </button>
-          </div>
-          
-          {memoizedSuggestion}
-          
-          <div className="bg-gray-800/50 p-2 mt-2 rounded text-xs text-gray-300">
-            {currentStrategy.name}
-          </div>
-        </div>
-        
-        <div className="flex border-b border-gray-800">
-          <div className="w-1/2 p-3 border-r border-gray-800">
-            <div className="text-gray-500 text-xs mb-1 flex items-center">
-              <TrendingUp size={12} className="mr-1" /> Taxa de Acerto
-            </div>
-            {memoizedWinRate}
-          </div>
-          <div className="w-1/2 p-3">
-            <div className="text-gray-500 text-xs mb-1 flex items-center">
-              <ChartBar size={12} className="mr-1" /> Tendência
-            </div>
-            {memoizedTrendChart}
-          </div>
-        </div>
-        
-        <RouletteActionButtons 
-          onDetailsClick={handleDetailsClick}
-          onPlayClick={handlePlayClick}
-        />
       </div>
       
-      <RouletteStatsModal 
-        open={statsOpen} 
-        setOpen={setStatsOpen} 
-        roletaName={name} 
+      {memoizedNumbers}
+      {memoizedSuggestion}
+      {memoizedWinRate}
+      {memoizedTrendChart}
+      
+      {/* Insights Section */}
+      <div className="p-2 bg-[#1a1922] rounded-lg border border-[#00ff00]/20">
+        <h4 className="text-xs font-medium text-[#00ff00] mb-1.5 flex items-center">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00] mr-1.5"></span>
+          Insights
+        </h4>
+        <div className="space-y-1.5">
+          {lastNumbers.length > 0 && (
+            <>
+              {/* Tendência de cores */}
+              <div className="flex items-center text-xs">
+                <div className={`w-3 h-3 rounded-full mr-1.5 ${getRouletteNumberColor(lastNumbers[0]).replace('text-white', '')}`}></div>
+                <span className="text-gray-300">
+                  {getColorName(lastNumbers[0])} apareceu nas últimas {getColorStreak(lastNumbers)} rodadas
+                </span>
+              </div>
+              
+              {/* Dica de aposta */}
+              <div className="flex items-center text-xs">
+                <div className="w-3 h-3 rounded-full bg-[#00ff00] mr-1.5"></div>
+                <span className="text-gray-300">
+                  {getInsightMessage(lastNumbers, wins, losses)}
+                </span>
+              </div>
+              
+              {/* Estatística da sessão */}
+              <div className="flex items-center text-xs">
+                <div className="w-3 h-3 rounded-full bg-blue-500 mr-1.5"></div>
+                <span className="text-gray-300">
+                  Taxa de acerto: {((wins / (wins + losses)) * 100).toFixed(1)}% nos últimos 20 números
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      
+      {memoizedActionButtons}
+
+      <div className="pt-2 flex flex-col h-full">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-[#00ff00]">{name}</h2>
+          <Button
+            variant="outline"
+            size="sm"
+            className="px-2 py-1 h-8 text-xs border-[#00ff00] text-[#00ff00] hover:bg-[#00ff00]/10"
+            onClick={(e) => {
+              e.stopPropagation();
+              setStatsOpen(true);
+            }}
+          >
+            <ChartBar className="h-3 w-3 mr-1" />
+            Estatísticas
+          </Button>
+        </div>
+        
+        <div className="my-2">
+          <h3 className="text-white/70 text-xs mb-1">Últimos números:</h3>
+          <div className="flex flex-wrap gap-1">
+            {lastNumbers.slice(0, 5).map((num, idx) => (
+              <div
+                key={`number-${idx}`}
+                className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${getRouletteNumberColor(num)}`}
+              >
+                {num}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <RouletteStatsModal
+        open={statsOpen}
+        onOpenChange={setStatsOpen}
+        name={name}
         lastNumbers={lastNumbers}
         wins={wins}
         losses={losses}
+        trend={trend}
       />
     </div>
   );
 };
 
-// Funções auxiliares
+// Funções auxiliares para insights
 const getColorName = (num: number): string => {
-  if (num === 0) return 'verde';
-  const redNumbers = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
-  return redNumbers.includes(num) ? 'vermelho' : 'preto';
+  num = Number(num); // Garantir que o número está no formato correto
+  if (num === 0) return "Verde";
+  if ([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36].includes(num)) return "Vermelho";
+  return "Preto";
 };
 
 const getColorStreak = (numbers: number[]): number => {
-  if (numbers.length === 0) return 0;
-  
   const firstColor = getColorName(numbers[0]);
   let streak = 1;
   
@@ -341,17 +386,23 @@ const getColorStreak = (numbers: number[]): number => {
 };
 
 const getInsightMessage = (numbers: number[], wins: number, losses: number): string => {
-  if (numbers.length < 5) return "Dados insuficientes para análise.";
+  const lastNum = numbers[0];
+  const isRed = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36].includes(lastNum);
+  const isBlack = lastNum !== 0 && !isRed;
+  const winRate = wins / (wins + losses);
   
-  const colorStreak = getColorStreak(numbers);
-  const winRate = wins / (wins + losses || 1) * 100;
-  
-  if (colorStreak >= 3) {
-    return `Repetição de ${getColorName(numbers[0])} (${colorStreak}x).`;
-  } else if (winRate > 55) {
-    return "Taxa de acerto acima da média!";
+  if (winRate > 0.65) {
+    return "Momento favorável para apostar em números " + (isRed ? "pretos" : "vermelhos");
+  } else if (numbers.filter(n => n % 2 === 0).length > numbers.length * 0.7) {
+    return "Tendência de números pares nas últimas rodadas";
+  } else if (numbers.filter(n => n % 2 !== 0).length > numbers.length * 0.7) {
+    return "Tendência de números ímpares nas últimas rodadas";
+  } else if (numbers.filter(n => n <= 18).length > numbers.length * 0.7) {
+    return "Tendência de números baixos (1-18) nas últimas rodadas";
+  } else if (numbers.filter(n => n > 18 && n <= 36).length > numbers.length * 0.7) {
+    return "Tendência de números altos (19-36) nas últimas rodadas";
   } else {
-    return "Padrão normal detectado.";
+    return "Distribua suas apostas em diferentes setores da mesa";
   }
 };
 
