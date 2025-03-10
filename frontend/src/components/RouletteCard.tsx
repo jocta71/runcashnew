@@ -506,7 +506,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
         </div>
       </div>
       
-      {memoizedNumbers}
+      {/* Últimos números removidos a pedido do usuário */}
       {memoizedSuggestion}
       {memoizedWinRate}
       {memoizedTrendChart}
@@ -653,20 +653,6 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
             <ChartBar className="h-3 w-3 mr-1" />
             Estatísticas
           </Button>
-        </div>
-        
-        <div className="my-2">
-          <h3 className="text-white/70 text-xs mb-1">Últimos números:</h3>
-          <div className="flex flex-wrap gap-1">
-            {lastNumbers.slice(0, 5).map((num, idx) => (
-              <div
-                key={`number-${idx}`}
-                className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${getRouletteNumberColor(num)}`}
-              >
-                {num}
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 
