@@ -473,6 +473,43 @@ def obter_ultimos_numeros(roleta_id, limite=10):
         logger.error(f"Erro ao obter números da roleta {roleta_id}: {str(e)}")
         return []
 
+def garantir_roleta_existe(roleta_id, roleta_nome):
+    """
+    Verifica se a roleta existe na tabela roletas, 
+    e a insere caso não exista
+    """
+    try:
+        # Gerar o mesmo UUID determinístico baseado no ID da roleta
+        roleta_id_hash = hashlib.md5(str(roleta_id).encode()).hexdigest()
+        roleta_uuid = str(uuid.UUID(roleta_id_hash))
+        
+        # Verificar se a roleta já existe
+        response = supabase.table("roletas") \
+            .select("*") \
+            .filter("id", "eq", roleta_uuid) \
+            .execute()
+        
+        # Se não existe, inserir
+        if not response.data:
+            logger.info(f"Roleta {roleta_nome} (ID: {roleta_id}) não encontrada na tabela roletas. Inserindo...")
+            
+            # Preparar dados para inserção
+            dados_roleta = {
+                "id": roleta_uuid,
+                "nome": roleta_nome,
+                "provedor": "Evolution Gaming",  # Valor padrão
+                "ativa": True
+            }
+            
+            # Inserir na tabela roletas
+            result = supabase.table("roletas").upsert(dados_roleta).execute()
+            logger.info(f"Roleta {roleta_nome} inserida com sucesso na tabela roletas")
+            
+        return roleta_uuid
+    except Exception as e:
+        logger.error(f"Erro ao verificar/inserir roleta {roleta_nome}: {str(e)}")
+        return None
+
 def inserir_novo_numero(roleta_id, roleta_nome, numero):
     """
     Insere um novo número na tabela roleta_numeros
@@ -488,12 +525,11 @@ def inserir_novo_numero(roleta_id, roleta_nome, numero):
             logger.warning(f"Número inválido para inserção: {numero}")
             return False
         
-        # Gerar um UUID baseado no ID da roleta para compatibilidade
-        # Isso garante que o mesmo ID da roleta sempre gere o mesmo UUID
-        
-        # Criar um UUID determinístico baseado no ID da roleta
-        roleta_id_hash = hashlib.md5(str(roleta_id).encode()).hexdigest()
-        roleta_uuid = str(uuid.UUID(roleta_id_hash))
+        # Garantir que a roleta existe na tabela roletas
+        roleta_uuid = garantir_roleta_existe(roleta_id, roleta_nome)
+        if not roleta_uuid:
+            logger.error(f"Não foi possível garantir a existência da roleta {roleta_nome} (ID: {roleta_id})")
+            return False
         
         # Preparar dados para inserção
         data = {
