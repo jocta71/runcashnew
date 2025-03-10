@@ -21,6 +21,8 @@ from flask_cors import CORS
 import threading
 import queue
 import sys
+import uuid
+import hashlib
 
 from config import CASINO_URL, SUPABASE_URL, SUPABASE_KEY, roleta_permitida_por_id, SCRAPE_INTERVAL_MINUTES, logger, MAX_CICLOS
 from strategy_analyzer import StrategyAnalyzer
@@ -437,11 +439,16 @@ def extrair_id_roleta(elemento_roleta):
         logger.warning(f"Erro ao extrair ID da roleta: {str(e)}")
         return "unknown"
 
-def obter_ultimos_numeros(roleta_id, limite=1000):
+def obter_ultimos_numeros(roleta_id, limite=10):
     """
-    Obtém os últimos números de uma roleta específica da tabela roleta_numeros
+    Obtém os últimos números para uma roleta específica
     """
     try:
+        # Gerar o mesmo UUID determinístico baseado no ID da roleta
+        roleta_id_hash = hashlib.md5(str(roleta_id).encode()).hexdigest()
+        roleta_uuid = str(uuid.UUID(roleta_id_hash))
+        
+        # URL da API REST do Supabase
         url = f"{supabase_url}/rest/v1/roleta_numeros"
         
         # Log em debug em vez de info para reduzir ruído
@@ -449,7 +456,7 @@ def obter_ultimos_numeros(roleta_id, limite=1000):
         
         response = supabase.table("roleta_numeros") \
             .select("numero") \
-            .filter("roleta_id", "eq", roleta_id) \
+            .filter("roleta_id", "eq", roleta_uuid) \
             .order("timestamp", desc=True) \
             .limit(limite) \
             .execute()
@@ -481,16 +488,23 @@ def inserir_novo_numero(roleta_id, roleta_nome, numero):
             logger.warning(f"Número inválido para inserção: {numero}")
             return False
         
+        # Gerar um UUID baseado no ID da roleta para compatibilidade
+        # Isso garante que o mesmo ID da roleta sempre gere o mesmo UUID
+        
+        # Criar um UUID determinístico baseado no ID da roleta
+        roleta_id_hash = hashlib.md5(str(roleta_id).encode()).hexdigest()
+        roleta_uuid = str(uuid.UUID(roleta_id_hash))
+        
         # Preparar dados para inserção
         data = {
-            "roleta_id": roleta_id,
+            "roleta_id": roleta_uuid,
             "roleta_nome": roleta_nome,
             "numero": numero_int,
             "timestamp": datetime.now().isoformat()
         }
         
         # Log em debug em vez de info para reduzir ruído
-        logger.debug(f"Inserindo número {numero_int} para roleta {roleta_nome}")
+        logger.debug(f"Inserindo número {numero_int} para roleta {roleta_nome} (ID: {roleta_uuid})")
         
         # Inserir na tabela roleta_numeros
         response = supabase.table("roleta_numeros").insert(data).execute()
@@ -499,7 +513,7 @@ def inserir_novo_numero(roleta_id, roleta_nome, numero):
         # Notificar clientes SSE sobre o novo número
         event_data = {
             "type": "new_number",
-            "roleta_id": roleta_id,
+            "roleta_id": roleta_uuid,
             "roleta_nome": roleta_nome, 
             "numero": numero_int,
             "timestamp": datetime.now().isoformat()
