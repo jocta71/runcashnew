@@ -39,8 +39,11 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
   // Referência ao serviço de eventos
   const eventServiceRef = useRef<EventService | null>(null);
   
-  // Referência para o intervalo de polling
+  // Referência para o intervalo de polling (desativado por padrão)
   const pollingIntervalRef = useRef<number | null>(null);
+  
+  // Referência para a assinatura do Supabase Realtime
+  const supabaseSubscriptionRef = useRef<any>(null);
   
   // Controle para ativar/desativar o polling
   const ENABLE_POLLING = false; // Desativado por padrão
@@ -88,7 +91,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
 
     checkAndSeedData();
     
-    // Configurar polling como fallback para SSE - buscar novos números periodicamente
+    // Configurar polling como fallback (desativado por padrão)
     const startPolling = () => {
       // Verificar se o polling está habilitado
       if (!ENABLE_POLLING) {
@@ -145,15 +148,81 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       }, POLLING_INTERVAL);
     };
     
-    // Iniciar polling
+    // Iniciar polling se estiver habilitado
     startPolling();
+    
+    // Configurar assinatura do Supabase Realtime para a tabela roleta_numeros
+    const setupRealtimeSubscription = () => {
+      console.log(`[REALTIME][${name}] Configurando assinatura do Supabase Realtime...`);
+      
+      // Inscrever-se para atualizações na tabela roleta_numeros
+      const subscription = supabase
+        .channel('roleta_numeros_changes')
+        .on('postgres_changes', { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'roleta_numeros' 
+        }, (payload) => {
+          console.log(`[REALTIME][${name}] Evento do Supabase recebido:`, payload);
+          
+          // Verificar se o novo número é para esta roleta
+          if (payload.new && payload.new.roleta_nome === name) {
+            const novoNumero = Number(payload.new.numero);
+            console.log(`[REALTIME][${name}] Novo número para esta roleta: ${novoNumero}`);
+            
+            // Atualizar o estado com o novo número
+            setLastNumbers(currentNumbers => {
+              // Verificar se é um número novo
+              if (currentNumbers.length === 0 || currentNumbers[0] !== novoNumero) {
+                console.log(`[REALTIME][${name}] Atualizando números com: ${novoNumero}`);
+                
+                // Salvar o número anterior
+                if (currentNumbers.length > 0) {
+                  setPreviousLastNumber(currentNumbers[0]);
+                }
+                
+                // Verificar estratégia para o novo número
+                verificarEstrategia(novoNumero);
+                
+                // Criar o novo array de números
+                const updatedNumbers = [novoNumero, ...currentNumbers.slice(0, 19)];
+                
+                toast({
+                  title: "Novo Número (via Realtime)",
+                  description: `${novoNumero} (${name})`,
+                  variant: "default",
+                });
+                
+                return updatedNumbers;
+              }
+              return currentNumbers;
+            });
+          }
+        })
+        .subscribe();
+      
+      // Guardar referência para limpar depois
+      supabaseSubscriptionRef.current = subscription;
+      console.log(`[REALTIME][${name}] Assinatura Realtime configurada com sucesso`);
+    };
+    
+    // Configurar assinatura Realtime
+    setupRealtimeSubscription();
     
     return () => {
       console.log(`[DEPURAÇÃO][${name}] Desmontando componente RouletteCard`);
+      
       // Limpar intervalo de polling quando o componente for desmontado
       if (pollingIntervalRef.current) {
         window.clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
+      }
+      
+      // Limpar assinatura do Supabase Realtime
+      if (supabaseSubscriptionRef.current) {
+        console.log(`[REALTIME][${name}] Removendo assinatura do Supabase Realtime`);
+        supabase.removeChannel(supabaseSubscriptionRef.current);
+        supabaseSubscriptionRef.current = null;
       }
     };
   }, [name, initialLastNumbers]);
