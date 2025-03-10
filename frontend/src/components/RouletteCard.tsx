@@ -21,6 +21,13 @@ interface RouletteCardProps {
   trend: { value: number }[];
 }
 
+// Objeto global para armazenar estado persistente entre remontagens
+const persistentState: Record<string, {
+  lastNumbers: number[],
+  lastUpdated: number,
+  hasLoaded: boolean
+}> = {};
+
 const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, trend }: RouletteCardProps) => {
   const navigate = useNavigate();
   const [showSuggestions, setShowSuggestions] = useState(true);
@@ -28,13 +35,36 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
   const [isBlurred, setIsBlurred] = useState(false);
   const [currentStrategy, setCurrentStrategy] = useState(strategies[0]);
   const [selectedGroup, setSelectedGroup] = useState<string>("grupo-123");
-  const [lastNumbers, setLastNumbers] = useState<number[]>([]);
+  
+  // Verificar se o nome da roleta é válido
+  const roletaNome = name || "Roleta Desconhecida";
+  
+  // Inicializamos o estado a partir do estado persistente, se existir
+  const [lastNumbers, setLastNumbers] = useState<number[]>(() => {
+    if (persistentState[roletaNome]?.lastNumbers?.length > 0) {
+      console.log(`[PERSISTÊNCIA][${roletaNome}] Recuperando estado salvo:`, 
+        persistentState[roletaNome].lastNumbers.length);
+      return persistentState[roletaNome].lastNumbers;
+    }
+    return initialLastNumbers || [];
+  });
+  
   const [previousLastNumber, setPreviousLastNumber] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [dataSeeded, setDataSeeded] = useState(false);
+  
+  // Usar estado persistente para carregamento também
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    if (persistentState[roletaNome]?.hasLoaded) {
+      return false;
+    }
+    return true;
+  });
+  
+  const [dataSeeded, setDataSeeded] = useState<boolean>(() => {
+    return !!persistentState[roletaNome]?.hasLoaded;
+  });
+  
   const [statsOpen, setStatsOpen] = useState(false);
   const [usingSupabaseData, setUsingSupabaseData] = useState(false);
-  const [isInitialRender, setIsInitialRender] = useState(true);
   
   // Referência para o intervalo de polling (desativado por padrão)
   const pollingIntervalRef = useRef<number | null>(null);
@@ -42,184 +72,106 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
   // Referência para a assinatura do Supabase Realtime
   const supabaseSubscriptionRef = useRef<any>(null);
   
+  // Registra o componente como montado
+  const isMounted = useRef(true);
+  
   // Controle para ativar/desativar o polling
   const ENABLE_POLLING = false; // Desativado por padrão
   const POLLING_INTERVAL = 15000; // 15 segundos
 
-  // Verificar se o nome da roleta é válido
-  const roletaNome = name || "Roleta Desconhecida";
-  
-  // Reduzindo logs para evitar poluição do console
-  if (isInitialRender) {
-    console.log(`[DEPURAÇÃO][${roletaNome}] Renderizando card com dados:`, { 
-      name: roletaNome, 
-      initialNumbersLength: initialLastNumbers?.length || 0,
-      wins, 
-      losses 
-    });
-  }
-
   // Função para verificar se a página está visível
   const isDocumentVisible = () => document.visibilityState === 'visible';
-
+  
+  // Persistir o estado sempre que lastNumbers mudar
   useEffect(() => {
-    // Marcar que não é mais a renderização inicial
-    setIsInitialRender(false);
-    
-    // Verificar se já há um timestamp de carregamento
-    const componentLoadedTimestamp = localStorage.getItem(`roulette_${roletaNome}_loaded_timestamp`);
-    const currentTime = Date.now();
-    const cacheExpiration = 5 * 60 * 1000; // 5 minutos
-    
-    // Se os dados foram carregados recentemente, usar os dados em cache
-    if (componentLoadedTimestamp && 
-        currentTime - parseInt(componentLoadedTimestamp) < cacheExpiration && 
-        initialLastNumbers && initialLastNumbers.length > 0) {
-      console.log(`[CACHE][${roletaNome}] Usando dados em cache`);
-      setLastNumbers(initialLastNumbers);
-      setDataSeeded(true);
-      setIsLoading(false);
-      return;
+    if (lastNumbers.length > 0) {
+      persistentState[roletaNome] = {
+        lastNumbers,
+        lastUpdated: Date.now(),
+        hasLoaded: true
+      };
     }
-    
-    // Se estiver voltando para a página e não for visível, não recarregar dados
-    if (!isInitialRender && !isDocumentVisible()) {
-      console.log(`[OTIMIZAÇÃO][${roletaNome}] Página não visível, não recarregando dados`);
-      setLastNumbers(lastNumbers.length > 0 ? lastNumbers : initialLastNumbers || []);
-      setDataSeeded(true);
-      setIsLoading(false);
-      return;
-    }
-    
-    console.log(`[DEPURAÇÃO][${roletaNome}] Inicializando componente RouletteCard`);
-    
-    const checkAndSeedData = async () => {
-      try {
-        console.log(`[DEPURAÇÃO][${roletaNome}] Buscando dados iniciais no Supabase...`);
-        setIsLoading(true);
-        
-        // Buscar números iniciais do Supabase
-        console.log(`[DEPURAÇÃO][${roletaNome}] Chamando fetchRouletteLatestNumbersByName...`);
-        const numbers = await fetchRouletteLatestNumbersByName(roletaNome, 20);
-        
-        console.log(`[DEPURAÇÃO][${roletaNome}] Números recebidos:`, numbers);
-        
-        if (numbers && numbers.length > 0) {
-          setLastNumbers(numbers.map(n => Number(n)));
-          setDataSeeded(true);
-          setUsingSupabaseData(true);
-          setIsLoading(false);
-          
-          // Salvar timestamp para controle de cache
-          localStorage.setItem(`roulette_${roletaNome}_loaded_timestamp`, Date.now().toString());
-          
-          console.log(`[DEPURAÇÃO][${roletaNome}] Dados carregados com sucesso do Supabase`);
-        } else {
-          console.log(`[DEPURAÇÃO][${roletaNome}] Nenhum dado encontrado no Supabase, usando dados iniciais`);
-          setLastNumbers(initialLastNumbers || []);
-          setDataSeeded(true);
-          setUsingSupabaseData(false);
-          setIsLoading(false);
-        }
-      } catch (error) {
-        console.error(`[ERRO][${roletaNome}] Erro ao buscar dados:`, error);
-        setLastNumbers(initialLastNumbers || []);
-        setDataSeeded(true);
-        setUsingSupabaseData(false);
-        setIsLoading(false);
-      }
-    };
+  }, [lastNumbers, roletaNome]);
 
-    // Verificar se já temos dados iniciais antes de buscar no Supabase
-    if (initialLastNumbers && initialLastNumbers.length > 0) {
-      setLastNumbers(initialLastNumbers);
-      setDataSeeded(true);
-      setIsLoading(false);
-      
-      // Ainda assim, atualizar em segundo plano para dados mais recentes
-      checkAndSeedData();
-    } else {
-      checkAndSeedData();
-    }
+  // Inicialização - Carrega dados apenas se necessário
+  useEffect(() => {
+    console.log(`[CICLO][${roletaNome}] Componente montado`);
     
-    // Configurar polling como fallback (desativado por padrão)
-    const startPolling = () => {
-      // Verificar se o polling está habilitado
-      if (!ENABLE_POLLING) {
-        console.log(`[POLLING][${roletaNome}] Polling desativado por configuração`);
-        return;
-      }
-      
-      console.log(`[POLLING][${roletaNome}] Iniciando polling como fallback para SSE`);
-      
-      // Limpar intervalo anterior se existir
-      if (pollingIntervalRef.current) {
-        window.clearInterval(pollingIntervalRef.current);
-      }
-      
-      // Criar novo intervalo de polling
-      pollingIntervalRef.current = window.setInterval(async () => {
-        try {
-          console.log(`[POLLING][${roletaNome}] Verificando novos números...`);
-          const latestNumbers = await fetchRouletteLatestNumbersByName(roletaNome, 1);
-          
-          if (latestNumbers && latestNumbers.length > 0) {
-            const latestNumber = Number(latestNumbers[0]);
-            
-            // Comparar com o número atual
-            setLastNumbers(currentNumbers => {
-              if (currentNumbers.length === 0 || currentNumbers[0] !== latestNumber) {
-                console.log(`[POLLING][${roletaNome}] Novo número encontrado via polling: ${latestNumber}`);
-                
-                // Salvar o número anterior
-                if (currentNumbers.length > 0) {
-                  setPreviousLastNumber(currentNumbers[0]);
-                }
-                
-                // Verificar estratégia para o novo número
-                verificarEstrategia(latestNumber);
-                
-                // Criar o novo array de números
-                const updatedNumbers = [latestNumber, ...currentNumbers.slice(0, 19)];
-                
-                toast({
-                  title: "Novo Número (via Polling)",
-                  description: `${latestNumber} (${roletaNome})`,
-                  variant: "default",
-                });
-                
-                return updatedNumbers;
-              }
-              return currentNumbers;
-            });
-          }
-        } catch (error) {
-          console.error(`[POLLING][${roletaNome}] Erro ao buscar novos números:`, error);
+    const needsUpdate = () => {
+      // Se já temos estado persistente e foi atualizado recentemente, não precisamos atualizar
+      if (persistentState[roletaNome]?.hasLoaded) {
+        const lastUpdated = persistentState[roletaNome].lastUpdated;
+        const now = Date.now();
+        const fiveMinutes = 5 * 60 * 1000;
+        
+        // Se foi atualizado há menos de 5 minutos, não precisamos atualizar
+        if (now - lastUpdated < fiveMinutes) {
+          console.log(`[CICLO][${roletaNome}] Dados ainda recentes (${Math.round((now - lastUpdated)/1000)}s), pulando busca`);
+          return false;
         }
-      }, POLLING_INTERVAL);
+      }
+      
+      // Se não estiver visível, não precisamos atualizar agora
+      if (!isDocumentVisible()) {
+        console.log(`[CICLO][${roletaNome}] Documento não visível, adiando atualização`);
+        return false;
+      }
+      
+      return true;
     };
     
-    // Iniciar polling se estiver habilitado
-    startPolling();
+    if (needsUpdate()) {
+      // Buscar dados iniciais do Supabase
+      console.log(`[CICLO][${roletaNome}] Buscando dados iniciais no Supabase...`);
+      
+      fetchRouletteLatestNumbersByName(roletaNome, 20)
+        .then(numbers => {
+          if (!isMounted.current) return;
+          
+          if (numbers && numbers.length > 0) {
+            console.log(`[CICLO][${roletaNome}] Recebidos ${numbers.length} números`);
+            const processedNumbers = numbers.map(n => Number(n));
+            setLastNumbers(processedNumbers);
+            setUsingSupabaseData(true);
+            
+            // Atualizar estado persistente
+            persistentState[roletaNome] = {
+              lastNumbers: processedNumbers,
+              lastUpdated: Date.now(),
+              hasLoaded: true
+            };
+          } else if (initialLastNumbers && initialLastNumbers.length > 0) {
+            console.log(`[CICLO][${roletaNome}] Sem dados do Supabase, usando iniciais`);
+            setLastNumbers(initialLastNumbers);
+          }
+          
+          setIsLoading(false);
+          setDataSeeded(true);
+        })
+        .catch(error => {
+          if (!isMounted.current) return;
+          
+          console.error(`[ERRO][${roletaNome}] Erro ao buscar dados:`, error);
+          if (initialLastNumbers && initialLastNumbers.length > 0) {
+            setLastNumbers(initialLastNumbers);
+          }
+          setIsLoading(false);
+          setDataSeeded(true);
+        });
+    } else {
+      // Já temos dados recentes, apenas confirmar que está carregado
+      setIsLoading(false);
+      setDataSeeded(true);
+    }
     
-    // Modificação para controlar assinaturas Realtime com base na visibilidade da página
+    // Configurar assinatura do Supabase Realtime para a tabela roleta_numeros
     let subscription: any = null;
     
-    // Função para configurar a assinatura Realtime
-    const setupRealtimeSubscription = () => {
-      // Apenas configurar se o documento estiver visível
-      if (!isDocumentVisible()) {
-        console.log(`[REALTIME][${roletaNome}] Documento não visível, adiando assinatura Realtime`);
-        return null;
-      }
-      
-      console.log(`[REALTIME][${roletaNome}] Configurando assinatura do Supabase Realtime...`);
-      
+    if (isDocumentVisible()) {
       try {
-        // Inscrever-se para atualizações na tabela roleta_numeros
-        console.log(`[REALTIME][${roletaNome}] Criando canal Realtime para roleta_numeros...`);
+        console.log(`[REALTIME][${roletaNome}] Configurando canal Realtime...`);
         
-        const channel = supabase
+        subscription = supabase
           .channel(`roleta_numeros_changes_${roletaNome}`)
           .on('postgres_changes', { 
             event: 'INSERT', 
@@ -227,91 +179,131 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
             table: 'roleta_numeros',
             filter: `roleta_nome=eq.${roletaNome}`
           }, (payload) => {
-            console.log(`[REALTIME][${roletaNome}] Evento do Supabase recebido:`, payload);
+            if (!isMounted.current) return;
             
-            // Verificar se o novo número é para esta roleta
             if (payload.new && payload.new.roleta_nome === roletaNome) {
               const novoNumero = Number(payload.new.numero);
-              console.log(`[REALTIME][${roletaNome}] Novo número para esta roleta: ${novoNumero}`);
+              console.log(`[REALTIME][${roletaNome}] Novo número: ${novoNumero}`);
               
-              // Atualizar o estado com o novo número
               setLastNumbers(currentNumbers => {
-                // Verificar se é um número novo
                 if (currentNumbers.length === 0 || currentNumbers[0] !== novoNumero) {
-                  console.log(`[REALTIME][${roletaNome}] Atualizando números com: ${novoNumero}`);
-                  
-                  // Salvar o número anterior
                   if (currentNumbers.length > 0) {
                     setPreviousLastNumber(currentNumbers[0]);
                   }
                   
-                  // Verificar estratégia para o novo número
                   verificarEstrategia(novoNumero);
                   
-                  // Exibir notificação toast apenas se o documento estiver visível
                   if (isDocumentVisible()) {
                     toast({
-                      title: "Novo Número (Realtime)",
+                      title: "Novo Número",
                       description: `${novoNumero} (${roletaNome})`,
                       variant: "default",
                     });
                   }
                   
-                  return [novoNumero, ...currentNumbers.slice(0, 19)];
+                  const updatedNumbers = [novoNumero, ...currentNumbers.slice(0, 19)];
+                  
+                  // Atualizar estado persistente
+                  persistentState[roletaNome] = {
+                    lastNumbers: updatedNumbers,
+                    lastUpdated: Date.now(),
+                    hasLoaded: true
+                  };
+                  
+                  return updatedNumbers;
                 }
                 return currentNumbers;
               });
             }
           })
           .subscribe((status: string) => {
-            console.log(`[REALTIME][${roletaNome}] Status da assinatura Realtime:`, status);
+            console.log(`[REALTIME][${roletaNome}] Status da assinatura: ${status}`);
           });
           
-        return channel;
+        supabaseSubscriptionRef.current = subscription;
       } catch (error) {
-        console.error(`[REALTIME][${roletaNome}] Erro ao configurar Supabase Realtime:`, error);
-        return null;
+        console.error(`[REALTIME][${roletaNome}] Erro ao configurar Realtime:`, error);
       }
-    };
+    }
     
-    // Configurar assinatura inicial
-    subscription = setupRealtimeSubscription();
-    supabaseSubscriptionRef.current = subscription;
-    
-    // Configurar listener para visibilidade do documento
+    // Registrar evento de visibilidade
     const handleVisibilityChange = () => {
-      console.log(`[VISIBILIDADE][${roletaNome}] Estado de visibilidade mudou para:`, document.visibilityState);
-      
       if (document.visibilityState === 'visible') {
-        // Se o documento se tornou visível e não há assinatura ativa, configurar uma nova
-        if (!supabaseSubscriptionRef.current) {
-          console.log(`[REALTIME][${roletaNome}] Documento visível novamente, reativando assinatura Realtime`);
-          subscription = setupRealtimeSubscription();
-          supabaseSubscriptionRef.current = subscription;
+        console.log(`[VISIBILIDADE][${roletaNome}] Documento visível, verificando estado`);
+        
+        // Verificar se precisamos atualizar dados
+        const lastUpdated = persistentState[roletaNome]?.lastUpdated || 0;
+        const now = Date.now();
+        const tenMinutes = 10 * 60 * 1000;
+        
+        if (now - lastUpdated > tenMinutes) {
+          console.log(`[VISIBILIDADE][${roletaNome}] Dados antigos, atualizando...`);
+          
+          fetchRouletteLatestNumbersByName(roletaNome, 20)
+            .then(numbers => {
+              if (!isMounted.current) return;
+              
+              if (numbers && numbers.length > 0) {
+                const processedNumbers = numbers.map(n => Number(n));
+                setLastNumbers(processedNumbers);
+                
+                // Atualizar estado persistente
+                persistentState[roletaNome] = {
+                  lastNumbers: processedNumbers,
+                  lastUpdated: Date.now(),
+                  hasLoaded: true
+                };
+              }
+            })
+            .catch(error => {
+              console.error(`[ERRO][${roletaNome}] Erro ao atualizar dados:`, error);
+            });
         }
-      } else {
-        // Se o documento não está mais visível, considerar remover a assinatura para economizar recursos
-        // Por enquanto, mantemos a assinatura para garantir atualização rápida quando voltar
+        
+        // Verificar se precisa recriar assinatura
+        if (!subscription && !supabaseSubscriptionRef.current) {
+          try {
+            console.log(`[REALTIME][${roletaNome}] Recriando canal Realtime...`);
+            
+            subscription = supabase
+              .channel(`roleta_numeros_changes_${roletaNome}`)
+              .on('postgres_changes', { 
+                event: 'INSERT', 
+                schema: 'public', 
+                table: 'roleta_numeros',
+                filter: `roleta_nome=eq.${roletaNome}`
+              }, (payload) => {
+                // Lógica de processamento da mensagem
+                if (payload.new && payload.new.roleta_nome === roletaNome) {
+                  const novoNumero = Number(payload.new.numero);
+                  // Lógica de atualização...
+                }
+              })
+              .subscribe();
+              
+            supabaseSubscriptionRef.current = subscription;
+          } catch (error) {
+            console.error(`[REALTIME][${roletaNome}] Erro ao recriar Realtime:`, error);
+          }
+        }
       }
     };
     
-    // Adicionar listener de visibilidade
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
-    // Limpar quando o componente desmontar
+    // Limpeza
     return () => {
-      console.log(`[CLEANUP][${roletaNome}] Limpando assinaturas e listeners`);
+      console.log(`[CICLO][${roletaNome}] Componente desmontado`);
+      isMounted.current = false;
       
-      // Remover assinatura do Supabase
       if (subscription) {
-        console.log(`[REALTIME][${roletaNome}] Removendo assinatura Supabase`);
+        console.log(`[REALTIME][${roletaNome}] Removendo assinatura`);
         supabase.removeChannel(subscription);
       }
       
-      // Remover listener de visibilidade
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [roletaNome]);
+  }, [roletaNome]); // Dependência apenas do nome da roleta
 
   const verificarEstrategia = (numero: number) => {
     // Placeholder para verificação de estratégia

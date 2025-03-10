@@ -65,14 +65,41 @@ const Index = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const navigate = useNavigate();
-  const [roulettes, setRoulettes] = useState<Roulette[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loaded, setLoaded] = useState(false);
+  
+  // Inicializar o estado de roletas a partir do sessionStorage, se disponível
+  const getInitialRoulettesState = () => {
+    try {
+      const savedState = sessionStorage.getItem('roulettes_state');
+      if (savedState) {
+        const parsedState = JSON.parse(savedState);
+        console.log('[PERSISTÊNCIA] Recuperando estado salvo de roletas:', parsedState.length);
+        return parsedState;
+      }
+    } catch (error) {
+      console.error('[PERSISTÊNCIA] Erro ao recuperar estado:', error);
+    }
+    return [];
+  };
+  
+  const [roulettes, setRoulettes] = useState<Roulette[]>(getInitialRoulettesState());
+  const [isLoading, setIsLoading] = useState(!roulettes.length);
+  const [loaded, setLoaded] = useState(!!roulettes.length);
+  
+  // Função para salvar o estado no sessionStorage sempre que mudar
+  useEffect(() => {
+    if (roulettes.length > 0) {
+      try {
+        sessionStorage.setItem('roulettes_state', JSON.stringify(roulettes));
+        console.log('[PERSISTÊNCIA] Estado salvo:', roulettes.length);
+      } catch (error) {
+        console.error('[PERSISTÊNCIA] Erro ao salvar estado:', error);
+      }
+    }
+  }, [roulettes]);
   
   // Inicializar o serviço de eventos quando o componente montar
   useEffect(() => {
     // Não inicializar mais o EventService do Render
-    // const eventService = EventService.getInstance();
     
     // Limpar quando o componente desmontar
     return () => {
@@ -83,6 +110,12 @@ const Index = () => {
   // Função para buscar roletas do banco de dados
   const fetchRoulettes = async () => {
     try {
+      // Verificar se já temos dados em cache
+      if (roulettes.length > 0) {
+        console.log('[PERSISTÊNCIA] Usando dados em cache, roletas já carregadas:', roulettes.length);
+        return;
+      }
+      
       setIsLoading(true);
       
       console.log('[DEBUG] Iniciando busca de roletas no Supabase...');
