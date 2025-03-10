@@ -26,8 +26,4 @@ services:
       - key: SCRAPE_INTERVAL_MINUTES
         value: "5"
       - key: MAX_CICLOS
-        value: "0"
-
-# Configurações extras
-healthCheckPath: /health
-numInstances: 1 
+        value: "0" 
