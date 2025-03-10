@@ -113,24 +113,46 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     checkAndSeedData();
   }, [name, initialLastNumbers]);
 
+  // Função para verificar se uma estratégia foi bem-sucedida com o novo número
+  const verificarEstrategia = useCallback((numero: number) => {
+    // Placeholder para verificação de estratégia
+    console.log(`[${name}] Verificando estratégia para número: ${numero}`);
+    
+    // Implementação real verificaria se os números sugeridos batem com o resultado
+    // e atualizaria wins/losses de forma otimizada
+    
+    // Exemplo: 
+    if (suggestion.includes(numero)) {
+      // Vitória - mas não atualize o estado diretamente para evitar re-renders
+      console.log(`[${name}] Estratégia bem-sucedida para número: ${numero}`);
+    }
+  }, [name, suggestion]);
+
   // Handler para novos eventos de números de roleta
   const handleNewNumber = useCallback((event: RouletteNumberEvent) => {
     console.log(`[DEPURAÇÃO][${name}] Novo número recebido via SSE: ${event.numero}`);
     
-    // Atualizar o estado apenas se for um número novo
-    setLastNumbers(currentNumbers => {
-      if (currentNumbers.length === 0 || currentNumbers[0] !== event.numero) {
+    // Atualizar o estado apenas se for um número novo e a roleta corresponder
+    if (event.roleta_nome === name || name.includes(event.roleta_nome)) {
+      setLastNumbers(currentNumbers => {
+        // Verificar se já temos este número como o mais recente para evitar duplicações
+        if (currentNumbers.length > 0 && currentNumbers[0] === event.numero) {
+          console.log(`[DEPURAÇÃO][${name}] Número ${event.numero} já é o mais recente, ignorando`);
+          return currentNumbers; // Não faz nada se já tivermos este número
+        }
+        
         // Salvar o número anterior
         if (currentNumbers.length > 0) {
           setPreviousLastNumber(currentNumbers[0]);
         }
         
-        // Verificar estratégia para o novo número
+        // Verificar estratégia para o novo número (sem causar re-render total)
         verificarEstrategia(event.numero);
         
-        // Criar o novo array de números
+        // Criar o novo array de números, preservando o restante do estado
         const updatedNumbers = [event.numero, ...currentNumbers.slice(0, 19)];
         
+        // Notificar discretamente com toast sem causar recargas completas
         toast({
           title: "Novo Número",
           description: `${event.numero} (${name})`,
@@ -138,11 +160,9 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
         });
         
         return updatedNumbers;
-      }
-      
-      return currentNumbers;
-    });
-  }, [name]);
+      });
+    }
+  }, [name, verificarEstrategia]);
 
   // Inscrever-se para receber eventos da roleta específica
   useEffect(() => {
@@ -151,21 +171,19 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       
       // Inscrever-se para receber atualizações em tempo real
       eventServiceRef.current.subscribe(name, handleNewNumber);
+      // Também se inscrever para '*' para capturar eventos de todas as roletas
+      eventServiceRef.current.subscribe('*', handleNewNumber);
       
       // Limpar inscrição quando o componente desmontar
       return () => {
         if (eventServiceRef.current) {
           console.log(`[DEPURAÇÃO][${name}] Cancelando inscrição de eventos`);
           eventServiceRef.current.unsubscribe(name, handleNewNumber);
+          eventServiceRef.current.unsubscribe('*', handleNewNumber);
         }
       };
     }
   }, [dataSeeded, name, handleNewNumber]);
-
-  const verificarEstrategia = (numero: number) => {
-    // Placeholder para verificação de estratégia
-    console.log(`[${name}] Verificando estratégia para número: ${numero}`);
-  };
 
   useEffect(() => {
     generateSuggestion();
