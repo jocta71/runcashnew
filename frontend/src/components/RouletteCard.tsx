@@ -41,6 +41,10 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
   
   // Referência para o intervalo de polling
   const pollingIntervalRef = useRef<number | null>(null);
+  
+  // Controle para ativar/desativar o polling
+  const ENABLE_POLLING = false; // Desativado por padrão
+  const POLLING_INTERVAL = 15000; // 15 segundos
 
   useEffect(() => {
     console.log(`[DEPURAÇÃO][${name}] Inicializando componente RouletteCard`);
@@ -84,8 +88,14 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
 
     checkAndSeedData();
     
-    // Configurar polling como fallback para SSE - buscar novos números a cada 15 segundos
+    // Configurar polling como fallback para SSE - buscar novos números periodicamente
     const startPolling = () => {
+      // Verificar se o polling está habilitado
+      if (!ENABLE_POLLING) {
+        console.log(`[POLLING][${name}] Polling desativado por configuração`);
+        return;
+      }
+      
       console.log(`[POLLING][${name}] Iniciando polling como fallback para SSE`);
       
       // Limpar intervalo anterior se existir
@@ -132,7 +142,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
         } catch (error) {
           console.error(`[POLLING][${name}] Erro ao buscar novos números:`, error);
         }
-      }, 15000); // Verificar a cada 15 segundos
+      }, POLLING_INTERVAL);
     };
     
     // Iniciar polling
