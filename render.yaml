@@ -18,9 +18,9 @@ services:
       - key: RENDER
         value: "true"
       - key: DISABLE_SCRAPER
-        value: "false" # Defina como "true" se o scraper não funcionar devido às limitações do selenium no Render
+        value: "false" # Mantendo o scraper ativado
       - key: SIMULATE_DATA
-        value: "true" # Nova opção para ativar a simulação de dados quando o scraper real não funcionar
+        value: "false" # Desativando a simulação para usar o scraper real
       - key: PRODUCTION
         value: "true"
       - key: SCRAPE_INTERVAL_MINUTES
