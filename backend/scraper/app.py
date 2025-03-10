@@ -86,11 +86,13 @@ class EventManager:
     def notify_clients(self, event_data):
         # Adicionar evento à fila
         self.event_queue.put(event_data)
+        logger.info(f"Evento adicionado à fila: {event_data.get('type')} - {event_data.get('roleta')} - {event_data.get('numero')}")
         
         # Enviar para todos os clientes
         for client_queue in self.clients[:]:  # Copia para evitar problemas se a lista mudar
             try:
                 client_queue.put(event_data)
+                logger.info(f"Evento enviado para um cliente")
             except Exception as e:
                 logger.error(f"Erro ao enviar evento para cliente: {str(e)}")
                 # Cliente com problema, remover
@@ -107,20 +109,47 @@ def sse():
         event_manager.register_client(client_queue)
         
         # Enviar um evento inicial
-        yield 'data: {"type": "connected", "message": "Conexão SSE estabelecida"}\n\n'
+        initial_msg = json.dumps({"type": "connected", "message": "Conexão SSE estabelecida"})
+        yield f'data: {initial_msg}\n\n'
+        
+        # Verificar se há eventos na fila do gerenciador para enviar imediatamente
+        if not event_manager.event_queue.empty():
+            try:
+                # Enviar até 5 eventos recentes da fila, se houver
+                for _ in range(5):
+                    try:
+                        event_data = event_manager.event_queue.get_nowait()
+                        yield f'data: {json.dumps(event_data)}\n\n'
+                        logger.info(f"Evento recente enviado para novo cliente: {event_data.get('type')}")
+                    except queue.Empty:
+                        break
+            except Exception as e:
+                logger.error(f"Erro ao enviar eventos recentes: {str(e)}")
+        
+        # Enviar evento de teste para confirmar a conexão
+        test_event = {
+            "type": "test_connection",
+            "message": "Testando conexão SSE",
+            "timestamp": time.time()
+        }
+        yield f'data: {json.dumps(test_event)}\n\n'
         
         try:
             while True:
                 # Aguardar eventos na fila do cliente
                 try:
-                    event_data = client_queue.get(timeout=30)  # 30s timeout para heartbeat
-                    yield f'data: {json.dumps(event_data)}\n\n'
+                    event_data = client_queue.get(timeout=20)  # Reduzido para 20s para mais heartbeats
+                    event_json = json.dumps(event_data)
+                    logger.info(f"Enviando evento para cliente: {event_data.get('type')}")
+                    yield f'data: {event_json}\n\n'
                 except queue.Empty:
                     # Enviar heartbeat para manter a conexão viva
+                    logger.debug("Enviando ping SSE para manter a conexão")
                     yield 'event: ping\ndata: {}\n\n'
         except GeneratorExit:
             # Cliente desconectou
             event_manager.unregister_client(client_queue)
+            logger.info("Cliente desconectado do SSE")
     
     return Response(generate(), mimetype='text/event-stream', 
                    headers={'Cache-Control': 'no-cache', 'Connection': 'keep-alive'})
@@ -154,6 +183,8 @@ def generate_test_event():
             numero = data.get('numero', random.randint(0, 36))
             roleta_id = data.get('roleta_id', '7x0b1tgh7agmf6hv')
             
+            logger.info(f"[TESTE] Gerando evento manual para {roleta_nome} com número {numero}")
+            
             # Criar o evento
             event_data = {
                 "type": "new_number",
@@ -161,17 +192,35 @@ def generate_test_event():
                 "numero": numero,
                 "timestamp": time.time(),
                 "simulado": True,
-                "manual": True
+                "manual": True,
+                "test": True
             }
             
             # Inserir no Supabase
             try:
                 inserir_novo_numero(roleta_id, roleta_nome, numero)
+                logger.info(f"[TESTE] Número {numero} inserido no Supabase para {roleta_nome}")
             except Exception as e:
-                logger.error(f"Erro ao inserir número simulado no Supabase: {str(e)}")
+                logger.error(f"[TESTE] Erro ao inserir número simulado no Supabase: {str(e)}")
             
-            # Notificar clientes
-            event_manager.notify_clients(event_data)
+            # Verificar se há clientes conectados
+            if len(event_manager.clients) > 0:
+                logger.info(f"[TESTE] Notificando {len(event_manager.clients)} clientes sobre novo número")
+                
+                # Notificar clientes diretamente
+                for client_queue in event_manager.clients[:]:
+                    try:
+                        client_queue.put(event_data)
+                        logger.info(f"[TESTE] Evento enviado para um cliente")
+                    except Exception as e:
+                        logger.error(f"[TESTE] Erro ao enviar evento para cliente: {str(e)}")
+                        # Cliente com problema, remover
+                        event_manager.unregister_client(client_queue)
+                
+                # Também notificar via gerenciador de eventos (redundante, mas para garantir)
+                event_manager.notify_clients(event_data)
+            else:
+                logger.warning("[TESTE] Nenhum cliente conectado para receber o evento")
             
             return jsonify({"success": True, "message": "Evento simulado enviado", "data": event_data})
         else:
@@ -565,6 +614,38 @@ def simulate_roulette_data():
         {"id": "7x0b1tgh7agmf6hv", "nome": "Roulette Live"}
     ]
     
+    # Gerar um evento inicial para confirmar que o simulador está funcionando
+    try:
+        roleta = roletas_simuladas[0]
+        numero = random.randint(0, 36)
+        logger.info(f"[SIMULAÇÃO] Gerando evento inicial com número {numero} para {roleta['nome']}")
+        
+        # Criar evento e notificar clientes
+        event_data = {
+            "type": "new_number",
+            "roleta": roleta['nome'],
+            "numero": numero,
+            "timestamp": time.time(),
+            "simulado": True,
+            "startup": True
+        }
+        
+        # Notificar clientes de forma mais direta
+        for client_queue in event_manager.clients[:]:
+            try:
+                client_queue.put(event_data)
+                logger.info(f"[SIMULAÇÃO] Evento inicial enviado para um cliente")
+            except Exception as e:
+                logger.error(f"[SIMULAÇÃO] Erro ao enviar evento inicial para cliente: {str(e)}")
+        
+        logger.info(f"[SIMULAÇÃO] Evento inicial enviado para {len(event_manager.clients)} clientes")
+    except Exception as e:
+        logger.error(f"[SIMULAÇÃO] Erro ao gerar evento inicial: {str(e)}")
+    
+    # Pequena pausa antes de iniciar o ciclo principal
+    time.sleep(5)
+    
+    # Ciclo principal de simulação
     while True:
         try:
             # Selecionar uma roleta aleatória
@@ -581,26 +662,34 @@ def simulate_roulette_data():
             # Inserir no Supabase
             try:
                 inserir_novo_numero(roleta_id, roleta_nome, numero)
-                
-                # Notificar clientes
-                event_data = {
-                    "type": "new_number",
-                    "roleta": roleta_nome,
-                    "numero": numero,
-                    "timestamp": time.time(),
-                    "simulado": True
-                }
-                event_manager.notify_clients(event_data)
-                
+                logger.info(f"[SIMULAÇÃO] Número {numero} inserido no Supabase para {roleta_nome}")
             except Exception as e:
                 logger.error(f"[SIMULAÇÃO] Erro ao inserir número simulado: {str(e)}")
             
-            # Aguardar intervalo aleatório (30-120 segundos)
-            time.sleep(random.randint(30, 120))
+            # Notificar clientes
+            event_data = {
+                "type": "new_number",
+                "roleta": roleta_nome,
+                "numero": numero,
+                "timestamp": time.time(),
+                "simulado": True
+            }
+            
+            # Verificar se há clientes conectados
+            if len(event_manager.clients) > 0:
+                logger.info(f"[SIMULAÇÃO] Notificando {len(event_manager.clients)} clientes sobre novo número")
+                event_manager.notify_clients(event_data)
+            else:
+                logger.warning("[SIMULAÇÃO] Nenhum cliente conectado para receber o evento")
+            
+            # Aguardar intervalo mais curto para testes (10-30 segundos)
+            intervalo = random.randint(10, 30)
+            logger.info(f"[SIMULAÇÃO] Aguardando {intervalo} segundos até o próximo número")
+            time.sleep(intervalo)
             
         except Exception as e:
             logger.error(f"[SIMULAÇÃO] Erro ao simular dados: {str(e)}")
-            time.sleep(60)  # Aguardar 1 minuto e tentar novamente
+            time.sleep(10)  # Aguardar e tentar novamente
 
 def main():
     """Função principal"""
@@ -639,10 +728,12 @@ if __name__ == "__main__":
     if not os.environ.get('FLASK_ENV') == 'development' and not os.environ.get('DISABLE_SCRAPER') == 'true':
         if os.environ.get('SIMULATE_DATA') == 'true':
             logger.info("Iniciando simulador de dados em thread separada")
+            # Iniciar o simulador diretamente em vez de através da função main
             simulator_thread = threading.Thread(target=simulate_roulette_data)
             simulator_thread.daemon = True
             simulator_thread.start()
             sys.scraper_thread_running = True
+            logger.info("Thread do simulador iniciada com sucesso")
         else:
             scraper_thread = threading.Thread(target=main)
             scraper_thread.daemon = True
