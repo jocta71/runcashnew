@@ -87,61 +87,6 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     return (window as any).__REACT_COMPONENTS_FROZEN === true;
   };
   
-  // React Strict Mode pode estar causando renderizações duplas
-  // Usando useEffect com uma flag de "já renderizou" para evitar dupla renderização
-  const didRenderRef = useRef(false);
-  
-  // Evitar completamente qualquer piscar durante atualizações
-  useEffect(() => {
-    // Este bloco executará apenas uma vez por montagem do componente
-    if (!didRenderRef.current) {
-      didRenderRef.current = true;
-      
-      // Adicionar classe para evitar transições no primeiro render
-      const card = document.querySelector(`[data-roulette-name="${roletaNome}"]`) as HTMLElement;
-      if (card) {
-        card.classList.add('no-transition');
-        // Remover a classe após o render inicial para permitir transições futuras
-        setTimeout(() => {
-          card.classList.remove('no-transition');
-        }, 300);
-      }
-    }
-  }, []);
-  
-  // Desabilitar todos os indicadores de carregamento ou animações
-  useEffect(() => {
-    const disableLoadingIndicators = () => {
-      // Evitar o indicador de carregamento completamente
-      setIsLoading(false);
-      
-      // Se tivermos dados no estado persistente, usar imediatamente
-      if (persistentState[roletaNome]?.lastNumbers?.length > 0) {
-        setLastNumbers(persistentState[roletaNome].lastNumbers);
-        setDataSeeded(true);
-      } else if (initialLastNumbers && initialLastNumbers.length > 0) {
-        setLastNumbers(initialLastNumbers);
-        setDataSeeded(true);
-      }
-    };
-    
-    // Desabilitar imediatamente
-    disableLoadingIndicators();
-    
-    // Também desabilitar quando o documento se tornar visível
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        disableLoadingIndicators();
-      }
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [roletaNome, initialLastNumbers]);
-  
   // Persistir o estado sempre que lastNumbers mudar
   useEffect(() => {
     if (lastNumbers.length > 0) {
@@ -168,12 +113,13 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       // Verificar se precisamos atualizar dados
       const lastUpdated = persistentState[roletaNome]?.lastUpdated || 0;
       const now = Date.now();
-      const tenMinutes = 10 * 60 * 1000;
+      const thirtyMinutes = 30 * 60 * 1000;
       
-      if (now - lastUpdated > tenMinutes && document.visibilityState === 'visible') {
-        console.log(`[EVENTO][${roletaNome}] Atualizando dados antigos silenciosamente`);
-        
-        // Atualização silenciosa em segundo plano, sem alterar UI
+      // Só atualizar se ficar mais de 30 minutos fora
+      if (event.detail.timeAway > thirtyMinutes) {
+        console.log(`[EVENTO][${roletaNome}] Tempo fora maior que 30 minutos, atualizando dados`);
+    
+        // Atualização silenciosa em segundo plano, sem alterar UI imediatamente
         fetchRouletteLatestNumbersByName(roletaNome, 20)
           .then(numbers => {
             if (!isMounted.current) return;
@@ -384,9 +330,18 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
         // Verificar se precisamos atualizar dados
         const lastUpdated = persistentState[roletaNome]?.lastUpdated || 0;
         const now = Date.now();
-        const tenMinutes = 10 * 60 * 1000;
         
-        if (now - lastUpdated > tenMinutes) {
+        // Aumentar o intervalo para 30 minutos em vez de 10 minutos para reduzir recargas
+        const thirtyMinutes = 30 * 60 * 1000;
+        
+        // Verificar se o sistema está congelado (bloqueio anti-recarga)
+        if (areComponentsFrozen()) {
+          console.log(`[VISIBILIDADE][${roletaNome}] Componentes congelados, mantendo estado atual`);
+          return;
+        }
+        
+        // Só atualizar se os dados forem muito antigos
+        if (now - lastUpdated > thirtyMinutes) {
           console.log(`[VISIBILIDADE][${roletaNome}] Dados antigos, atualizando...`);
           
           fetchRouletteLatestNumbersByName(roletaNome, 1)
@@ -396,40 +351,27 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
               if (numbers && numbers.length > 0) {
                 const novoNumero = Number(numbers[0]);
                 
-                // Atualizar apenas o último número
-                updateLastNumber(novoNumero);
+                // Comparar com o número atual antes de atualizar
+                if (lastNumbers.length === 0 || lastNumbers[0] !== novoNumero) {
+                  // Atualizar apenas o último número
+                  updateLastNumber(novoNumero);
+                } else {
+                  console.log(`[VISIBILIDADE][${roletaNome}] Mesmo número, não atualizando UI`);
+                  // Apenas atualizar o timestamp sem recarregar a UI
+                  persistentState[roletaNome] = {
+                    ...(persistentState[roletaNome] || {}),
+                    lastNumbers: lastNumbers,  // Garantir que lastNumbers está presente
+                    lastUpdated: now,
+                    hasLoaded: true
+                  };
+                }
               }
             })
             .catch(error => {
               console.error(`[ERRO][${roletaNome}] Erro ao atualizar dados:`, error);
             });
-        }
-        
-        // Verificar se precisa recriar assinatura
-        if (!subscription && !supabaseSubscriptionRef.current) {
-          try {
-            console.log(`[REALTIME][${roletaNome}] Recriando canal Realtime...`);
-            
-            subscription = supabase
-              .channel(`roleta_numeros_changes_${roletaNome}`)
-              .on('postgres_changes', { 
-                event: 'INSERT', 
-                schema: 'public', 
-                table: 'roleta_numeros',
-                filter: `roleta_nome=eq.${roletaNome}`
-              }, (payload) => {
-                // Lógica de processamento da mensagem
-                if (payload.new && payload.new.roleta_nome === roletaNome) {
-                  const novoNumero = Number(payload.new.numero);
-                  // Lógica de atualização...
-                }
-              })
-              .subscribe();
-              
-            supabaseSubscriptionRef.current = subscription;
-          } catch (error) {
-            console.error(`[REALTIME][${roletaNome}] Erro ao recriar Realtime:`, error);
-          }
+        } else {
+          console.log(`[VISIBILIDADE][${roletaNome}] Dados recentes (${Math.round((now - lastUpdated)/1000)}s), mantendo estado`);
         }
       }
     };
@@ -496,20 +438,10 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
     });
   };
 
-  // Atualizando o memoizedNumbers para evitar qualquer piscar durante a atualização
-  const memoizedNumbers = useMemo(() => {
-    // Apenas renderizar quando realmente temos dados, nunca estados vazios
-    const numbersToShow = lastNumbers.length > 0 ? 
-      lastNumbers : 
-      (persistentState[roletaNome]?.lastNumbers || initialLastNumbers || []);
-      
-    return (
-      <LastNumbers 
-        numbers={numbersToShow} 
-        isLoading={false} // Nunca mostrar estado de carregamento
-      />
-    );
-  }, [lastNumbers, isLoading, roletaNome, initialLastNumbers]);
+  // Memorize components to prevent unnecessary re-renders
+  const memoizedNumbers = useMemo(() => (
+    <LastNumbers numbers={lastNumbers} isLoading={isLoading} />
+  ), [lastNumbers, isLoading]);
 
   const memoizedSuggestion = useMemo(() => (
     <SuggestionDisplay 
@@ -550,71 +482,105 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
 
   return (
     <div 
-      className="bg-card rounded-lg shadow-lg p-4 relative overflow-hidden"
-      data-roulette-name={roletaNome}
+      className="bg-[#17161e]/90 backdrop-filter backdrop-blur-sm border border-white/10 rounded-xl p-4 space-y-3 animate-fade-in hover-scale cursor-pointer h-auto"
+      onClick={handleDetailsClick}
     >
-      <div className="absolute inset-0 bg-gradient-to-b from-black/30 to-transparent z-0"></div>
-      
-      <div className="relative z-10 space-y-2">
-        {/* Cabeçalho */}
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <h3 className="text-xl font-bold">{roletaNome}</h3>
-            <div className="flex gap-1">
-              {showSuggestions && <SuggestionDisplay 
-                suggestion={suggestion}
-                selectedGroup={selectedGroup}
-                isBlurred={isBlurred}
-                toggleVisibility={toggleVisibility}
-                numberGroups={numberGroups}
-              />}
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleDetailsClick}
-              className="relative">
-              <ChartBar className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handlePlayClick}
-              className="relative bg-blue-500 hover:bg-blue-600">
-              Play
-            </Button>
-          </div>
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">{roletaNome}</h3>
+        <div className="flex items-center">
+          {usingSupabaseData ? (
+            <span className="text-xs mr-2 text-[#00ff00]">Dados do Supabase</span>
+          ) : (
+            <span className="text-xs mr-2 text-yellow-400">Aguardando Supabase</span>
+          )}
+          <TrendingUp size={20} className="text-[#00ff00]" />
         </div>
-        
-        {/* Números - o componente que não deve piscar */}
-        <div className="no-flash-container">
-          {memoizedNumbers}
-        </div>
-        
-        {/* Taxa de vitórias */}
-        <WinRateDisplay 
-          wins={wins}
-          losses={losses}
-        />
-        
-        {/* Tendência */}
-        <RouletteTrendChart data={trend} />
-        
-        {/* Botões de ação */}
-        <RouletteActionButtons onSuggestionClick={generateSuggestion} />
       </div>
       
-      {/* Modal de estatísticas */}
+      {memoizedNumbers}
+      {memoizedSuggestion}
+      {memoizedWinRate}
+      {memoizedTrendChart}
+      
+      {/* Insights Section */}
+      <div className="p-2 bg-[#1a1922] rounded-lg border border-[#00ff00]/20">
+        <h4 className="text-xs font-medium text-[#00ff00] mb-1.5 flex items-center">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#00ff00] mr-1.5"></span>
+          Insights
+        </h4>
+        <div className="space-y-1.5">
+          {lastNumbers.length > 0 && (
+            <>
+              {/* Tendência de cores */}
+              <div className="flex items-center text-xs">
+                <div className={`w-3 h-3 rounded-full mr-1.5 ${getRouletteNumberColor(lastNumbers[0]).replace('text-white', '')}`}></div>
+                <span className="text-gray-300">
+                  {getColorName(lastNumbers[0])} apareceu nas últimas {getColorStreak(lastNumbers)} rodadas
+                </span>
+              </div>
+              
+              {/* Dica de aposta */}
+              <div className="flex items-center text-xs">
+                <div className="w-3 h-3 rounded-full bg-[#00ff00] mr-1.5"></div>
+                <span className="text-gray-300">
+                  {getInsightMessage(lastNumbers, wins, losses)}
+                </span>
+              </div>
+              
+              {/* Estatística da sessão */}
+              <div className="flex items-center text-xs">
+                <div className="w-3 h-3 rounded-full bg-blue-500 mr-1.5"></div>
+                <span className="text-gray-300">
+                  Taxa de acerto: {((wins / (wins + losses)) * 100).toFixed(1)}% nos últimos 20 números
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      
+      {memoizedActionButtons}
+
+      <div className="pt-2 flex flex-col h-full">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-[#00ff00]">{roletaNome}</h2>
+          <Button
+            variant="outline"
+            size="sm"
+            className="px-2 py-1 h-8 text-xs border-[#00ff00] text-[#00ff00] hover:bg-[#00ff00]/10"
+            onClick={(e) => {
+              e.stopPropagation();
+              setStatsOpen(true);
+            }}
+          >
+            <ChartBar className="h-3 w-3 mr-1" />
+            Estatísticas
+          </Button>
+        </div>
+        
+        <div className="my-2">
+          <h3 className="text-white/70 text-xs mb-1">Últimos números:</h3>
+          <div className="flex flex-wrap gap-1">
+            {lastNumbers.slice(0, 5).map((num, idx) => (
+              <div
+                key={`number-${idx}`}
+                className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${getRouletteNumberColor(num)}`}
+              >
+                {num}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <RouletteStatsModal
         open={statsOpen}
         onOpenChange={setStatsOpen}
-        rouletteName={roletaNome}
-        numbers={lastNumbers}
+        name={roletaNome}
+        lastNumbers={lastNumbers}
         wins={wins}
         losses={losses}
+        trend={trend}
       />
     </div>
   );
