@@ -12,7 +12,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import RouletteStatsModal from './roulette/RouletteStatsModal';
 import { fetchRouletteLatestNumbersByName } from '@/integrations/api/rouletteService';
-import EventService, { RouletteNumberEvent } from '@/services/EventService';
 
 interface RouletteCardProps {
   name: string;
@@ -36,9 +35,6 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
   const [statsOpen, setStatsOpen] = useState(false);
   const [usingSupabaseData, setUsingSupabaseData] = useState(false);
   
-  // Referência ao serviço de eventos
-  const eventServiceRef = useRef<EventService | null>(null);
-  
   // Referência para o intervalo de polling (desativado por padrão)
   const pollingIntervalRef = useRef<number | null>(null);
   
@@ -51,10 +47,6 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
 
   useEffect(() => {
     console.log(`[DEPURAÇÃO][${name}] Inicializando componente RouletteCard`);
-    
-    // Inicializar o serviço de eventos
-    const eventService = EventService.getInstance();
-    eventServiceRef.current = eventService;
     
     const checkAndSeedData = async () => {
       try {
@@ -188,7 +180,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
                 const updatedNumbers = [novoNumero, ...currentNumbers.slice(0, 19)];
                 
                 toast({
-                  title: "Novo Número (via Realtime)",
+                  title: "Novo Número",
                   description: `${novoNumero} (${name})`,
                   variant: "default",
                 });
@@ -226,72 +218,6 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
       }
     };
   }, [name, initialLastNumbers]);
-
-  // Handler para novos eventos de números de roleta
-  const handleNewNumber = useCallback((event: RouletteNumberEvent) => {
-    console.log(`[SSE][${name}] Novo número recebido via SSE: ${event.numero}`);
-    
-    if (event.roleta_nome !== name) {
-      console.log(`[SSE][${name}] Ignorando evento para outra roleta: ${event.roleta_nome}`);
-      return; // Ignorar eventos para outras roletas
-    }
-    
-    // Atualizar o estado apenas se for um número novo
-    setLastNumbers(currentNumbers => {
-      // Verificar se o número é realmente novo
-      const isNewNumber = currentNumbers.length === 0 || currentNumbers[0] !== event.numero;
-      console.log(`[SSE][${name}] É número novo? ${isNewNumber}. Atual: ${currentNumbers[0]}, Novo: ${event.numero}`);
-      
-      if (isNewNumber) {
-        // Salvar o número anterior
-        if (currentNumbers.length > 0) {
-          setPreviousLastNumber(currentNumbers[0]);
-        }
-        
-        // Verificar estratégia para o novo número
-        verificarEstrategia(event.numero);
-        
-        // Criar o novo array de números
-        const updatedNumbers = [event.numero, ...currentNumbers.slice(0, 19)];
-        console.log(`[SSE][${name}] Atualizando números: ${updatedNumbers.slice(0, 5).join(', ')}...`);
-        
-        toast({
-          title: "Novo Número",
-          description: `${event.numero} (${name})`,
-          variant: "default",
-        });
-        
-        return updatedNumbers;
-      }
-      
-      return currentNumbers;
-    });
-  }, [name]);
-
-  // Inscrever-se para receber eventos da roleta específica
-  useEffect(() => {
-    if (dataSeeded && eventServiceRef.current) {
-      console.log(`[SSE][${name}] Inscrevendo para eventos da roleta: ${name}`);
-      
-      // Inscrever-se para receber atualizações de qualquer roleta (*) para fins de depuração
-      console.log(`[SSE][${name}] TAMBÉM inscrevendo para todos os eventos (*) para depuração`);
-      eventServiceRef.current.subscribe('*', (event) => {
-        console.log(`[SSE][GLOBAL] Evento recebido para ${event.roleta_nome}: ${event.numero}`);
-      });
-      
-      // Inscrever-se para receber atualizações em tempo real desta roleta específica
-      eventServiceRef.current.subscribe(name, handleNewNumber);
-      
-      // Limpar inscrição quando o componente desmontar
-      return () => {
-        if (eventServiceRef.current) {
-          console.log(`[SSE][${name}] Cancelando inscrição de eventos`);
-          eventServiceRef.current.unsubscribe('*', () => {});
-          eventServiceRef.current.unsubscribe(name, handleNewNumber);
-        }
-      };
-    }
-  }, [dataSeeded, name, handleNewNumber]);
 
   const verificarEstrategia = (numero: number) => {
     // Placeholder para verificação de estratégia
