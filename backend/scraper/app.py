@@ -21,6 +21,9 @@ from flask_cors import CORS
 import threading
 import queue
 import sys
+import traceback
+import psutil
+from selenium.webdriver.common.action_chains import ActionChains
 
 from config import CASINO_URL, SUPABASE_URL, SUPABASE_KEY, roleta_permitida_por_id, SCRAPE_INTERVAL_MINUTES, logger, MAX_CICLOS
 from strategy_analyzer import StrategyAnalyzer
@@ -100,6 +103,13 @@ class EventManager:
 
 # Instanciando o gerenciador de eventos
 event_manager = EventManager()
+
+# Variáveis globais para monitoramento
+ultima_extracao_bem_sucedida = None
+contagem_extrações = 0
+contagem_erros = 0
+status_scraper = "inactive"
+inicio_scraper = None
 
 @app.route('/events')
 def sse():
@@ -312,44 +322,60 @@ def configurar_driver():
             raise
 
 def extrair_numeros_js(driver, elemento_roleta):
-    """
-    Extrai apenas o número mais recente (no topo) da roleta.
+    """Extrai os números da roleta usando JavaScript"""
+    global ultima_extracao_bem_sucedida, contagem_extrações, contagem_erros
     
-    Na interface do cassino, os números mais recentes geralmente aparecem primeiro/no topo,
-    portanto vamos garantir que mantemos essa ordem ao extrair.
-    """
     try:
-        # Método 1: Procurar em spans dentro do elemento de informações e pegar apenas o primeiro (mais recente)
-        numeros_elementos = elemento_roleta.find_elements(By.CSS_SELECTOR, ".cy-live-casino-grid-item-infobar-draws span")
-        if numeros_elementos and len(numeros_elementos) > 0:
-            numero_topo = numeros_elementos[0].text.strip()
-            if numero_topo:
-                logger.info(f"Número extraído (método 1): {numero_topo}")
-                return [numero_topo]  # Retorna como lista com um único elemento
+        # Implementação existente...
+        # Passar o mouse sobre o elemento para ativar possíveis tooltips
+        actions = ActionChains(driver)
+        actions.move_to_element(elemento_roleta).perform()
         
-        # Método 2: Procurar em divs e pegar apenas o primeiro (mais recente)
-        numeros_elementos = elemento_roleta.find_elements(By.CSS_SELECTOR, ".cy-live-casino-grid-item-infobar-draws div")
-        if numeros_elementos and len(numeros_elementos) > 0:
-            numero_topo = numeros_elementos[0].text.strip()
-            if numero_topo:
-                logger.info(f"Número extraído (método 2): {numero_topo}")
-                return [numero_topo]  # Retorna como lista com um único elemento
+        # Capturar a lista de números usando JavaScript
+        script = """
+        function extrairNumeros(elemento) {
+            // Buscar números dentro do elemento passando pelo shadow DOM
+            const container = elemento.querySelector('.tile-body') || elemento;
+            const numerosElem = container.querySelectorAll('.roulette-historytool');
+            const numeros = [];
+            
+            if (numerosElem && numerosElem.length > 0) {
+                numerosElem.forEach(e => {
+                    const texto = e.textContent.trim();
+                    const numero = parseInt(texto);
+                    if (!isNaN(numero)) {
+                        numeros.push(numero);
+                    }
+                });
+                return numeros;
+            }
+
+            // Se não encontrou pela classe específica, tenta encontrar pelo texto
+            const todosElementos = container.querySelectorAll('*');
+            for (const elem of todosElementos) {
+                const texto = elem.textContent.trim();
+                const numero = parseInt(texto);
+                if (!isNaN(numero) && numero >= 0 && numero <= 36) {
+                    numeros.push(numero);
+                }
+            }
+            
+            return numeros;
+        }
+        return extrairNumeros(arguments[0]);
+        """
+        numeros = driver.execute_script(script, elemento_roleta)
         
-        # Método 3: Extrair do texto completo usando regex e pegar apenas o primeiro número encontrado
-        info_bar = elemento_roleta.find_element(By.CSS_SELECTOR, ".cy-live-casino-grid-item-infobar")
-        if info_bar:
-            texto_completo = info_bar.text
-            # Padrão para encontrar números de 0 a 36
-            numeros = re.findall(r'\b([0-9]|[1-2][0-9]|3[0-6])\b', texto_completo)
-            if numeros and len(numeros) > 0:
-                logger.info(f"Número extraído (método 3): {numeros[0]}")
-                return [numeros[0]]  # Retorna apenas o primeiro número encontrado
-    
-    except (NoSuchElementException, Exception) as e:
-        logger.warning(f"Erro ao extrair números: {str(e)}")
-    
-    logger.warning("Nenhum número encontrado para esta roleta")
-    return []
+        # Registrar tentativa bem-sucedida
+        ultima_extracao_bem_sucedida = datetime.now().isoformat()
+        contagem_extrações += 1
+        
+        return numeros
+    except Exception as e:
+        # Registrar erro
+        contagem_erros += 1
+        logger.error(f"Erro ao extrair números com JavaScript: {str(e)}")
+        return []
 
 def extrair_id_roleta(elemento_roleta):
     """Extrai o ID único da roleta a partir das classes do elemento"""
@@ -447,40 +473,37 @@ def inserir_novo_numero(roleta_id, roleta_nome, numero):
         return False
 
 def processar_novos_numeros(roleta_id, roleta_nome, numeros_novos):
-    """
-    Processa novos números detectados para uma roleta
-    """
+    """Processa novos números obtidos da roleta"""
+    global ultima_extracao_bem_sucedida
+    
     if not numeros_novos:
-        return False
+        return []
     
-    # Obter números existentes para verificar duplicidade
-    numeros_existentes = obter_ultimos_numeros(roleta_id, limite=100)
+    logger.info(f"Processando {len(numeros_novos)} números novos para {roleta_nome}")
     
-    # Verificar cada número novo
-    numeros_adicionados = False
-    for num_str in numeros_novos:
-        try:
-            # Validar o número
-            if isinstance(num_str, str):
-                num_limpo = re.sub(r'[^\d]', '', num_str)
-                if not num_limpo:
-                    continue
-                num = int(num_limpo)
-            else:
-                num = int(num_str)
+    # Obter os números já salvos desta roleta
+    ultimos_numeros = obter_ultimos_numeros(roleta_id)
+    
+    # Filtrar apenas os números que ainda não foram salvos
+    numeros_a_inserir = []
+    for numero in numeros_novos:
+        # Verificar se este número não está entre os últimos salvos
+        if numero not in ultimos_numeros:
+            numeros_a_inserir.append(numero)
+    
+    # Se tiver números novos, inseri-los no banco
+    if numeros_a_inserir:
+        logger.info(f"Inserindo {len(numeros_a_inserir)} números novos para {roleta_nome}: {numeros_a_inserir}")
+        for numero in numeros_a_inserir:
+            inserir_novo_numero(roleta_id, roleta_nome, numero)
             
-            # Verificar duplicidade (apenas com os mais recentes para performance)
-            if not numeros_existentes or num != numeros_existentes[0]:
-                if inserir_novo_numero(roleta_id, roleta_nome, num):
-                    numeros_adicionados = True
-                    # Atualizar a lista de números existentes
-                    numeros_existentes.insert(0, num)
-            else:
-                logger.debug(f"Número {num} já existente para a roleta {roleta_nome}")
-        except Exception as e:
-            logger.warning(f"Erro ao processar número {num_str}: {str(e)}")
+            # Atualizar timestamp da última extração bem-sucedida
+            ultima_extracao_bem_sucedida = datetime.now().isoformat()
+            
+    else:
+        logger.info(f"Nenhum número novo para inserir para {roleta_nome}")
     
-    return numeros_adicionados
+    return numeros_a_inserir
 
 def atualizar_dados_estrategia(roleta_id, roleta_nome, dados_estrategia):
     """
@@ -497,110 +520,169 @@ def atualizar_dados_estrategia(roleta_id, roleta_nome, dados_estrategia):
         return False
 
 def scrape_roletas(driver=None):
-    """Função principal que realiza o scraping das roletas"""
+    """Função principal de scraping"""
     try:
-        # Inicializar driver se não fornecido
-        driver_interno = driver
-        if driver_interno is None:
+        # Inicializar contador de ciclos e tempo de execução
+        ciclo_atual = 0
+        tempo_inicio = time.time()
+        ultima_reinicializacao_driver = tempo_inicio
+        driver_interno = False
+        
+        # Log de início da execução
+        logger.info(f"Iniciando scraping de roletas. Tempo máximo de ciclos: {MAX_CICLOS}")
+        
+        while True:
             try:
-                driver_interno = configurar_driver()
-            except Exception as e:
-                logger.error(f"Erro ao configurar driver: {str(e)}")
-                return None
-        
-        logger.info(f"Navegando para: {CASINO_URL}")
-        driver_interno.get(CASINO_URL)
-        
-        # Aguardar carregamento da página (5-10 segundos)
-        time.sleep(random.uniform(5, 10))
-        
-        # Iniciar ciclo de scraping
-        ciclo = 1
-        while ciclo <= MAX_CICLOS or MAX_CICLOS == 0:
-            logger.info(f"Iniciando ciclo {ciclo} de scraping")
-            
-            # Encontrar todas as roletas na página
-            elementos_roletas = driver_interno.find_elements(By.CSS_SELECTOR, ".cy-live-casino-grid-item")
-            logger.info(f"Encontradas {len(elementos_roletas)} roletas na página")
-            
-            # Lista para armazenar roletas permitidas encontradas neste ciclo
-            roletas_encontradas = []
-            
-            # Processar cada roleta
-            for elemento_roleta in elementos_roletas:
-                try:
-                    # Extrair ID da roleta primeiro para filtrar rapidamente
-                    id_roleta = extrair_id_roleta(elemento_roleta)
-                    
-                    # Verificar se a roleta está na lista de permitidas
-                    if not roleta_permitida_por_id(id_roleta):
-                        logger.debug(f"Roleta com ID {id_roleta} ignorada (não está na lista de permitidas)")
-                        continue
-                    
-                    # Extrair título da roleta apenas para roletas permitidas
-                    titulo_elemento = elemento_roleta.find_element(By.CSS_SELECTOR, ".cy-live-casino-grid-item-title")
-                    titulo_roleta = titulo_elemento.text.strip()
-                    
-                    roletas_encontradas.append(f"{titulo_roleta} (ID: {id_roleta})")
-                    logger.info(f"Processando roleta permitida: {titulo_roleta} (ID: {id_roleta})")
-                    
-                    # Inicializar analisador para a roleta se não existir
-                    if titulo_roleta not in analisadores_mesas:
-                        analisadores_mesas[titulo_roleta] = StrategyAnalyzer(titulo_roleta)
-                        # Carregar números existentes no analisador
-                        numeros_existentes = obter_ultimos_numeros(id_roleta)
-                        if numeros_existentes:
-                            analisadores_mesas[titulo_roleta].add_numbers(numeros_existentes)
-                            logger.info(f"Carregados {len(numeros_existentes)} números existentes para o analisador de {titulo_roleta}")
-                    
-                    # Extrair números da roleta
-                    numeros = extrair_numeros_js(driver_interno, elemento_roleta)
-                    
-                    # Processar novos números
-                    if processar_novos_numeros(id_roleta, titulo_roleta, numeros):
-                        logger.info(f"Novos números processados para {titulo_roleta}: {numeros}")
-                    
-                    # Adicionar números ao analisador
-                    if analisadores_mesas[titulo_roleta].add_numbers(numeros):
-                        logger.info(f"Novos números adicionados ao analisador para {titulo_roleta}: {numeros}")
-                        
-                        # Atualizar dados de estratégia se necessário
-                        dados_estrategia = analisadores_mesas[titulo_roleta].get_data().get("estrategia", {})
-                        atualizar_dados_estrategia(id_roleta, titulo_roleta, dados_estrategia)
+                # Verificar se atingimos o limite de ciclos (0 = sem limite)
+                if MAX_CICLOS > 0 and ciclo_atual >= MAX_CICLOS:
+                    logger.info(f"Atingido limite de {MAX_CICLOS} ciclos. Finalizando.")
+                    break
                 
-                except Exception as e:
-                    logger.error(f"Erro ao processar roleta: {str(e)}")
-            
-            # Registrar as roletas permitidas encontradas neste ciclo
-            if roletas_encontradas:
-                logger.info(f"Roletas permitidas encontradas neste ciclo: {len(roletas_encontradas)}")
-                for roleta in roletas_encontradas:
-                    logger.info(f"  - {roleta}")
-            else:
-                logger.warning("Nenhuma roleta permitida encontrada neste ciclo")
-            
-            # Pausa entre ciclos (entre 2 e 3 segundos)
-            pausa = random.uniform(2, 3)
-            time.sleep(pausa)
-            
-            # Incrementar ciclo apenas se MAX_CICLOS não for 0 (infinito)
-            if MAX_CICLOS != 0:
-                ciclo += 1
-            else:
-                logger.info(f"Ciclo {ciclo} completado, continuando indefinidamente...")
-                ciclo += 1
-    
-    except Exception as e:
-        logger.error(f"Erro no processo de scraping: {str(e)}")
-    
-    finally:
-        # Fechar o driver apenas se foi criado internamente
-        if driver is None and 'driver_interno' in locals() and driver_interno:
+                # Verificar se é necessário reinicializar o driver (a cada 2 horas)
+                tempo_atual = time.time()
+                if tempo_atual - ultima_reinicializacao_driver > 7200:  # 2 horas em segundos
+                    logger.info("Reinicializando driver após 2 horas de execução para prevenir problemas de memória")
+                    if driver_interno and driver:
+                        try:
+                            driver.quit()
+                        except Exception as e:
+                            logger.error(f"Erro ao fechar driver antigo: {str(e)}")
+                    
+                    driver = configurar_driver()
+                    driver_interno = True
+                    ultima_reinicializacao_driver = tempo_atual
+                    logger.info("Driver reinicializado com sucesso")
+                
+                # Se não temos um driver, criar um
+                if not driver:
+                    logger.info("Driver não fornecido, configurando um novo")
+                    driver = configurar_driver()
+                    driver_interno = True
+                
+                ciclo_atual += 1
+                logger.info(f"Iniciando ciclo {ciclo_atual}")
+                
+                # Encontrar todas as roletas na página
+                elementos_roletas = driver.find_elements(By.CSS_SELECTOR, ".cy-live-casino-grid-item")
+                logger.info(f"Encontradas {len(elementos_roletas)} roletas na página")
+                
+                # Lista para armazenar roletas permitidas encontradas neste ciclo
+                roletas_encontradas = []
+                
+                # Processar cada roleta
+                for elemento_roleta in elementos_roletas:
+                    try:
+                        # Extrair ID da roleta primeiro para filtrar rapidamente
+                        id_roleta = extrair_id_roleta(elemento_roleta)
+                        
+                        # Verificar se a roleta está na lista de permitidas
+                        if not roleta_permitida_por_id(id_roleta):
+                            logger.debug(f"Roleta com ID {id_roleta} ignorada (não está na lista de permitidas)")
+                            continue
+                        
+                        # Extrair título da roleta apenas para roletas permitidas
+                        titulo_elemento = elemento_roleta.find_element(By.CSS_SELECTOR, ".cy-live-casino-grid-item-title")
+                        titulo_roleta = titulo_elemento.text.strip()
+                        
+                        roletas_encontradas.append(f"{titulo_roleta} (ID: {id_roleta})")
+                        logger.info(f"Processando roleta permitida: {titulo_roleta} (ID: {id_roleta})")
+                        
+                        # Inicializar analisador para a roleta se não existir
+                        if titulo_roleta not in analisadores_mesas:
+                            analisadores_mesas[titulo_roleta] = StrategyAnalyzer(titulo_roleta)
+                            # Carregar números existentes no analisador
+                            numeros_existentes = obter_ultimos_numeros(id_roleta)
+                            if numeros_existentes:
+                                analisadores_mesas[titulo_roleta].add_numbers(numeros_existentes)
+                                logger.info(f"Carregados {len(numeros_existentes)} números existentes para o analisador de {titulo_roleta}")
+                        
+                        # Extrair números da roleta
+                        numeros = extrair_numeros_js(driver, elemento_roleta)
+                        
+                        # Processar novos números
+                        if processar_novos_numeros(id_roleta, titulo_roleta, numeros):
+                            logger.info(f"Novos números processados para {titulo_roleta}: {numeros}")
+                        
+                        # Adicionar números ao analisador
+                        if analisadores_mesas[titulo_roleta].add_numbers(numeros):
+                            logger.info(f"Novos números adicionados ao analisador para {titulo_roleta}: {numeros}")
+                            
+                            # Atualizar dados de estratégia se necessário
+                            dados_estrategia = analisadores_mesas[titulo_roleta].get_data().get("estrategia", {})
+                            atualizar_dados_estrategia(id_roleta, titulo_roleta, dados_estrategia)
+                    
+                    except Exception as e:
+                        logger.error(f"Erro ao processar roleta: {str(e)}")
+                
+                # Registrar as roletas permitidas encontradas neste ciclo
+                if roletas_encontradas:
+                    logger.info(f"Roletas permitidas encontradas neste ciclo: {len(roletas_encontradas)}")
+                    for roleta in roletas_encontradas:
+                        logger.info(f"  - {roleta}")
+                else:
+                    logger.warning("Nenhuma roleta permitida encontrada neste ciclo")
+                
+                # Adicionar verificação de saúde periódica
+                if ciclo_atual % 5 == 0:  # A cada 5 ciclos
+                    logger.info(f"Verificação de saúde: Scraper funcionando há {round((time.time() - tempo_inicio) / 60, 2)} minutos, {ciclo_atual} ciclos executados")
+                
+                # Pausa entre ciclos para não sobrecarregar o site alvo
+                time.sleep(SCRAPE_INTERVAL_MINUTES * 60)
+                
+            except Exception as e:
+                logger.error(f"Erro durante o ciclo {ciclo_atual}: {str(e)}")
+                logger.error(f"Stacktrace: {traceback.format_exc()}")
+                
+                # Tentar recuperar de erros
+                try:
+                    if driver:
+                        # Verificar se o driver ainda está respondendo
+                        try:
+                            # Tente acessar uma propriedade simples
+                            _ = driver.current_url
+                        except:
+                            logger.error("Driver não está respondendo. Reinicializando...")
+                            try:
+                                driver.quit()
+                            except:
+                                logger.error("Não foi possível fechar o driver antigo")
+                            
+                            driver = configurar_driver()
+                            driver_interno = True
+                except Exception as recovery_error:
+                    logger.error(f"Erro durante tentativa de recuperação: {str(recovery_error)}")
+                
+                # Pausa mais longa após erro para evitar sobrecarga
+                logger.info("Aguardando 2 minutos antes de tentar novamente após erro")
+                time.sleep(120)
+        
+        # Fechar o driver se foi criado internamente
+        if driver_interno and driver:
             try:
-                driver_interno.quit()
+                driver.quit()
                 logger.info("Driver fechado com sucesso")
             except Exception as e:
                 logger.error(f"Erro ao fechar driver: {str(e)}")
+    
+    except Exception as e:
+        logger.error(f"Erro crítico na função de scraping: {str(e)}")
+        logger.error(f"Stacktrace: {traceback.format_exc()}")
+        
+        # Tentar fechar o driver se houver exceção crítica
+        if driver_interno and driver:
+            try:
+                driver.quit()
+            except:
+                pass
+        
+        # Notificar administradores sobre falha crítica
+        logger.critical("Falha crítica no scraper. Necessário verificar manualmente.")
+        
+        # Reiniciar o serviço após falha crítica (se estiver no modo de recuperação automática)
+        if os.environ.get('AUTO_RECOVER', 'true').lower() == 'true':
+            logger.info("Tentando reiniciar o serviço devido a falha crítica...")
+            # Iniciar novo processo
+            os.execv(sys.executable, ['python'] + sys.argv)
 
 # Função para simular dados quando o scraper não funcionar
 def simulate_roulette_data():
@@ -834,19 +916,31 @@ def force_event():
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
-    """Endpoint para verificar o status do simulador e do sistema SSE"""
+    """Retorna informações sobre o status do sistema"""
     try:
+        # Calcular tempo de atividade
+        uptime = None
+        if inicio_scraper:
+            uptime_seconds = time.time() - inicio_scraper
+            uptime = {
+                "seconds": int(uptime_seconds),
+                "minutes": int(uptime_seconds / 60),
+                "hours": int(uptime_seconds / 3600),
+                "days": int(uptime_seconds / 86400)
+            }
+        
+        # Obter estatísticas
         status = {
+            "status": "healthy",
             "timestamp": datetime.now().isoformat(),
-            "simulator_running": hasattr(sys, 'simulator_thread_running') and sys.simulator_thread_running,
-            "scraper_running": hasattr(sys, 'scraper_thread_running') and sys.scraper_thread_running,
             "clients_connected": len(event_manager.clients),
-            "environment": {
-                "production": IS_PRODUCTION,
-                "simulate_data": os.environ.get('SIMULATE_DATA') == 'true',
-                "disable_scraper": os.environ.get('DISABLE_SCRAPER') == 'true',
-            },
-            "queue_size": event_manager.event_queue.qsize() if hasattr(event_manager.event_queue, 'qsize') else -1
+            "scraper": status_scraper,
+            "last_successful_extraction": ultima_extracao_bem_sucedida,
+            "extraction_count": contagem_extrações,
+            "error_count": contagem_erros,
+            "uptime": uptime,
+            "simulator_running": hasattr(sys, 'simulator_thread_running') and sys.simulator_thread_running,
+            "memory_usage_mb": round(psutil.Process().memory_info().rss / 1024 / 1024, 2) if 'psutil' in sys.modules else "N/A"
         }
         
         return jsonify(status)
@@ -856,9 +950,97 @@ def get_status():
             "error": str(e)
         }), 500
 
+@app.route('/api/restart-scraper', methods=['POST'])
+def restart_scraper():
+    """Endpoint para reiniciar o scraper remotamente"""
+    try:
+        logger.info("Reinicialização remota do scraper solicitada")
+        
+        # Verificar autorização através de uma chave secreta no cabeçalho
+        auth_key = request.headers.get('X-API-KEY')
+        if not auth_key or auth_key != os.environ.get('ADMIN_API_KEY', 'admin-secret-key'):
+            logger.warning("Tentativa de reinicialização não autorizada do scraper")
+            return jsonify({"error": "Não autorizado"}), 401
+        
+        # Iniciar thread para reiniciar o serviço (isso permite que o endpoint responda primeiro)
+        def restart_service():
+            time.sleep(1)  # Pequena pausa para garantir que a resposta da API seja enviada
+            logger.info("Reiniciando o serviço...")
+            os.execv(sys.executable, ['python'] + sys.argv)
+        
+        threading.Thread(target=restart_service).start()
+        
+        return jsonify({
+            "message": "Reiniciando o serviço, por favor aguarde...",
+            "status": "restarting"
+        })
+    except Exception as e:
+        logger.error(f"Erro ao reiniciar scraper: {str(e)}")
+        return jsonify({
+            "error": str(e)
+        }), 500
+
+@app.route('/api/scraper/logs', methods=['GET'])
+def get_scraper_logs():
+    """Endpoint para obter os últimos logs do scraper"""
+    try:
+        # Verificar autorização através de uma chave secreta no cabeçalho
+        auth_key = request.headers.get('X-API-KEY')
+        if not auth_key or auth_key != os.environ.get('ADMIN_API_KEY', 'admin-secret-key'):
+            logger.warning("Tentativa não autorizada de acessar logs")
+            return jsonify({"error": "Não autorizado"}), 401
+        
+        # Obter parâmetros de consulta
+        lines = request.args.get('lines', default=100, type=int)
+        level = request.args.get('level', default='INFO').upper()
+        
+        # Limitar o número de linhas
+        lines = min(lines, 1000)
+        
+        # Caminho para o arquivo de log (ajuste conforme sua configuração)
+        log_file = os.environ.get('LOG_FILE', 'scraper.log')
+        
+        # Verificar se o arquivo existe
+        if not os.path.exists(log_file):
+            return jsonify({
+                "error": f"Arquivo de log {log_file} não encontrado",
+                "logs": []
+            }), 404
+        
+        # Ler as últimas linhas do arquivo
+        with open(log_file, 'r') as f:
+            all_logs = f.readlines()
+        
+        # Filtrar por nível, se especificado
+        if level != 'ALL':
+            filtered_logs = [log for log in all_logs if level in log]
+        else:
+            filtered_logs = all_logs
+        
+        # Obter as últimas N linhas
+        last_logs = filtered_logs[-lines:] if lines < len(filtered_logs) else filtered_logs
+        
+        return jsonify({
+            "total_lines": len(all_logs),
+            "filtered_lines": len(filtered_logs),
+            "showing_lines": len(last_logs),
+            "logs": last_logs
+        })
+    except Exception as e:
+        logger.error(f"Erro ao obter logs: {str(e)}")
+        return jsonify({
+            "error": str(e)
+        }), 500
+
 def main():
     """Função principal"""
+    global status_scraper, inicio_scraper
+    
     try:
+        # Inicializar variáveis de monitoramento
+        inicio_scraper = time.time()
+        status_scraper = "starting"
+        
         # Verificar se a tabela roleta_numeros existe
         try:
             supabase.table("roleta_numeros").select("count").limit(1).execute()
@@ -870,6 +1052,7 @@ def main():
         # Se estivermos em produção e a simulação estiver ativada
         if IS_PRODUCTION and os.environ.get('SIMULATE_DATA') == 'true':
             logger.info("Modo de simulação de dados ativado")
+            status_scraper = "simulator_active"
             simulate_roulette_data()
             return
         
@@ -877,13 +1060,16 @@ def main():
         # pode ser necessário desabilitar o scraping com Selenium
         if IS_PRODUCTION and os.environ.get('DISABLE_SCRAPER') == 'true':
             logger.warning("Scraper desabilitado em ambiente de produção por configuração")
+            status_scraper = "disabled"
             return
-            
+        
         # Iniciar o scraping
+        status_scraper = "active"
         scrape_roletas()
         
     except Exception as e:
         logger.error(f"Erro na função principal: {str(e)}")
+        status_scraper = "error"
 
 if __name__ == "__main__":
     # Marcar a thread do scraper como iniciada
