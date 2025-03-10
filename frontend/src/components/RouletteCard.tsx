@@ -505,7 +505,7 @@ const RouletteCard = ({ name, lastNumbers: initialLastNumbers, wins, losses, tre
         </div>
       </div>
       
-      {/* Últimos números removidos a pedido do usuário */}
+      {memoizedNumbers}
       {memoizedSuggestion}
       {memoizedWinRate}
       {memoizedTrendChart}
