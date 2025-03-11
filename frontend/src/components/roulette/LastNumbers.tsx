@@ -57,18 +57,18 @@ const LastNumbers = memo(({ numbers, isLoading }: LastNumbersProps) => {
   // Renderizar números
   console.log('[LastNumbers] Renderizando números:', validNumbers.slice(0, 5));
   
-  // Dividir os números em duas linhas (8 em cada linha no máximo)
+  // Dividir os números em duas linhas (6 em cada linha no máximo)
   const firstRowNumbers = validNumbers.slice(0, 6);
   const secondRowNumbers = validNumbers.slice(6, 12);
   
   return (
-    <div className="grid grid-rows-2 gap-1 my-2" data-testid="last-numbers">
+    <div className="grid grid-rows-2 gap-1 my-2 w-full" data-testid="last-numbers">
       {/* Primeira linha */}
-      <div className="flex justify-start gap-1 md:gap-1.5 min-h-7">
+      <div className="flex justify-start gap-1 min-h-7 w-full flex-nowrap overflow-hidden">
         {firstRowNumbers.map((num, idx) => (
           <div
             key={`first-${num}-${idx}`}
-            className={`w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center text-xs font-bold 
+            className={`min-w-6 h-6 md:min-w-7 md:h-7 rounded-full flex items-center justify-center text-xs font-bold 
               ${getRouletteNumberColor(num)}
               ${newNumberIndex === 0 && idx === 0 ? 'animate-pulse shadow-lg transition-all duration-500 scale-110' : ''}
             `}
@@ -81,11 +81,11 @@ const LastNumbers = memo(({ numbers, isLoading }: LastNumbersProps) => {
       </div>
       
       {/* Segunda linha */}
-      <div className="flex justify-start gap-1 md:gap-1.5 min-h-7">
+      <div className="flex justify-start gap-1 min-h-7 w-full flex-nowrap overflow-hidden">
         {secondRowNumbers.map((num, idx) => (
           <div
             key={`second-${num}-${idx}`}
-            className={`w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center text-xs font-bold 
+            className={`min-w-6 h-6 md:min-w-7 md:h-7 rounded-full flex items-center justify-center text-xs font-bold 
               ${getRouletteNumberColor(num)}
             `}
             data-number={num}
