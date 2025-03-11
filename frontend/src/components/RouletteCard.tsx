@@ -328,17 +328,22 @@ const RouletteCard = ({ name, roleta_nome, lastNumbers: initialLastNumbers, wins
             
             if (payload.new && payload.new.roleta_nome === roletaNome) {
               const novoNumero = Number(payload.new.numero);
-              console.log(`[REALTIME][${roletaNome}] Novo número: ${novoNumero}`);
+              console.log(`[REALTIME][${roletaNome}] Novo número: ${novoNumero} (${typeof novoNumero})`);
               
-              // Usar a função updateLastNumber para atualizar apenas o último número
-              updateLastNumber(novoNumero);
-              
-              // Notificação visual para o usuário
-              toast({
-                title: "Novo número!",
-                description: `${roletaNome}: ${novoNumero}`,
-                duration: 3000
-              });
+              // Validar número antes de atualizar
+              if (!isNaN(novoNumero) && novoNumero >= 0 && novoNumero <= 36) {
+                // Usar a função updateLastNumber para atualizar apenas o último número
+                updateLastNumber(novoNumero);
+                
+                // Notificação visual para o usuário
+                toast({
+                  title: "Novo número!",
+                  description: `${roletaNome}: ${novoNumero}`,
+                  duration: 3000
+                });
+              } else {
+                console.error(`[REALTIME][${roletaNome}] Número inválido recebido: ${novoNumero}`);
+              }
             } else {
               console.log(`[REALTIME][${roletaNome}] Payload recebido mas não corresponde ao filtro atual:`, payload);
             }
@@ -347,10 +352,28 @@ const RouletteCard = ({ name, roleta_nome, lastNumbers: initialLastNumbers, wins
             console.log(`[REALTIME][${roletaNome}] Status da assinatura: ${status}`);
             if (status === 'SUBSCRIBED') {
               console.log(`[REALTIME][${roletaNome}] Inscrição bem-sucedida! Aguardando eventos.`);
+              // Indicar visualmente que a assinatura está ativa
+              toast({
+                title: "Conectado!",
+                description: `Monitorando ${roletaNome} em tempo real`,
+                duration: 2000
+              });
             } else if (status === 'CHANNEL_ERROR') {
               console.error(`[REALTIME][${roletaNome}] Erro no canal. Verifique se a replicação está ativada no Supabase.`);
+              toast({
+                title: "Erro de conexão",
+                description: "Não foi possível conectar ao serviço em tempo real",
+                variant: "destructive",
+                duration: 5000
+              });
             } else if (status === 'TIMED_OUT') {
               console.error(`[REALTIME][${roletaNome}] Tempo esgotado ao conectar ao Supabase Realtime.`);
+              toast({
+                title: "Timeout",
+                description: "Conexão com o serviço em tempo real expirou",
+                variant: "destructive",
+                duration: 5000
+              });
             }
           });
           

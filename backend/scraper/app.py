@@ -23,6 +23,7 @@ import queue
 import sys
 import uuid
 import hashlib
+import requests
 
 from config import CASINO_URL, SUPABASE_URL, SUPABASE_KEY, roleta_permitida_por_id, SCRAPE_INTERVAL_MINUTES, logger, MAX_CICLOS
 from strategy_analyzer import StrategyAnalyzer
@@ -98,17 +99,20 @@ class EventManager:
     def notify_clients(self, event_data):
         # Adicionar evento à fila
         self.event_queue.put(event_data)
-        logger.info(f"Evento adicionado à fila: {event_data.get('type')} - {event_data.get('roleta')} - {event_data.get('numero')}")
+        logger.info(f"Evento adicionado à fila: {event_data.get('type')} - Roleta: {event_data.get('roleta_nome')} - Número: {event_data.get('numero')}")
         
         # Enviar para todos os clientes
+        clients_notified = 0
         for client_queue in self.clients[:]:  # Copia para evitar problemas se a lista mudar
             try:
                 client_queue.put(event_data)
-                logger.info(f"Evento enviado para um cliente")
+                clients_notified += 1
             except Exception as e:
                 logger.error(f"Erro ao enviar evento para cliente: {str(e)}")
                 # Cliente com problema, remover
                 self.unregister_client(client_queue)
+        
+        logger.info(f"Evento enviado para {clients_notified} clientes de {len(self.clients)} conectados")
 
 # Instanciando o gerenciador de eventos
 event_manager = EventManager()
@@ -245,12 +249,13 @@ def generate_test_event():
 @app.route('/api/roletas')
 def listar_roletas():
     try:
-        response = supabase.table("roleta_numeros").select("roleta_nome").execute()
+        # Usar a abordagem de consultar a tabela roletas em vez de roleta_numeros
+        # Isso evita o problema de GROUP BY com o campo timestamp
+        response = supabase.table("roletas").select("nome").execute()
         roletas = []
         if response.data:
-            # Extrair nomes únicos de roletas
-            nomes = set([item['roleta_nome'] for item in response.data])
-            roletas = list(nomes)
+            # Extrair nomes de roletas da tabela roletas
+            roletas = [item['nome'] for item in response.data]
         
         return jsonify({
             "status": "success",
@@ -483,46 +488,39 @@ def garantir_roleta_existe(roleta_id, roleta_nome):
         roleta_id_hash = hashlib.md5(str(roleta_id).encode()).hexdigest()
         roleta_uuid = str(uuid.UUID(roleta_id_hash))
         
-        # Verificar se a roleta já existe
-        response = supabase.table("roletas") \
-            .select("*") \
-            .filter("id", "eq", roleta_uuid) \
-            .execute()
+        # Determinar o tipo de roleta com base no nome
+        tipo_roleta = "ao_vivo"  # Valor padrão
+        if "auto" in roleta_nome.lower() or "speed" in roleta_nome.lower():
+            tipo_roleta = "automatica"
+        elif "lightning" in roleta_nome.lower():
+            tipo_roleta = "especial"
         
-        # Se não existe, inserir
-        if not response.data:
-            logger.info(f"Roleta {roleta_nome} (ID: {roleta_id}) não encontrada na tabela roletas. Inserindo...")
-            
-            # Determinar o tipo de roleta com base no nome
-            tipo_roleta = "ao_vivo"  # Valor padrão
-            if "auto" in roleta_nome.lower() or "speed" in roleta_nome.lower():
-                tipo_roleta = "automatica"
-            elif "lightning" in roleta_nome.lower():
-                tipo_roleta = "especial"
-            
-            # Preparar dados para inserção
-            dados_roleta = {
-                "id": roleta_uuid,
-                "nome": roleta_nome,
-                "tipo": tipo_roleta,
-                "provedor": "Evolution Gaming",  # Valor padrão
-                "ativa": True
-            }
-            
-            # Inserir na tabela roletas
-            result = supabase.table("roletas").upsert(dados_roleta).execute()
-            logger.info(f"Roleta {roleta_nome} inserida com sucesso na tabela roletas")
-            
+        # Preparar dados para inserção
+        dados_roleta = {
+            "id": roleta_uuid,
+            "nome": roleta_nome,
+            "tipo": tipo_roleta,
+            "provedor": "Evolution Gaming",  # Valor padrão
+            "ativa": True
+        }
+        
+        # Inserir ou atualizar na tabela roletas diretamente, sem verificação prévia
+        result = supabase.table("roletas").upsert(dados_roleta).execute()
+        
         return roleta_uuid
     except Exception as e:
         logger.error(f"Erro ao verificar/inserir roleta {roleta_nome}: {str(e)}")
         return None
 
-def inserir_novo_numero(roleta_id, roleta_nome, numero):
+def inserir_numero_direto_api(roleta_id, roleta_nome, numero, timestamp):
     """
-    Insere um novo número na tabela roleta_numeros
+    Alternativa para inserir um novo número diretamente via API REST,
+    evitando problemas potenciais com GROUP BY
     """
     try:
+        # Removendo a restrição de roletas funcionando para permitir atualização de todas as roletas
+        # Anteriormente, só "Auto-Roulette VIP" recebia atualizações
+        
         # Validar o número
         if isinstance(numero, str):
             numero_int = int(re.sub(r'[^\d]', '', numero))
@@ -544,30 +542,51 @@ def inserir_novo_numero(roleta_id, roleta_nome, numero):
             "roleta_id": roleta_uuid,
             "roleta_nome": roleta_nome,
             "numero": numero_int,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": timestamp
         }
         
         # Log em debug em vez de info para reduzir ruído
         logger.debug(f"Inserindo número {numero_int} para roleta {roleta_nome} (ID: {roleta_uuid})")
         
-        # Inserir na tabela roleta_numeros
-        response = supabase.table("roleta_numeros").insert(data).execute()
-        logger.info(f"NOVO NÚMERO: {numero_int} para {roleta_nome}")
-        
-        # Notificar clientes SSE sobre o novo número
-        event_data = {
-            "type": "new_number",
-            "roleta_id": roleta_uuid,
-            "roleta_nome": roleta_nome, 
-            "numero": numero_int,
-            "timestamp": datetime.now().isoformat()
+        # Inserir via HTTP direto
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal"
         }
-        event_manager.notify_clients(event_data)
         
-        return True
+        url = f"{supabase_url}/rest/v1/roleta_numeros"
+        response = requests.post(url, json=data, headers=headers)
+        
+        if response.status_code >= 200 and response.status_code < 300:
+            logger.info(f"NOVO NÚMERO: {numero_int} para {roleta_nome}")
+            
+            # Notificar clientes SSE sobre o novo número
+            event_data = {
+                "type": "new_number",
+                "roleta_id": roleta_uuid,
+                "roleta_nome": roleta_nome, 
+                "numero": numero_int,
+                "timestamp": timestamp
+            }
+            event_manager.notify_clients(event_data)
+            
+            # Melhorar o log para facilitar a depuração
+            logger.info(f"NOVO NÚMERO INSERIDO E NOTIFICADO: {numero_int} para {roleta_nome} (ID: {roleta_uuid})")
+            print(f"{datetime.now().strftime('%H:%M:%S')} - NOVO NÚMERO: {numero_int} para {roleta_nome}")
+            
+            return True
+        else:
+            logger.error(f"Erro HTTP {response.status_code} ao inserir número {numero_int}: {response.text}")
+            return False
+            
     except Exception as e:
         logger.error(f"Erro ao inserir número {numero} para a roleta {roleta_nome}: {str(e)}")
         return False
+
+# Substituir a função inserir_novo_numero pela versão alternativa
+inserir_novo_numero = inserir_numero_direto_api
 
 def processar_novos_numeros(roleta_id, roleta_nome, numeros_novos):
     """
@@ -594,7 +613,7 @@ def processar_novos_numeros(roleta_id, roleta_nome, numeros_novos):
             
             # Verificar duplicidade (apenas com os mais recentes para performance)
             if not numeros_existentes or num != numeros_existentes[0]:
-                if inserir_novo_numero(roleta_id, roleta_nome, num):
+                if inserir_novo_numero(roleta_id, roleta_nome, num, datetime.now().isoformat()):
                     numeros_adicionados = True
                     # Atualizar a lista de números existentes
                     numeros_existentes.insert(0, num)
@@ -837,7 +856,7 @@ def simulate_roulette_data():
             
             # Inserir no Supabase
             try:
-                inserir_novo_numero(roleta_id, roleta_nome, numero)
+                inserir_novo_numero(roleta_id, roleta_nome, numero, datetime.now().isoformat())
                 logger.info(f"[SIMULAÇÃO] Número {numero} inserido no Supabase para {roleta_nome}")
             except Exception as e:
                 logger.error(f"[SIMULAÇÃO] Erro ao inserir número simulado: {str(e)}")
@@ -969,7 +988,7 @@ def force_event():
         
         # Inserir no Supabase
         try:
-            inserir_novo_numero(roleta_id, roleta_nome, numero)
+            inserir_novo_numero(roleta_id, roleta_nome, numero, datetime.now().isoformat())
             logger.info(f"[EVENTO FORÇADO] Número {numero} inserido no Supabase para {roleta_nome}")
         except Exception as e:
             logger.error(f"[EVENTO FORÇADO] Erro ao inserir no Supabase: {str(e)}")
