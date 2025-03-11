@@ -64,7 +64,7 @@ const LastNumbers = memo(({ numbers, isLoading }: LastNumbersProps) => {
   return (
     <div className="grid grid-rows-2 gap-1 my-2 w-full" data-testid="last-numbers">
       {/* Primeira linha */}
-      <div className="flex justify-start gap-1 min-h-7 w-full flex-nowrap overflow-hidden">
+      <div className="flex justify-between gap-1 min-h-7 w-full flex-nowrap overflow-hidden">
         {firstRowNumbers.map((num, idx) => (
           <div
             key={`first-${num}-${idx}`}
@@ -81,7 +81,7 @@ const LastNumbers = memo(({ numbers, isLoading }: LastNumbersProps) => {
       </div>
       
       {/* Segunda linha */}
-      <div className="flex justify-start gap-1 min-h-7 w-full flex-nowrap overflow-hidden">
+      <div className="flex justify-between gap-1 min-h-7 w-full flex-nowrap overflow-hidden">
         {secondRowNumbers.map((num, idx) => (
           <div
             key={`second-${num}-${idx}`}
