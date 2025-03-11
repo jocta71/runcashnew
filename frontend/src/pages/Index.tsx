@@ -467,9 +467,9 @@ const Index = () => {
   }, [roulettes]);
 
   return (
-    <div className="min-h-screen grid grid-cols-1 md:grid-cols-[260px_1fr_345px] bg-vegas-black">
+    <div className="h-screen grid grid-cols-1 md:grid-cols-[260px_1fr_345px] bg-vegas-black overflow-hidden">
       {/* Desktop Sidebar - Primeira coluna no grid */}
-      <div className="hidden md:block">
+      <div className="hidden md:block h-screen overflow-hidden">
         <Sidebar />
       </div>
       
@@ -477,7 +477,7 @@ const Index = () => {
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} isMobile={true} />
       
       {/* Conteúdo principal - Segunda coluna no grid */}
-      <div className="relative overflow-hidden">
+      <div className="relative h-screen flex flex-col overflow-hidden">
         {/* Mobile Header */}
         <div className="mobile-header md:hidden">
           <button 
@@ -498,7 +498,7 @@ const Index = () => {
         </div>
         
         {/* Desktop Header */}
-        <div className="hidden md:flex sticky top-0 z-40 h-[70px] w-full items-center justify-between px-4 border-b border-[#33333359] bg-[#100f13]">
+        <div className="hidden md:flex z-40 h-[70px] items-center justify-between px-4 border-b border-[#33333359] bg-[#100f13]">
           <div className="flex items-center gap-2">
             <span className="text-white text-2xl font-bold">RunCash</span>
             <div className="relative flex items-center ml-4 max-w-[180px]">
@@ -562,7 +562,7 @@ const Index = () => {
           </div>
         </div>
         
-        <main className="pt-4 md:pt-[70px] pb-8 px-4 w-full min-h-screen bg-[#100f13] overflow-x-hidden">
+        <main className="flex-1 pt-4 md:pt-4 pb-8 px-4 bg-[#100f13] overflow-y-auto overflow-x-hidden">
           {isLoading ? (
             <div className="flex justify-center items-center h-[200px]">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-vegas-gold"></div>
@@ -594,7 +594,7 @@ const Index = () => {
       </div>
       
       {/* Chat - Terceira coluna no grid */}
-      <div className="hidden md:block">
+      <div className="hidden md:block h-screen overflow-hidden">
         <ChatUI />
       </div>
       
