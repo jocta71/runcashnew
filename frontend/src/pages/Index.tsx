@@ -467,16 +467,19 @@ const Index = () => {
   }, [roulettes]);
 
   return (
-    <div className="min-h-screen flex bg-vegas-black">
-      {/* Desktop Sidebar */}
-      <Sidebar />
+    <div className="min-h-screen grid grid-cols-1 md:grid-cols-[260px_1fr_345px] bg-vegas-black">
+      {/* Desktop Sidebar - Primeira coluna no grid */}
+      <div className="hidden md:block">
+        <Sidebar />
+      </div>
       
       {/* Mobile Sidebar (drawer) */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} isMobile={true} />
       
-      <div className="flex-1 relative">
+      {/* Conteúdo principal - Segunda coluna no grid */}
+      <div className="relative">
         {/* Mobile Header */}
-        <div className="mobile-header">
+        <div className="mobile-header md:hidden">
           <button 
             className="p-2"
             onClick={() => setSidebarOpen(true)}
@@ -495,7 +498,7 @@ const Index = () => {
         </div>
         
         {/* Desktop Header */}
-        <div className="hidden md:flex fixed top-0 left-0 right-0 md:left-64 md:right-80 z-40 h-[70px] items-center justify-between px-4 border-b border-[#33333359] bg-[#100f13]">
+        <div className="hidden md:flex fixed top-0 z-40 h-[70px] w-full items-center justify-between px-4 border-b border-[#33333359] bg-[#100f13]">
           <div className="flex items-center gap-2">
             <span className="text-white text-2xl font-bold">RunCash</span>
             <div className="relative flex items-center ml-4 max-w-[180px]">
@@ -559,7 +562,7 @@ const Index = () => {
           </div>
         </div>
         
-        <main className="pt-4 md:pt-[70px] pb-8 px-4 md:px-8 lg:px-10 md:pl-[280px] md:pr-[345px] lg:pl-[260px] lg:pr-[345px] xl:pl-[280px] xl:pr-[345px] w-full min-h-screen bg-[#100f13]">
+        <main className="pt-4 md:pt-[70px] pb-8 px-4 w-full min-h-screen bg-[#100f13]">
           {isLoading ? (
             <div className="flex justify-center items-center h-[200px]">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-vegas-gold"></div>
@@ -590,8 +593,10 @@ const Index = () => {
         </main>
       </div>
       
-      {/* Desktop Chat */}
-      <ChatUI />
+      {/* Chat - Terceira coluna no grid */}
+      <div className="hidden md:block">
+        <ChatUI />
+      </div>
       
       {/* Mobile Chat (drawer) */}
       <ChatUI isOpen={chatOpen} onClose={() => setChatOpen(false)} isMobile={true} />
