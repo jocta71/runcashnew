@@ -9,17 +9,17 @@ interface RouletteActionButtonsProps {
 
 const RouletteActionButtons = ({ onDetailsClick, onPlayClick }: RouletteActionButtonsProps) => {
   return (
-    <div className="flex flex-col sm:flex-row gap-2">
+    <div className="flex flex-col gap-2">
       <Button 
         onClick={onDetailsClick}
-        className="w-full sm:flex-1 bg-[#00baff] hover:bg-[#00baff]/80 text-black font-medium text-xs sm:text-sm h-12 py-3"
+        className="w-full bg-[#00baff] hover:bg-[#00baff]/80 text-black font-medium text-xs sm:text-sm h-12 py-3"
       >
         <Dices size={16} className="mr-1 sm:mr-2" />
         Ver Página de Estatísticas
       </Button>
       
       <Button 
-        className="w-full sm:flex-1 text-black font-medium animate-pulse-neon bg-gradient-to-b from-[#00ff00] to-[#8bff00] hover:from-[#00ff00]/90 hover:to-[#8bff00]/90 text-xs sm:text-sm truncate h-12 py-3"
+        className="w-full text-black font-medium animate-pulse-neon bg-gradient-to-b from-[#00ff00] to-[#8bff00] hover:from-[#00ff00]/90 hover:to-[#8bff00]/90 text-xs sm:text-sm truncate h-12 py-3"
         onClick={onPlayClick}
       >
         <Play size={16} className="mr-1 sm:mr-2 shrink-0" />
