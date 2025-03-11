@@ -559,7 +559,7 @@ const Index = () => {
           </div>
         </div>
         
-        <main className="pt-4 md:pt-[70px] pb-8 px-4 md:px-8 lg:px-10 md:pl-[280px] md:pr-[80px] lg:pl-[260px] lg:pr-[100px] xl:pl-[280px] xl:pr-[120px] w-full min-h-screen bg-[#100f13]">
+        <main className="pt-4 md:pt-[70px] pb-8 px-4 md:px-8 lg:px-10 md:pl-[280px] md:pr-[345px] lg:pl-[260px] lg:pr-[345px] xl:pl-[280px] xl:pr-[345px] w-full min-h-screen bg-[#100f13]">
           {isLoading ? (
             <div className="flex justify-center items-center h-[200px]">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-vegas-gold"></div>
