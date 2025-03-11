@@ -4,10 +4,15 @@ Um sistema completo para rastreamento de roletas e análise de estratégias.
 
 ## Estrutura do Projeto
 
-O projeto está organizado em dois componentes principais:
+O projeto foi reorganizado para uma estrutura mais clara e organizada:
 
-- **Frontend**: Interface de usuário React com Vite e TailwindCSS
-- **Backend**: API e Scraper para coleta de dados em tempo real
+- **frontend/** - Interface de usuário React
+- **backend/** - API e lógica do servidor
+- **api/** - Endpoints da API
+- **docs/** - Toda a documentação do projeto
+- **scripts/** - Scripts de utilidades, banco de dados e manutenção
+
+Para detalhes completos sobre a reorganização, consulte [docs/reorganizacao-projeto.md](docs/reorganizacao-projeto.md).
 
 ## Principais Recursos
 
