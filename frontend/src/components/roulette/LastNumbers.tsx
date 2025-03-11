@@ -11,15 +11,12 @@ const LastNumbers = memo(({ numbers, isLoading }: LastNumbersProps) => {
   // Validar números para garantir que são válidos
   const validNumbers = numbers.filter(num => num >= 0 && num <= 36);
   
-  // Limitar para mostrar apenas os 10 primeiros números para economizar espaço
-  const displayNumbers = validNumbers.slice(0, 10);
-  
   // Referência para o número anterior
   const previousNumbersRef = useRef<number[]>([]);
   
   // Verificar qual número é novo
-  const newNumberIndex = displayNumbers.length > 0 && previousNumbersRef.current.length > 0 
-    ? (displayNumbers[0] !== previousNumbersRef.current[0] ? 0 : -1) 
+  const newNumberIndex = validNumbers.length > 0 && previousNumbersRef.current.length > 0 
+    ? (validNumbers[0] !== previousNumbersRef.current[0] ? 0 : -1) 
     : -1;
   
   // Atualizar a referência após renderização
@@ -60,13 +57,13 @@ const LastNumbers = memo(({ numbers, isLoading }: LastNumbersProps) => {
   // Renderizar números
   console.log('[LastNumbers] Renderizando números:', validNumbers.slice(0, 5));
   return (
-    <div className="flex flex-wrap gap-0.5 my-0.5" data-testid="last-numbers">
-      {displayNumbers.map((num, idx) => (
+    <div className="flex flex-wrap gap-1 md:gap-1.5 my-2 overflow-hidden" data-testid="last-numbers">
+      {validNumbers.slice(0, 15).map((num, idx) => (
         <div
           key={`${num}-${idx}`}
-          className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold 
+          className={`w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center text-xs font-bold 
             ${getRouletteNumberColor(num)}
-            ${idx === newNumberIndex ? 'animate-pulse shadow-sm transition-all duration-500 scale-110' : ''}
+            ${idx === newNumberIndex ? 'animate-pulse shadow-lg transition-all duration-500 scale-110' : ''}
           `}
           data-number={num}
           data-new={idx === newNumberIndex ? 'true' : 'false'}
