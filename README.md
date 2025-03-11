@@ -111,4 +111,47 @@ Para contribuir com o projeto, confira as informações em [docs/github-upload-i
 
 ## Licença
 
-Este projeto está licenciado sob a Licença MIT. 
+Este projeto está licenciado sob a Licença MIT.
+
+## Solução de Problemas
+
+### Números Não Aparecem em Tempo Real
+
+Se os números das roletas não estiverem aparecendo em tempo real, verifique as seguintes configurações:
+
+1. **Ative a Replicação no Supabase**:
+   - Acesse o dashboard do Supabase
+   - Navegue até Database > Replication
+   - Clique na aba "Tables" e ative a replicação para a tabela `roleta_numeros`
+   - Certifique-se de que os eventos INSERT estão habilitados
+
+2. **Verifique a Conexão com o Supabase**:
+   - Confirme se as variáveis de ambiente estão configuradas corretamente:
+     ```
+     VITE_SUPABASE_URL=sua_url_do_supabase
+     VITE_SUPABASE_API_KEY=sua_chave_anon_do_supabase
+     ```
+   - Essas variáveis devem estar no arquivo `.env` na pasta `frontend/`
+
+3. **Depuração de Conexões em Tempo Real**:
+   - Abra o console do navegador (F12) para ver os logs
+   - Procure por mensagens com o prefixo [REALTIME]
+   - Verifique se há erros relacionados às inscrições do Supabase
+
+4. **Verifique o Scraper**:
+   - Certifique-se de que o backend/scraper está coletando dados e inserindo-os no Supabase
+   - Confirme que os dados estão sendo inseridos na tabela `roleta_numeros` com a coluna `roleta_nome` preenchida corretamente
+
+5. **Teste Manualmente a Replicação**:
+   - Em modo de desenvolvimento, cada cartão de roleta possui um botão "Testar Realtime"
+   - Este botão insere um número aleatório na tabela `roleta_numeros` e permite verificar se a replicação está funcionando
+   - Verifique o console para logs detalhados do processo
+
+6. **Verificação pelo Supabase Dashboard**:
+   - Vá para Database > API no dashboard do Supabase
+   - Execute uma inserção manual:
+     ```sql
+     INSERT INTO roleta_numeros (roleta_nome, roleta_id, numero, cor, timestamp)
+     VALUES ('Auto-Roulette', 'test-manual', 7, 'red', NOW());
+     ```
+   - Observe o console do navegador para ver se o evento foi recebido 

@@ -11,7 +11,7 @@ import RouletteActionButtons from './roulette/RouletteActionButtons';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import RouletteStatsModal from './roulette/RouletteStatsModal';
-import { fetchRouletteLatestNumbersByName } from '@/integrations/api/rouletteService';
+import { fetchRouletteLatestNumbersByName, testSupabaseRealtime } from '@/integrations/api/rouletteService';
 import { useRoletaAnalytics } from '@/hooks/useRoletaAnalytics';
 
 interface RouletteCardProps {
@@ -299,8 +299,23 @@ const RouletteCard = ({ name, roleta_nome, lastNumbers: initialLastNumbers, wins
       try {
         console.log(`[REALTIME][${roletaNome}] Configurando canal Realtime...`);
         
+        // Verificar se as variáveis de ambiente estão disponíveis
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseKey = import.meta.env.VITE_SUPABASE_API_KEY;
+        
+        if (!supabaseUrl || !supabaseKey) {
+          console.error(`[REALTIME][${roletaNome}] Erro: Variáveis de ambiente do Supabase não configuradas corretamente.`);
+          console.error('VITE_SUPABASE_URL e VITE_SUPABASE_API_KEY são necessárias no arquivo .env');
+        } else {
+          console.log(`[REALTIME][${roletaNome}] Conectando ao Supabase em: ${supabaseUrl.substring(0, 20)}...`);
+        }
+        
+        // Canal com um nome único baseado na roleta e timestamp
+        const channelName = `roleta_numeros_changes_${roletaNome}_${Date.now()}`;
+        console.log(`[REALTIME][${roletaNome}] Nome do canal: ${channelName}`);
+        
         subscription = supabase
-          .channel(`roleta_numeros_changes_${roletaNome}`)
+          .channel(channelName)
           .on('postgres_changes', { 
             event: 'INSERT', 
             schema: 'public', 
@@ -309,19 +324,43 @@ const RouletteCard = ({ name, roleta_nome, lastNumbers: initialLastNumbers, wins
           }, (payload) => {
             if (!isMounted.current) return;
             
+            console.log(`[REALTIME][${roletaNome}] Recebido payload:`, payload);
+            
             if (payload.new && payload.new.roleta_nome === roletaNome) {
               const novoNumero = Number(payload.new.numero);
               console.log(`[REALTIME][${roletaNome}] Novo número: ${novoNumero}`);
               
               // Usar a função updateLastNumber para atualizar apenas o último número
               updateLastNumber(novoNumero);
+              
+              // Notificação visual para o usuário
+              toast({
+                title: "Novo número!",
+                description: `${roletaNome}: ${novoNumero}`,
+                duration: 3000
+              });
+            } else {
+              console.log(`[REALTIME][${roletaNome}] Payload recebido mas não corresponde ao filtro atual:`, payload);
             }
           })
           .subscribe((status: string) => {
             console.log(`[REALTIME][${roletaNome}] Status da assinatura: ${status}`);
+            if (status === 'SUBSCRIBED') {
+              console.log(`[REALTIME][${roletaNome}] Inscrição bem-sucedida! Aguardando eventos.`);
+            } else if (status === 'CHANNEL_ERROR') {
+              console.error(`[REALTIME][${roletaNome}] Erro no canal. Verifique se a replicação está ativada no Supabase.`);
+            } else if (status === 'TIMED_OUT') {
+              console.error(`[REALTIME][${roletaNome}] Tempo esgotado ao conectar ao Supabase Realtime.`);
+            }
           });
           
         supabaseSubscriptionRef.current = subscription;
+        
+        // Verificar após 5 segundos se houve alguma atividade
+        setTimeout(() => {
+          console.log(`[REALTIME][${roletaNome}] Verificação de atividade após 5s: Canal ativo e aguardando eventos.`);
+          console.log(`[REALTIME][${roletaNome}] Dica: Verifique se a replicação está ativada no dashboard do Supabase.`);
+        }, 5000);
       } catch (error) {
         console.error(`[REALTIME][${roletaNome}] Erro ao configurar Realtime:`, error);
       }
@@ -495,156 +534,189 @@ const RouletteCard = ({ name, roleta_nome, lastNumbers: initialLastNumbers, wins
 
   return (
     <div 
-      className="bg-[#17161e]/90 backdrop-filter backdrop-blur-sm border border-white/10 rounded-xl p-3 md:p-4 space-y-2 md:space-y-3 animate-fade-in hover-scale cursor-pointer h-auto w-full overflow-hidden"
-      onClick={handleDetailsClick}
+      className={`relative rounded-lg overflow-hidden p-4 ${
+        cardClassname
+      } transition-all duration-300 shadow-lg hover:shadow-xl`}
     >
-      {/* Header com Nome da Roleta */}
-      <div className="flex items-center justify-between mb-2 border-b border-white/10 pb-2">
-        <h3 className="text-lg font-bold text-white truncate mr-2" title={roletaNome}>
-          {roletaNome}
-        </h3>
-        <div className="flex items-center">
-          {usingSupabaseData ? (
-            <span className="text-xs mr-2 text-[#00ff00]">Dados do Supabase</span>
-          ) : (
-            <span className="text-xs mr-2 text-yellow-400">Aguardando Supabase</span>
-          )}
-          <TrendingUp size={20} className="text-[#00ff00]" />
+      {/* Adicionar botão de teste apenas em desenvolvimento */}
+      {import.meta.env.DEV && (
+        <div className="absolute top-2 right-2 z-10">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              testSupabaseRealtime(roletaNome)
+                .then(() => {
+                  toast({
+                    title: "Teste iniciado",
+                    description: `Verifique o console para os resultados`,
+                    duration: 3000
+                  });
+                })
+                .catch((error) => {
+                  toast({
+                    title: "Erro no teste",
+                    description: String(error).substring(0, 50),
+                    variant: "destructive",
+                    duration: 5000
+                  });
+                });
+            }}
+          >
+            Testar Realtime
+          </Button>
         </div>
-      </div>
+      )}
       
-      {memoizedNumbers}
-      {memoizedSuggestion}
-      {memoizedWinRate}
-      {memoizedTrendChart}
-      
-      {/* Insights Section - Versão redesenhada e simplificada */}
-      <div className="p-3 bg-[#1a1922] rounded-lg border border-[#00ff00]/20">
-        <div className="flex items-center justify-between mb-2">
-          <h4 className="text-sm font-medium text-white flex items-center">
-            <BarChart3 size={16} className="text-[#00ff00] mr-1.5" />
-            Análises Rápidas
-          </h4>
-          {!analyticsLoading && (
-            <span className="text-xs text-gray-400 bg-[#252431] px-2 py-0.5 rounded-full">
-              {lastNumbers.length} jogadas
-            </span>
-          )}
+      <div className="flex flex-col h-full">
+        {/* Header com Nome da Roleta */}
+        <div className="flex items-center justify-between mb-2 border-b border-white/10 pb-2">
+          <h3 className="text-lg font-bold text-white truncate mr-2" title={roletaNome}>
+            {roletaNome}
+          </h3>
+          <div className="flex items-center">
+            {usingSupabaseData ? (
+              <span className="text-xs mr-2 text-[#00ff00]">Dados do Supabase</span>
+            ) : (
+              <span className="text-xs mr-2 text-yellow-400">Aguardando Supabase</span>
+            )}
+            <TrendingUp size={20} className="text-[#00ff00]" />
+          </div>
         </div>
         
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          {/* Mini-card 1: Distribuição de cores */}
-          <div className="p-2 bg-[#252431] rounded-lg">
-            <div className="flex items-center mb-1.5">
-              <PieChart size={14} className="text-[#00ff00] mr-1" />
-              <span className="text-[10px] uppercase font-medium text-gray-400">Cores</span>
-            </div>
-            
-            {!analyticsLoading && colorDistribution.length > 0 ? (
-              <div className="flex space-x-1">
-                {colorDistribution.map((item, idx) => (
-                  <div 
-                    key={idx} 
-                    className="flex-1 h-5 rounded-sm flex items-center justify-center"
-                    style={{
-                      backgroundColor: item.cor === 'vermelho' ? '#ef4444' : 
-                                      item.cor === 'preto' ? '#1e1e1e' : '#10b981',
-                      opacity: 0.7 + (item.porcentagem / 100) * 0.3
-                    }}
-                  >
-                    <span className="text-[10px] font-bold text-white">
-                      {Math.round(item.porcentagem)}%
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="h-5 bg-gray-700/30 rounded-sm animate-pulse"></div>
+        {memoizedNumbers}
+        {memoizedSuggestion}
+        {memoizedWinRate}
+        {memoizedTrendChart}
+        
+        {/* Insights Section - Versão redesenhada e simplificada */}
+        <div className="p-3 bg-[#1a1922] rounded-lg border border-[#00ff00]/20">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-medium text-white flex items-center">
+              <BarChart3 size={16} className="text-[#00ff00] mr-1.5" />
+              Análises Rápidas
+            </h4>
+            {!analyticsLoading && (
+              <span className="text-xs text-gray-400 bg-[#252431] px-2 py-0.5 rounded-full">
+                {lastNumbers.length} jogadas
+              </span>
             )}
           </div>
           
-          {/* Mini-card 2: Taxa de Acerto */}
-          <div className="p-2 bg-[#252431] rounded-lg">
-            <div className="flex items-center mb-1.5">
-              <Target size={14} className="text-[#00ff00] mr-1" />
-              <span className="text-[10px] uppercase font-medium text-gray-400">Acertos</span>
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            {/* Mini-card 1: Distribuição de cores */}
+            <div className="p-2 bg-[#252431] rounded-lg">
+              <div className="flex items-center mb-1.5">
+                <PieChart size={14} className="text-[#00ff00] mr-1" />
+                <span className="text-[10px] uppercase font-medium text-gray-400">Cores</span>
+              </div>
+              
+              {!analyticsLoading && colorDistribution.length > 0 ? (
+                <div className="flex space-x-1">
+                  {colorDistribution.map((item, idx) => (
+                    <div 
+                      key={idx} 
+                      className="flex-1 h-5 rounded-sm flex items-center justify-center"
+                      style={{
+                        backgroundColor: item.cor === 'vermelho' ? '#ef4444' : 
+                                        item.cor === 'preto' ? '#1e1e1e' : '#10b981',
+                        opacity: 0.7 + (item.porcentagem / 100) * 0.3
+                      }}
+                    >
+                      <span className="text-[10px] font-bold text-white">
+                        {Math.round(item.porcentagem)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="h-5 bg-gray-700/30 rounded-sm animate-pulse"></div>
+              )}
             </div>
             
-            <div className="flex items-center space-x-2">
-              <div 
-                className="flex-1 h-5 bg-gray-700/30 rounded-sm overflow-hidden"
-              >
-                <div 
-                  className="h-full bg-gradient-to-r from-blue-500 to-[#00ff00]"
-                  style={{ width: `${Math.min(100, Math.max(1, ((wins / (wins + losses)) * 100)))}%` }}
-                ></div>
+            {/* Mini-card 2: Taxa de Acerto */}
+            <div className="p-2 bg-[#252431] rounded-lg">
+              <div className="flex items-center mb-1.5">
+                <Target size={14} className="text-[#00ff00] mr-1" />
+                <span className="text-[10px] uppercase font-medium text-gray-400">Acertos</span>
               </div>
-              <span className="text-sm font-bold text-[#00ff00]">
-                {((wins / (wins + losses)) * 100).toFixed(0)}%
-              </span>
-            </div>
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-3 gap-2 mb-3">
-          {/* Célula 1: Sequência Atual */}
-          <div className="bg-[#252431] p-2 rounded-lg flex flex-col justify-between">
-            <div className="flex items-center mb-1">
-              <History size={14} className="text-purple-400 mr-1.5" />
-              <span className="text-[10px] uppercase font-medium text-gray-400">Sequência</span>
-            </div>
-            <div className="text-right">
-              <span className="text-xs font-medium text-purple-400">
-                {!analyticsLoading && currentStreak.count > 0 
-                  ? `${currentStreak.count}x ${currentStreak.value}`
-                  : "---"}
-              </span>
+              
+              <div className="flex items-center space-x-2">
+                <div 
+                  className="flex-1 h-5 bg-gray-700/30 rounded-sm overflow-hidden"
+                >
+                  <div 
+                    className="h-full bg-gradient-to-r from-blue-500 to-[#00ff00]"
+                    style={{ width: `${Math.min(100, Math.max(1, ((wins / (wins + losses)) * 100)))}%` }}
+                  ></div>
+                </div>
+                <span className="text-sm font-bold text-[#00ff00]">
+                  {((wins / (wins + losses)) * 100).toFixed(0)}%
+                </span>
+              </div>
             </div>
           </div>
           
-          {/* Célula 2: Dúzia Ausente */}
-          <div className="bg-[#252431] p-2 rounded-lg flex flex-col justify-between">
-            <div className="flex items-center mb-1">
-              <Clock size={14} className="text-yellow-400 mr-1.5" />
-              <span className="text-[10px] uppercase font-medium text-gray-400">Dúzia</span>
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            {/* Célula 1: Sequência Atual */}
+            <div className="bg-[#252431] p-2 rounded-lg flex flex-col justify-between">
+              <div className="flex items-center mb-1">
+                <History size={14} className="text-purple-400 mr-1.5" />
+                <span className="text-[10px] uppercase font-medium text-gray-400">Sequência</span>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-medium text-purple-400">
+                  {!analyticsLoading && currentStreak.count > 0 
+                    ? `${currentStreak.count}x ${currentStreak.value}`
+                    : "---"}
+                </span>
+              </div>
             </div>
-            <div className="text-right">
-              <span className="text-xs font-medium text-yellow-400">
-                {!analyticsLoading && missingDozens.length > 0
-                  ? `${missingDozens[0].dezena} (${missingDozens[0].ausencia}x)`
-                  : "---"}
-              </span>
+            
+            {/* Célula 2: Dúzia Ausente */}
+            <div className="bg-[#252431] p-2 rounded-lg flex flex-col justify-between">
+              <div className="flex items-center mb-1">
+                <Clock size={14} className="text-yellow-400 mr-1.5" />
+                <span className="text-[10px] uppercase font-medium text-gray-400">Dúzia</span>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-medium text-yellow-400">
+                  {!analyticsLoading && missingDozens.length > 0
+                    ? `${missingDozens[0].dezena} (${missingDozens[0].ausencia}x)`
+                    : "---"}
+                </span>
+              </div>
+            </div>
+            
+            {/* Célula 3: Recomendação */}
+            <div className="bg-[#252431] p-2 rounded-lg flex flex-col justify-between">
+              <div className="flex items-center mb-1">
+                <Star size={14} className="text-[#00ff00] mr-1.5" />
+                <span className="text-[10px] uppercase font-medium text-gray-400">Recomendação</span>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-medium text-[#00ff00]">
+                  {getColorName(lastNumbers[0] || 0).toUpperCase()}
+                </span>
+              </div>
             </div>
           </div>
           
-          {/* Célula 3: Recomendação */}
-          <div className="bg-[#252431] p-2 rounded-lg flex flex-col justify-between">
-            <div className="flex items-center mb-1">
-              <Star size={14} className="text-[#00ff00] mr-1.5" />
-              <span className="text-[10px] uppercase font-medium text-gray-400">Recomendação</span>
-            </div>
-            <div className="text-right">
-              <span className="text-xs font-medium text-[#00ff00]">
-                {getColorName(lastNumbers[0] || 0).toUpperCase()}
-              </span>
-            </div>
-          </div>
+          {/* Botão "Ver Análise Completa" removido a pedido do usuário */}
         </div>
         
-        {/* Botão "Ver Análise Completa" removido a pedido do usuário */}
-      </div>
-      
-      {memoizedActionButtons}
+        {memoizedActionButtons}
 
-      <RouletteStatsModal
-        open={statsOpen}
-        onOpenChange={setStatsOpen}
-        name={roletaNome}
-        lastNumbers={lastNumbers}
-        wins={wins}
-        losses={losses}
-        trend={trend}
-      />
+        <RouletteStatsModal
+          open={statsOpen}
+          onOpenChange={setStatsOpen}
+          name={roletaNome}
+          lastNumbers={lastNumbers}
+          wins={wins}
+          losses={losses}
+          trend={trend}
+        />
+      </div>
     </div>
   );
 };

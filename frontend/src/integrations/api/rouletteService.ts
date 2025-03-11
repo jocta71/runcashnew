@@ -495,3 +495,46 @@ export const fetchRouletteById = async (id: string): Promise<RouletteData> => {
     }
   }
 };
+
+// Função para testar a inserção de dados e replicação no Supabase
+export const testSupabaseRealtime = async (roletaNome: string): Promise<void> => {
+  try {
+    console.log(`[TEST] Iniciando teste de Supabase Realtime para ${roletaNome}...`);
+    
+    // Gerar número aleatório para teste
+    const testNumber = Math.floor(Math.random() * 37);
+    
+    // Inserir diretamente na tabela pelo endpoint REST
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/roleta_numeros`,
+      {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          roleta_nome: roletaNome,
+          roleta_id: `test-${roletaNome}`,
+          numero: testNumber,
+          cor: testNumber === 0 ? 'green' : (testNumber % 2 === 0 ? 'black' : 'red'),
+          timestamp: new Date().toISOString()
+        })
+      }
+    );
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Erro ao inserir número de teste: ${response.status} ${errorText}`);
+    }
+    
+    console.log(`[TEST] Número de teste ${testNumber} inserido com sucesso para ${roletaNome}`);
+    console.log(`[TEST] Verifique se o canal Realtime recebeu a notificação no console.`);
+    
+    return Promise.resolve();
+  } catch (error) {
+    console.error('[TEST] Erro ao testar Supabase Realtime:', error);
+    return Promise.reject(error);
+  }
+};
