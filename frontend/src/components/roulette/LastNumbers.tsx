@@ -57,44 +57,21 @@ const LastNumbers = memo(({ numbers, isLoading }: LastNumbersProps) => {
   // Renderizar números
   console.log('[LastNumbers] Renderizando números:', validNumbers.slice(0, 5));
   
-  // Garantir exatamente duas linhas de números
-  const firstRowNumbers = validNumbers.slice(0, 6);
-  const secondRowNumbers = validNumbers.slice(6, 12);
-  
   return (
-    <div className="grid grid-rows-2 gap-2 my-2" data-testid="last-numbers">
-      {/* Primeira linha */}
-      <div className="flex justify-center gap-1 md:gap-1.5">
-        {firstRowNumbers.map((num, idx) => (
-          <div
-            key={`first-${num}-${idx}`}
-            className={`w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center text-xs font-bold 
-              ${getRouletteNumberColor(num)}
-              ${newNumberIndex === 0 && idx === 0 ? 'animate-pulse shadow-lg transition-all duration-500 scale-110' : ''}
-            `}
-            data-number={num}
-            data-new={newNumberIndex === 0 && idx === 0 ? 'true' : 'false'}
-          >
-            {num}
-          </div>
-        ))}
-      </div>
-      
-      {/* Segunda linha */}
-      <div className="flex justify-center gap-1 md:gap-1.5">
-        {secondRowNumbers.map((num, idx) => (
-          <div
-            key={`second-${num}-${idx}`}
-            className={`w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center text-xs font-bold 
-              ${getRouletteNumberColor(num)}
-            `}
-            data-number={num}
-            data-new="false"
-          >
-            {num}
-          </div>
-        ))}
-      </div>
+    <div className="flex flex-wrap justify-start gap-1 md:gap-1.5 my-2" data-testid="last-numbers">
+      {validNumbers.slice(0, 15).map((num, idx) => (
+        <div
+          key={`${num}-${idx}`}
+          className={`w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center text-xs font-bold 
+            ${getRouletteNumberColor(num)}
+            ${newNumberIndex === 0 && idx === 0 ? 'animate-pulse shadow-lg transition-all duration-500 scale-110' : ''}
+          `}
+          data-number={num}
+          data-new={newNumberIndex === 0 && idx === 0 ? 'true' : 'false'}
+        >
+          {num}
+        </div>
+      ))}
     </div>
   );
 });
