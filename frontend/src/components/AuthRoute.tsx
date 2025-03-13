@@ -1,29 +1,15 @@
-import { Navigate } from 'react-router-dom';
-import { useAuth } from '@/context/AuthContext';
+import React from 'react';
 
 interface AuthRouteProps {
   children: React.ReactNode;
 }
 
 /**
- * Componente para proteger a rota de autenticação
- * Redireciona para a página inicial se o usuário já estiver autenticado
+ * Componente mock que substitui a versão original de AuthRoute
+ * Esta versão sempre permite o acesso às rotas de autenticação
  */
-const AuthRoute = ({ children }: AuthRouteProps) => {
-  const { user, loading } = useAuth();
-
-  // Remover completamente a tela de carregamento
-  if (loading) {
-    // Não mostrar nada durante o carregamento
-    return null;
-  }
-
-  // Redirecionar para a página inicial se já estiver autenticado
-  if (user) {
-    return <Navigate to="/" replace />;
-  }
-
-  // Mostrar a página de autenticação se não estiver autenticado
+const AuthRoute: React.FC<AuthRouteProps> = ({ children }) => {
+  // Permitir acesso direto ao conteúdo sem verificação
   return <>{children}</>;
 };
 

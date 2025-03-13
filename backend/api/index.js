@@ -4,6 +4,13 @@ const { createClient } = require('@supabase/supabase-js');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 require('dotenv').config();
 
+// Import our REST API routes
+const restRoutes = require('./routes/restApi');
+// Import our Events API routes
+const eventsRoutes = require('./routes/eventsApi');
+// Import error handler middleware
+const errorHandler = require('./middleware/errorHandler');
+
 const app = express();
 const PORT = process.env.PORT || 3002;
 // Simplificando: usando '*' para permitir todas as origens
@@ -55,6 +62,12 @@ if (!supabaseKey) {
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Use our REST API routes
+app.use('/api/rest', restRoutes);
+
+// Use our Events API routes
+app.use('/api/events', eventsRoutes);
 
 // Endpoint para obter dados das roletas
 app.get('/api/roletas', async (req, res) => {
@@ -158,7 +171,7 @@ app.get('/api/roletas/:id', async (req, res) => {
 
 // Endpoint para health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'healthy' });
+  res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
 // Endpoint GET para o webhook (para verificação do Stripe)
@@ -444,6 +457,14 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
   }
   
   res.json({ received: true });
+});
+
+// Error handler middleware (must be after all routes)
+app.use(errorHandler);
+
+// 404 handler for any routes not found
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found' });
 });
 
 // Iniciar o servidor

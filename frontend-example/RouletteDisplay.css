@@ -1,0 +1,131 @@
+.roletas-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+}
+
+.connection-status {
+  background-color: #1e1e2d;
+  color: white;
+  padding: 10px 15px;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.roleta-card {
+  background-color: #1e1e2d;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+  animation: fadeIn 0.5s ease;
+}
+
+.roleta-title {
+  color: #ffffff;
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 20px;
+  border-bottom: 1px solid #2d2d40;
+  padding-bottom: 10px;
+}
+
+.numeros-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.numero-ball {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: white;
+  font-size: 14px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.numero-ball:hover {
+  transform: scale(1.1);
+}
+
+/* Cores das roletas */
+.numero-ball.vermelho {
+  background-color: #e53935;
+}
+
+.numero-ball.preto {
+  background-color: #212121;
+}
+
+.numero-ball.verde {
+  background-color: #43a047;
+}
+
+/* Para os números mais recentes, adicionar destaque */
+.numero-ball:first-child {
+  animation: pulse 1.5s infinite;
+}
+
+.no-data {
+  color: #999;
+  font-style: italic;
+  padding: 10px 0;
+}
+
+.loading, .error {
+  text-align: center;
+  padding: 40px;
+  font-size: 18px;
+  color: #777;
+  background-color: #1e1e2d;
+  border-radius: 10px;
+  margin: 20px 0;
+}
+
+.error {
+  color: #e53935;
+}
+
+/* Animações */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(255, 255, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+}
+
+/* Responsividade */
+@media (min-width: 768px) {
+  .roletas-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .connection-status {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1024px) {
+  .roletas-container {
+    grid-template-columns: repeat(3, 1fr);
+  }
+} 

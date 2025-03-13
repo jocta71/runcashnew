@@ -11,10 +11,6 @@ interface EnvConfig {
   // URL da API de eventos SSE
   sseServerUrl: string;
   
-  // Configurações do Supabase
-  supabaseUrl: string;
-  supabaseApiKey: string;
-
   // Indica se estamos em ambiente de produção
   isProduction: boolean;
 }
@@ -28,12 +24,25 @@ function getRequiredEnvVar(key: string): string {
   // @ts-ignore - Ignorando erro de tipagem do Vite
   const value = import.meta.env[key];
   
+  // Valores mock para desenvolvimento local
+  const mockValues: Record<string, string> = {
+    'VITE_SSE_SERVER_URL': 'https://short-mammals-help.loca.lt/api/events'
+  };
+  
   if (value === undefined || value === '') {
+    // Em desenvolvimento, usar valor mock se disponível
+    if (!isProduction && mockValues[key]) {
+      console.warn(`[Config Mock] Usando valor mock para ${key}: ${mockValues[key]}`);
+      return mockValues[key];
+    }
+    
     // Em desenvolvimento, mostrar um erro útil
     if (!isProduction) {
-      console.error(`[Config Error] Variável de ambiente ${key} não está definida. Configure-a no arquivo .env ou nas variáveis de ambiente do Vercel.`);
+      console.error(`[Config Error] Variável de ambiente ${key} não está definida. Usando valor padrão.`);
     }
-    throw new Error(`Variável de ambiente ${key} não está definida`);
+    
+    // Fornecer um valor padrão para evitar erros
+    return mockValues[key] || '';
   }
   
   return value;
@@ -50,15 +59,11 @@ const config: EnvConfig = {
       // Fallback para desenvolvimento apenas
       if (!isProduction) {
         console.warn('[Config] Fallback para SSE local, defina VITE_SSE_SERVER_URL para produção');
-        return 'http://localhost:5000/events';
+        return 'https://short-mammals-help.loca.lt/api/events'; // URL atualizada para o novo endpoint
       }
       throw e;
     }
   })(),
-  
-  // Configurações do Supabase - sem fallbacks hardcoded
-  supabaseUrl: getRequiredEnvVar('VITE_SUPABASE_URL'),
-  supabaseApiKey: getRequiredEnvVar('VITE_SUPABASE_API_KEY'),
   
   // Flag de ambiente
   isProduction
@@ -68,9 +73,6 @@ const config: EnvConfig = {
 if (!isProduction) {
   console.log('[Config] Variáveis de ambiente carregadas:', {
     sseServerUrl: config.sseServerUrl,
-    supabaseUrl: config.supabaseUrl,
-    // Não logamos a chave de API completa por segurança
-    supabaseApiKey: config.supabaseApiKey.substring(0, 10) + '...',
     isProduction: config.isProduction
   });
 }

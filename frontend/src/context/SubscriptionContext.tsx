@@ -1,9 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import React, { createContext, useContext, useState } from 'react';
 import { Plan, PlanType, UserSubscription } from '@/types/plans';
-import { useAuth } from './AuthContext';
-import { useToast } from '@/hooks/use-toast';
-import { getStripeClient, createCheckoutSession } from '@/integrations/stripe/client';
 
 // Lista de planos disponíveis
 export const availablePlans: Plan[] = [
@@ -92,150 +88,66 @@ interface SubscriptionContextType {
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
 
+// Versão mock do SubscriptionProvider que sempre fornece acesso premium
 export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const [currentSubscription, setCurrentSubscription] = useState<UserSubscription | null>(null);
-  const [currentPlan, setCurrentPlan] = useState<Plan | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Sempre usar o plano premium como padrão
+  const premiumPlan = availablePlans.find(plan => plan.id === 'premium') || availablePlans[3];
+  
+  // Estado inicial com plano premium
+  const [currentSubscription] = useState<UserSubscription | null>({
+    id: 'mock-subscription',
+    userId: 'mock-user',
+    planId: 'premium',
+    planType: PlanType.PREMIUM,
+    startDate: new Date(),
+    endDate: null,
+    status: 'active',
+    paymentMethod: 'mock',
+    paymentProvider: 'manual',
+    nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+  });
+  
+  const [currentPlan] = useState<Plan | null>(premiumPlan);
+  const [loading] = useState(false);
 
-  // Função para carregar a assinatura do usuário do Supabase
-  const loadUserSubscription = async () => {
-    // MODO TEMPORÁRIO: Sempre definir o plano gratuito para todos os usuários
-    // Isso é uma solução temporária enquanto a tabela de assinaturas não está configurada
-    
-    // Encontrar o plano gratuito
-    const freePlan = availablePlans.find(plan => plan.type === PlanType.FREE);
-    
-    // Se o usuário estiver logado, criar uma assinatura simulada
-    if (user) {
-      const mockSubscription: UserSubscription = {
-        id: `temp-${user.id}`,
-        userId: user.id,
-        planId: 'free',
-        planType: PlanType.FREE,
-        startDate: new Date(),
-        endDate: null,
-        status: 'active',
-      };
-      
-      setCurrentSubscription(mockSubscription);
-    } else {
-      setCurrentSubscription(null);
-    }
-    
-    // Definir o plano gratuito para todos
-    setCurrentPlan(freePlan || null);
-    setLoading(false);
-    
-    // Log para indicar que estamos usando o modo temporário
-    console.log('[ASSINATURA] Modo temporário ativado: todos os usuários têm plano gratuito');
+  // Função mock para carregar assinatura (não faz nada)
+  const loadUserSubscription = async (): Promise<void> => {
+    // Não faz nada, já que o estado inicial já inclui o plano premium
+    return Promise.resolve();
   };
 
-  // Carregar assinatura quando o usuário mudar
-  useEffect(() => {
-    loadUserSubscription();
-  }, [user]);
-
-  // Verificar se o usuário tem acesso a um recurso específico
+  // Sempre retorna true para qualquer recurso
   const hasFeatureAccess = (featureId: string): boolean => {
-    if (!currentPlan) return false;
-    return currentPlan.allowedFeatures.includes(featureId);
+    return true;
   };
 
-  // Função para atualizar o plano - MODO TEMPORÁRIO
+  // Funções mock para upgrade e cancelamento (não fazem nada)
   const upgradePlan = async (planId: string): Promise<void> => {
-    if (!user) {
-      toast({
-        title: "Erro ao atualizar plano",
-        description: "Você precisa estar logado para atualizar seu plano.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // Encontrar o plano selecionado
-      const selectedPlan = availablePlans.find(p => p.id === planId);
-      if (!selectedPlan) {
-        throw new Error("Plano não encontrado");
-      }
-
-      // MODO TEMPORÁRIO: Exibir mensagem explicando a situação
-      toast({
-        title: "Funcionalidade temporariamente indisponível",
-        description: "O sistema de assinaturas está em manutenção. Por enquanto, todos os usuários têm acesso ao plano gratuito.",
-        duration: 5000,
-      });
-
-      // Simular um pequeno atraso para feedback visual
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Definir plano localmente (apenas para interface, sem persistência)
-      // No modo temporário, sempre voltamos para o plano gratuito
-      const freePlan = availablePlans.find(plan => plan.type === PlanType.FREE);
-      setCurrentPlan(freePlan || null);
-    } catch (error) {
-      console.error('Erro ao atualizar plano:', error);
-      toast({
-        title: "Erro ao processar pagamento",
-        description: "Ocorreu um erro ao processar seu pagamento. Tente novamente mais tarde.",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
+    console.log(`Upgrade para o plano ${planId} simulado com sucesso`);
+    return Promise.resolve();
   };
 
-  // Função para cancelar assinatura - MODO TEMPORÁRIO
   const cancelSubscription = async (): Promise<void> => {
-    if (!user) {
-      toast({
-        title: "Erro ao cancelar assinatura",
-        description: "Você precisa estar logado para realizar esta ação.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // MODO TEMPORÁRIO: Exibir mensagem explicando a situação
-      toast({
-        title: "Funcionalidade temporariamente indisponível",
-        description: "O sistema de assinaturas está em manutenção. Por enquanto, todos os usuários têm acesso ao plano gratuito.",
-        duration: 5000,
-      });
-
-      // Simular um pequeno atraso para feedback visual
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // No modo temporário, não fazemos nada realmente, pois todos estão no plano gratuito
-    } catch (error) {
-      console.error('Erro ao cancelar assinatura:', error);
-      toast({
-        title: "Erro ao cancelar assinatura",
-        description: error.message || "Ocorreu um erro ao cancelar sua assinatura. Tente novamente.",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
+    console.log('Cancelamento de assinatura simulado com sucesso');
+    return Promise.resolve();
   };
 
-  const value = {
-    currentSubscription,
-    currentPlan,
-    availablePlans,
-    loading,
-    hasFeatureAccess,
-    upgradePlan,
-    cancelSubscription,
-    loadUserSubscription
-  };
-
-  return <SubscriptionContext.Provider value={value}>{children}</SubscriptionContext.Provider>;
+  return (
+    <SubscriptionContext.Provider
+      value={{
+        currentSubscription,
+        currentPlan,
+        availablePlans,
+        loading,
+        hasFeatureAccess,
+        upgradePlan,
+        cancelSubscription,
+        loadUserSubscription
+      }}
+    >
+      {children}
+    </SubscriptionContext.Provider>
+  );
 };
 
 export const useSubscription = () => {

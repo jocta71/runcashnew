@@ -11,6 +11,8 @@ export function LastNumbersRealtime({ roletaNome, limit = 20 }) {
     // Buscar números iniciais
     const fetchInitialNumbers = async () => {
       try {
+        console.log(`[LastNumbersRealtime] Buscando números iniciais para ${roletaNome}...`);
+        
         const { data, error } = await supabase
           .from('roleta_numeros')
           .select('numero, timestamp, cor')
@@ -18,12 +20,25 @@ export function LastNumbersRealtime({ roletaNome, limit = 20 }) {
           .order('timestamp', { ascending: false })
           .limit(limit);
           
-        if (error) throw error;
+        if (error) {
+          console.error(`[LastNumbersRealtime] Erro ao buscar números:`, error);
+          throw error;
+        }
         
-        setNumbers(data.map(n => ({
-          number: n.numero,
-          color: n.cor,
-          timestamp: new Date(n.timestamp)
+        console.log(`[LastNumbersRealtime] Números obtidos do Supabase:`, data);
+        
+        // Aplicar validação para garantir que todos os números são válidos
+        const validData = data.filter(n => 
+          n.numero !== null && !isNaN(Number(n.numero)) && 
+          Number(n.numero) >= 0 && Number(n.numero) <= 36
+        );
+        
+        console.log(`[LastNumbersRealtime] Números válidos:`, validData.length);
+        
+        setNumbers(validData.map(n => ({
+          number: Number(n.numero),
+          color: n.cor || getRouletteNumberColor(Number(n.numero)),
+          timestamp: new Date(n.timestamp || Date.now())
         })));
       } catch (error) {
         console.error('[LastNumbersRealtime] Erro ao buscar números:', error);
@@ -32,11 +47,25 @@ export function LastNumbersRealtime({ roletaNome, limit = 20 }) {
       }
     };
     
+    // Função auxiliar para determinar a cor do número
+    const getRouletteNumberColor = (num) => {
+      if (num === 0) return 'verde';
+      
+      // Números vermelhos na roleta europeia
+      const numerosVermelhos = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+      return numerosVermelhos.includes(num) ? 'vermelho' : 'preto';
+    };
+    
     fetchInitialNumbers();
     
     // Configurar subscription em tempo real
+    console.log(`[LastNumbersRealtime] Configurando subscription para ${roletaNome}...`);
+    
+    const channelName = `roleta_numeros_${roletaNome}_${Date.now()}`;
+    console.log(`[LastNumbersRealtime] Canal: ${channelName}`);
+    
     const subscription = supabase
-      .channel('roleta_numeros_realtime')
+      .channel(channelName)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
@@ -46,12 +75,26 @@ export function LastNumbersRealtime({ roletaNome, limit = 20 }) {
         // Adicionar novo número ao estado
         console.log('[LastNumbersRealtime] Novo número recebido:', payload.new);
         
+        // Validar o número recebido
+        if (!payload.new || payload.new.numero === undefined || payload.new.numero === null) {
+          console.error('[LastNumbersRealtime] Payload inválido:', payload);
+          return;
+        }
+        
+        const num = Number(payload.new.numero);
+        if (isNaN(num) || num < 0 || num > 36) {
+          console.error('[LastNumbersRealtime] Número inválido:', num);
+          return;
+        }
+        
         const newNumber = {
-          number: payload.new.numero,
-          color: payload.new.cor,
-          timestamp: new Date(payload.new.timestamp),
+          number: num,
+          color: payload.new.cor || getRouletteNumberColor(num),
+          timestamp: new Date(payload.new.timestamp || Date.now()),
           isNew: true
         };
+        
+        console.log('[LastNumbersRealtime] Adicionando novo número ao estado:', newNumber);
         
         setNumbers(prev => [newNumber, ...prev.slice(0, limit - 1)]);
         
@@ -59,9 +102,12 @@ export function LastNumbersRealtime({ roletaNome, limit = 20 }) {
         setNewNumberIndicator(true);
         setTimeout(() => setNewNumberIndicator(false), 3000);
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`[LastNumbersRealtime] Status da subscription: ${status}`);
+      });
     
     return () => {
+      console.log(`[LastNumbersRealtime] Removendo subscription para ${roletaNome}...`);
       supabase.removeChannel(subscription);
     };
   }, [roletaNome, limit]);

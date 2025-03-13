@@ -1,70 +1,91 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+Configurações do sistema de scraper de roletas
+"""
+
 import os
 import logging
+import platform
+from datetime import datetime
 from dotenv import load_dotenv
+import sys
 
-# Carregar variáveis de ambiente
+# Carregar variáveis de ambiente do arquivo .env se existir
 load_dotenv()
 
-# Configurar logging
-logger = logging.getLogger('roulette_scraper')
-logger.setLevel(logging.INFO)  # Manteremos INFO como padrão, mas ajustaremos o formato
+# Configurações de ambiente
+AMBIENTE_PROD = os.environ.get('PRODUCTION', '').lower() in ('true', '1', 't') or \
+                os.environ.get('RENDER', '').lower() in ('true', '1', 't')
 
-# Criar um handler para console com formato mais limpo
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
+# Versão da API
+API_VERSION = "1.0.0"
 
-# Criar um formatador mais conciso - apenas hora:minuto:segundo e a mensagem
-formatter = logging.Formatter('%(asctime)s - %(message)s', '%H:%M:%S')
-console_handler.setFormatter(formatter)
+# URL do casino para scraping
+CASINO_URL = os.environ.get('CASINO_URL', 'https://www.cassinobrazil.com/')
 
-# Adicionar o handler ao logger
-logger.addHandler(console_handler)
+# Seletor CSS para encontrar as roletas no site
+# Pode variar dependendo do site do casino
+ROLETA_CSS_SELECTOR = os.environ.get('ROLETA_CSS_SELECTOR', '.cy-live-casino-grid-item')
 
-# Máximo de ciclos (0 = infinito)
-MAX_CICLOS = 0
+# Configurações de intervalos
+SCRAPE_INTERVAL_MINUTES = int(os.environ.get('SCRAPE_INTERVAL_MINUTES', '5'))
+HEALTH_CHECK_INTERVAL = int(os.environ.get('HEALTH_CHECK_INTERVAL', '60'))  # Em segundos
+MAX_CICLOS = int(os.environ.get('MAX_CICLOS', '1000'))
+MAX_ERROS_CONSECUTIVOS = int(os.environ.get('MAX_ERROS_CONSECUTIVOS', '5'))
 
-# Intervalo de scraping em minutos (padrão: 5 minutos)
-SCRAPE_INTERVAL_MINUTES = int(os.getenv('SCRAPE_INTERVAL_MINUTES', 5))
+# Configurações do servidor
+DEFAULT_HOST = os.environ.get('HOST', '0.0.0.0')
+DEFAULT_PORT = int(os.environ.get('PORT', '5000'))
 
+# Configurações de banco de dados
 # Supabase
-SUPABASE_URL = os.getenv('SUPABASE_URL', 'https://evzqzghxuttctbxgohpx.supabase.co')
-SUPABASE_KEY = os.getenv('SUPABASE_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ')
+SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
+SUPABASE_KEY = os.environ.get('SUPABASE_KEY', '')
+SUPABASE_ENABLED = os.environ.get('SUPABASE_ENABLED', '').lower() in ('true', '1', 't')
 
-# URL do cassino
-casino_url_env = os.getenv('CASINO_URL', 'https://es.888casino.com/live-casino/#filters=live-roulette')
-# Sanitizar a URL removendo espaços e símbolos indesejados
-CASINO_URL = casino_url_env.strip()
-if CASINO_URL.startswith('='):
-    CASINO_URL = CASINO_URL[1:]
+# MongoDB
+MONGODB_URI = os.environ.get('MONGODB_URI', 'mongodb://localhost:27017/runcash')
+MONGODB_DB_NAME = os.environ.get('MONGODB_DB_NAME', 'runcash')
+MONGODB_ENABLED = os.environ.get('MONGODB_ENABLED', '').lower() in ('true', '1', 't')
 
-# Função para verificar se uma roleta é permitida
-def roleta_permitida_por_id(id_roleta):
-    # Lista de IDs conhecidos (sincronizada com frontend/src/config/allowedRoulettes.ts)
-    roletas_conhecidas = [
-        "2010016",  # Immersive Roulette
-        "2380335",  # Brazilian Mega Roulette
-        "2010065",  # Bucharest Auto-Roulette
-        "2010096",  # Speed Auto Roulette
-        "2010017",  # Auto-Roulette
-        "2010098",  # Auto-Roulette VIP
-    ]
+# Configuração de segurança
+API_KEY = os.environ.get('API_KEY', 'dev_key')
+
+# Importar função de verificação de roletas permitidas
+from roletas_permitidas import roleta_permitida_por_id
+
+# Configuração de logging
+logger = logging.getLogger('runcash')
+
+def configurar_logging():
+    """Configura o sistema de logging"""
+    # Silenciar virtualmente tudo
+    logging.basicConfig(
+        level=logging.CRITICAL,  # Silenciar quase tudo
+        format='%(message)s',  # Formato ultra mínimo
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
     
-    # Obter lista de roletas permitidas da variável de ambiente
-    roletas_permitidas = os.getenv('ALLOWED_ROULETTES', '')
+    # Silenciar loggers específicos que podem ser muito verbosos
+    for logger_name in ['werkzeug', 'selenium', 'urllib3', 'requests', 'pymongo']:
+        logging.getLogger(logger_name).setLevel(logging.CRITICAL)
     
-    # Se a variável não estiver definida, usar a lista de roletas conhecidas
-    if not roletas_permitidas:
-        # Reduzir verbosidade - apenas log em debug
-        logger.debug(f"Usando lista interna de roletas")
-        return id_roleta in roletas_conhecidas
+    # Configurar o logger principal
+    logger.setLevel(logging.CRITICAL)  # Só mostrar erros críticos
+    logger.handlers = []  # Limpar handlers existentes
     
-    # Se a variável tiver o valor "*", permitir todas as roletas
-    if roletas_permitidas == "*":
-        logger.debug("Modo permissivo: todas as roletas são permitidas")
-        return True
+    # Remover formatação de data e tempo para minimizar ainda mais
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(logging.Formatter('%(message)s'))
+    logger.addHandler(handler)
     
-    # Dividir a string por vírgulas para obter a lista de roletas permitidas
-    lista_permitidas = [r.strip() for r in roletas_permitidas.split(',')]
+    # Mensagem inicial
+    logger.info(f"Log iniciado em {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"Sistema operacional: {platform.system()} {platform.version()}")
+    logger.info(f"Ambiente: {'Produção' if AMBIENTE_PROD else 'Desenvolvimento'}")
     
-    # Verificar se o ID da roleta está na lista de permitidas
-    return id_roleta in lista_permitidas
+    return logger

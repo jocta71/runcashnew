@@ -31,15 +31,15 @@ class EventService {
   private reconnectTimeout: number | null = null;
   private backoffTime: number = 1000; // Tempo inicial de backoff em ms
 
-  // Obtém a URL do servidor de eventos da configuração centralizada
-  private getServerUrl(): string {
-    console.log(`[EventService] Usando URL do servidor de eventos: ${config.sseServerUrl}`);
-    return config.sseServerUrl;
-  }
-
   private constructor() {
+    // Adicionar listener global para logging de todos os eventos
+    this.subscribe('*', (event: RouletteNumberEvent) => {
+      console.log(`[EventService][GLOBAL] Evento recebido para roleta: ${event.roleta_nome}, número: ${event.numero}`);
+    });
+    
+    // Iniciar com SSE para comunicação em tempo real verdadeiro
+    console.log('[EventService] Iniciando com SSE para eventos em tempo real');
     this.connect();
-    console.log('EventService inicializado');
   }
 
   public static getInstance(): EventService {
@@ -47,6 +47,17 @@ class EventService {
       EventService.instance = new EventService();
     }
     return EventService.instance;
+  }
+
+  // Obtém a URL do servidor de eventos com proxy CORS, se necessário
+  private getServerUrl(): string {
+    // Usando um proxy CORS alternativo que pode ser melhor para SSE
+    const originalUrl = 'https://short-mammals-help.loca.lt/api/events';
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(originalUrl)}`;
+    
+    // Usando o proxy na tentativa de resolver o CORS
+    console.log(`[EventService] Usando URL via proxy CORS alternativo: ${proxyUrl}`);
+    return proxyUrl;
   }
 
   private connect(): void {
@@ -57,24 +68,26 @@ class EventService {
 
     try {
       const serverUrl = this.getServerUrl();
-      console.log(`Conectando ao servidor de eventos: ${serverUrl}`);
+      console.log(`[EventService] Tentando conexão SSE simplificada: ${serverUrl}`);
+      
+      // Usar EventSource com configuração mínima
       this.eventSource = new EventSource(serverUrl);
 
       this.eventSource.onopen = () => {
-        console.log('Conexão SSE estabelecida');
+        console.log('[EventService] Conexão SSE estabelecida com sucesso!');
         this.isConnected = true;
         this.connectionAttempts = 0;
         this.backoffTime = 1000; // Resetar o tempo de backoff
         
         toast({
           title: "Conexão em tempo real estabelecida",
-          description: "Você receberá atualizações automáticas das roletas",
+          description: "Você receberá atualizações instantâneas das roletas",
           variant: "default"
         });
       };
 
       this.eventSource.onerror = (error) => {
-        console.error('Erro na conexão SSE:', error);
+        console.error('[EventService] Erro na conexão SSE, tentando reconectar...');
         this.isConnected = false;
         
         if (this.eventSource) {
@@ -82,11 +95,19 @@ class EventService {
           this.eventSource = null;
         }
 
-        // Tentar reconectar com backoff exponencial
+        // Incrementar tentativas
         this.connectionAttempts++;
-        const delay = Math.min(this.backoffTime * Math.pow(1.5, this.connectionAttempts - 1), 30000);
         
-        console.log(`Tentando reconectar em ${delay}ms (tentativa ${this.connectionAttempts})`);
+        // Limitar a 10 tentativas para não ficar eternamente
+        if (this.connectionAttempts > 10) {
+          console.error('[EventService] Máximo de tentativas atingido. Por favor, recarregue a página.');
+          return;
+        }
+        
+        // Backoff mais rápido, mas com intervalos crescentes
+        const delay = Math.min(1000 * this.connectionAttempts, 8000);
+        
+        console.log(`[EventService] Tentando reconectar em ${Math.round(delay/1000)}s (tentativa ${this.connectionAttempts})`);
         
         if (this.reconnectTimeout) {
           clearTimeout(this.reconnectTimeout);
@@ -95,55 +116,68 @@ class EventService {
         this.reconnectTimeout = window.setTimeout(() => {
           this.connect();
         }, delay);
-        
-        if (this.connectionAttempts > 3) {
-          toast({
-            title: "Problemas de conexão",
-            description: "Tentando reconectar ao servidor de eventos...",
-            variant: "destructive"
-          });
-        }
       };
 
       this.eventSource.onmessage = (event) => {
         try {
-          // Log do evento bruto para depuração
-          console.log(`[SSE][RAW] Evento recebido:`, event.data);
+          // Parsing inicial do JSON
+          let parsedData;
+          try {
+            parsedData = JSON.parse(event.data);
+          } catch (e) {
+            console.error('[EventService] Erro ao fazer parse do JSON');
+            return;
+          }
           
-          const data = JSON.parse(event.data) as EventData;
+          // Adaptar formato da nova API para o formato esperado
+          let data: EventData;
+          
+          // Verificar formato e adaptar conforme necessário
+          if (parsedData.type && parsedData.type === 'new_number') {
+            // Já está no formato esperado
+            data = parsedData as RouletteNumberEvent;
+          } else if (parsedData.roleta_nome && parsedData.numero !== undefined) {
+            // Formato da nova API: converter para o formato esperado
+            data = {
+              type: 'new_number',
+              roleta_id: parsedData.roleta_id || parsedData.id || 'unknown-id',
+              roleta_nome: parsedData.roleta_nome,
+              numero: Number(parsedData.numero),
+              timestamp: parsedData.timestamp || new Date().toISOString()
+            };
+          } else if (parsedData.message && typeof parsedData.message === 'string') {
+            // Evento de conexão ou outro evento informativo
+            data = {
+              type: 'connected',
+              message: parsedData.message
+            };
+          } else {
+            return;
+          }
           
           if (data.type === 'new_number') {
-            console.log(`[SSE][EVENT] Novo número recebido para ${data.roleta_nome}: ${data.numero}`);
-            
-            // Verificar quantos listeners estão registrados para esta roleta
-            const roletaListeners = this.listeners.get(data.roleta_nome);
-            const globalListeners = this.listeners.get('*');
-            
-            console.log(`[SSE][STATS] Listeners para ${data.roleta_nome}: ${roletaListeners?.size || 0}`);
-            console.log(`[SSE][STATS] Listeners globais: ${globalListeners?.size || 0}`);
-            
+            console.log(`[EventService] Novo número em tempo real: ${data.roleta_nome} - ${data.numero}`);
             this.notifyListeners(data);
-          } else if (data.type === 'connected') {
-            console.log('[SSE][CONN] Conexão confirmada pelo servidor:', data.message);
-          } else {
-            console.log(`[SSE][UNKNOWN] Tipo de evento desconhecido:`, data);
           }
         } catch (error) {
-          console.error('[SSE][ERROR] Erro ao processar evento:', error, 'Dados brutos:', event.data);
+          console.error('[EventService] Erro ao processar evento SSE');
         }
       };
     } catch (error) {
-      console.error('Erro ao criar conexão SSE:', error);
-      this.isConnected = false;
+      console.error('[EventService] Erro ao criar conexão SSE, tentando novamente...');
+      
+      // Tentar reconectar após um breve atraso
+      setTimeout(() => {
+        this.connect();
+      }, 2000);
     }
   }
 
   // Adiciona um listener para eventos de uma roleta específica
   public subscribe(roletaNome: string, callback: RouletteEventCallback): void {
-    console.log(`[SSE][SUB] Tentando inscrever para eventos da roleta: ${roletaNome}`);
+    console.log(`[EventService] Inscrevendo para eventos da roleta: ${roletaNome}`);
     
     if (!this.listeners.has(roletaNome)) {
-      console.log(`[SSE][SUB] Criando novo conjunto de listeners para ${roletaNome}`);
       this.listeners.set(roletaNome, new Set());
     }
 
@@ -151,14 +185,12 @@ class EventService {
     listeners?.add(callback);
     
     const count = listeners?.size || 0;
-    console.log(`[SSE][SUB] Inscrito para eventos da roleta: ${roletaNome}. Total de listeners: ${count}`);
+    console.log(`[EventService] Total de listeners para ${roletaNome}: ${count}`);
     
-    // Verificar se a conexão SSE está ativa
+    // Sempre verificar a conexão SSE ao inscrever um novo listener
     if (!this.isConnected || !this.eventSource) {
-      console.log(`[SSE][SUB] Conexão SSE não está ativa. Tentando reconectar...`);
+      console.log(`[EventService] Conexão SSE não ativa, reconectando...`);
       this.connect();
-    } else {
-      console.log(`[SSE][SUB] Conexão SSE já está ativa.`);
     }
   }
 
@@ -175,33 +207,29 @@ class EventService {
 
   // Notifica os listeners sobre um novo evento
   private notifyListeners(event: RouletteNumberEvent): void {
-    console.log(`[SSE][NOTIFY] Notificando listeners para ${event.roleta_nome}, número: ${event.numero}`);
+    // Log simplificado para melhor desempenho em modo tempo real
+    console.log(`[EventService] Novo número: ${event.roleta_nome} - ${event.numero}`);
     
     // Notificar listeners da roleta específica
     const roletaListeners = this.listeners.get(event.roleta_nome);
     if (roletaListeners && roletaListeners.size > 0) {
-      console.log(`[SSE][NOTIFY] Encontrados ${roletaListeners.size} listeners para ${event.roleta_nome}`);
       roletaListeners.forEach(callback => {
         try {
-          console.log(`[SSE][NOTIFY] Chamando callback para ${event.roleta_nome}`);
           callback(event);
         } catch (error) {
-          console.error(`[SSE][ERROR] Erro ao chamar callback para ${event.roleta_nome}:`, error);
+          console.error(`[EventService] Erro ao notificar listener para ${event.roleta_nome}`);
         }
       });
-    } else {
-      console.log(`[SSE][NOTIFY] Nenhum listener encontrado para ${event.roleta_nome}`);
     }
     
     // Notificar listeners globais (*)
     const globalListeners = this.listeners.get('*');
     if (globalListeners && globalListeners.size > 0) {
-      console.log(`[SSE][NOTIFY] Notificando ${globalListeners.size} listeners globais`);
       globalListeners.forEach(callback => {
         try {
           callback(event);
         } catch (error) {
-          console.error('[SSE][ERROR] Erro ao chamar callback global:', error);
+          console.error('[EventService] Erro ao notificar listener global');
         }
       });
     }
@@ -220,7 +248,7 @@ class EventService {
     }
     
     this.isConnected = false;
-    console.log('Desconectado do servidor de eventos');
+    console.log('[EventService] Desconectado do servidor de eventos');
   }
 }
 

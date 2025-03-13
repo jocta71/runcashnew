@@ -1,196 +1,145 @@
-# Roulette Scraper para RunCash
+# RunCash - Sistema de Scraper de Roletas
 
-Este é um scraper para coletar números de roletas do site 888casino e enviar para o Supabase.
+## Visão Geral
 
-## Funcionalidades
+O RunCash é um sistema avançado para monitoramento e análise de roletas online. O sistema inclui capacidades de scraping em tempo real, armazenamento de dados, análise estatística e uma API para integração com aplicações frontend.
 
-- Extrai números de roletas em tempo real do site 888casino
-- Filtra roletas por ID permitido
-- Armazena histórico de até 20 números para cada roleta
-- Integração com Supabase para armazenamento dos dados
-- Preparado para deploy no Heroku
+Este repositório contém a versão refatorada do backend, que foi modularizada para melhor manutenção e extensibilidade.
+
+## Características
+
+- 🎮 Scraping em tempo real de roletas online
+- 📊 Análise estatística de números e sequências
+- 📱 API REST para integração com aplicações frontend
+- 🔄 Notificações em tempo real via Server-Sent Events (SSE)
+- 💾 Suporte a múltiplas fontes de dados (MongoDB e Supabase)
+- 🧪 Modo de simulação para testes sem scraper
+- 📝 Logging extensivo para monitoramento
+
+## Arquitetura
+
+O sistema foi refatorado em uma estrutura modular com os seguintes componentes:
+
+- `app_refactor.py` - Módulo principal que coordena a inicialização dos componentes
+- `config.py` - Configurações, variáveis de ambiente e logging
+- `scraper_core.py` - Lógica do scraper e extração de dados
+- `server.py` - Implementação da API Flask e eventos SSE
+- `event_manager.py` - Gerenciador de eventos para notificações em tempo real
+- `analytics.py` - Análise de dados e estatísticas
+- `data_source_mongo.py` - Implementação de fonte de dados MongoDB
+- `data_source_supabase.py` - Implementação de fonte de dados Supabase
+- `mongo_config.py` - Configurações e utilitários para MongoDB
+- `run.py` - Script de inicialização com opções de linha de comando
+
+## Requisitos
+
+- Python 3.8+
+- MongoDB ou Supabase para armazenamento de dados
+- Chrome/Chromium e ChromeDriver para o scraper
+
+### Dependências Python
+
+```
+pymongo==4.5.0
+supabase==1.0.3
+flask==2.3.2
+flask-cors==4.0.0
+selenium==4.11.2
+webdriver-manager==3.8.6
+python-dotenv==1.0.0
+requests==2.30.0
+```
 
 ## Configuração
 
-1. Crie um arquivo `.env` baseado no `.env.example`:
-```
-cp .env.example .env
-```
-
-2. Preencha as variáveis de ambiente no arquivo `.env`:
-- `SUPABASE_URL`: URL do seu projeto Supabase
-- `SUPABASE_KEY`: Chave de serviço (service key) do Supabase
-- `ALLOWED_ROULETTES`: Lista de IDs de roletas permitidas, separadas por vírgula (deixe vazio para permitir todas)
-- `SCRAPE_INTERVAL_MINUTES`: Intervalo em minutos entre cada execução do scraper
-
-## Estrutura de Dados no Supabase
-
-Os dados são armazenados na tabela `roletas` com a seguinte estrutura:
-```json
-{
-  "id": "historico",
-  "data": {
-    "Roleta VIP": {
-      "numeros": [23, 15, 7, ...],  // Até 20 números mais recentes
-      "ultima_atualizacao": "2023-10-10 14:30:45",
-      "estrategia": {}  // Dados adicionais do analisador
-    },
-    "Roleta Express": {
-      // Similar ao acima
-    }
-  },
-  "updated_at": "2023-10-10T14:30:45.000Z"
-}
-```
-
-## Criação da Tabela no Supabase
-
-1. Acesse o dashboard do Supabase
-2. Vá para a seção "Table Editor"
-3. Clique em "Create a new table"
-4. Defina o nome da tabela como `roletas`
-5. Adicione as seguintes colunas:
-   - `id` (tipo: text, primary key)
-   - `data` (tipo: jsonb, not null)
-   - `updated_at` (tipo: timestamp with time zone, default: now())
-6. Clique em "Save"
-
-Ou execute o seguinte SQL:
-```sql
-CREATE TABLE roletas (
-    id TEXT PRIMARY KEY,
-    data JSONB NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Criar um registro inicial
-INSERT INTO roletas (id, data) VALUES ('historico', '{}');
-```
-
-## Nova Estrutura de Armazenamento
-
-### Tabela `roleta_numeros`
-
-A partir da versão atualizada, o scraper utiliza uma nova estrutura de armazenamento de dados com a tabela `roleta_numeros`. Esta tabela armazena cada número individualmente, em vez de mantê-los em um array, permitindo:
-
-- Consultas mais eficientes
-- Melhor organização dos dados
-- Análises temporais precisas
-- Escalabilidade para grandes volumes de dados
-
-### Implementação da Nova Estrutura
-
-Para implementar a nova estrutura, siga estes passos:
-
-1. Execute o script SQL `create_roleta_numeros_table.sql` para criar a tabela e suas funcionalidades:
+1. Clone o repositório
+2. Instale as dependências:
+   ```
+   pip install -r requirements.txt
+   ```
+3. Configure as variáveis de ambiente criando um arquivo `.env` na raiz do projeto:
 
 ```bash
-psql -h <seu-host-supabase> -d postgres -U postgres -f create_roleta_numeros_table.sql
+# Ambiente
+PRODUCTION=false
+
+# MongoDB (opcional)
+MONGODB_URI=mongodb://localhost:27017/runcash
+MONGODB_DB_NAME=runcash
+MONGODB_ENABLED=true
+
+# Supabase (opcional)
+SUPABASE_URL=https://seu-projeto.supabase.co
+SUPABASE_KEY=sua-chave-supabase
+SUPABASE_ENABLED=false
+
+# URL do Casino
+CASINO_URL=https://www.cassinobrazil.com/
+
+# Servidor
+HOST=0.0.0.0
+PORT=5000
 ```
 
-Ou execute o SQL diretamente no editor de SQL da interface do Supabase.
+## Uso
 
-2. A tabela `roleta_numeros` terá a seguinte estrutura:
+O sistema pode ser iniciado usando o script `run.py`, que oferece várias opções de linha de comando:
 
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | SERIAL | Identificador único do registro |
-| roleta_id | TEXT | ID da roleta |
-| roleta_nome | TEXT | Nome da roleta |
-| numero | INTEGER | Número sorteado (0-36) |
-| created_at | TIMESTAMPTZ | Data e hora em que o número foi registrado |
+### Exemplos de uso
 
-3. Funcionalidades Adicionais:
-   - Trigger para limitar automaticamente a 1000 registros por roleta
-   - Índices para otimizar consultas comuns
-   - View `vw_ultimos_numeros_roleta` para facilitar consultas
-   - Função `get_ultimos_numeros()` para obter os últimos números
-
-### Consultas Úteis
-
-```sql
--- Obter os últimos 10 números de uma roleta específica
-SELECT numero, created_at 
-FROM roleta_numeros 
-WHERE roleta_id = '2341648' 
-ORDER BY created_at DESC 
-LIMIT 10;
-
--- Contar ocorrências de cada número para uma roleta
-SELECT numero, COUNT(*) as ocorrencias 
-FROM roleta_numeros 
-WHERE roleta_id = '2341648' 
-GROUP BY numero 
-ORDER BY ocorrencias DESC;
-
--- Verificar quantos números cada roleta tem armazenados
-SELECT roleta_nome, COUNT(*) as total 
-FROM roleta_numeros 
-GROUP BY roleta_id, roleta_nome;
+**Iniciar com MongoDB (padrão):**
+```bash
+python run.py --mongodb
 ```
 
-## Deploy no Heroku
-
-1. Crie uma aplicação no Heroku:
-```
-heroku create runcash-scraper
+**Iniciar com Supabase:**
+```bash
+python run.py --supabase
 ```
 
-2. Adicione os buildpacks necessários:
-```
-heroku buildpacks:add heroku/python
-heroku buildpacks:add https://github.com/heroku/heroku-buildpack-google-chrome
-heroku buildpacks:add https://github.com/heroku/heroku-buildpack-chromedriver
+**Iniciar apenas em modo de simulação (sem scraper real):**
+```bash
+python run.py --simulate
 ```
 
-3. Configure as variáveis de ambiente:
-```
-heroku config:set SUPABASE_URL=seu_url
-heroku config:set SUPABASE_KEY=sua_chave
-heroku config:set ALLOWED_ROULETTES=id1,id2,id3
-heroku config:set SCRAPE_INTERVAL_MINUTES=5
-heroku config:set GOOGLE_CHROME_BIN=/app/.apt/usr/bin/google-chrome
-heroku config:set CHROMEDRIVER_PATH=/app/.chromedriver/bin/chromedriver
+**Iniciar apenas o servidor (sem scraper ou simulador):**
+```bash
+python run.py --only-server
 ```
 
-4. Deploy da aplicação:
-```
-git push heroku main
-```
-
-## Execução Local
-
-1. Instale as dependências:
-```
-pip install -r requirements.txt
+**Iniciar com porta específica:**
+```bash
+python run.py --port 8080
 ```
 
-2. Execute o setup para verificar a conexão com o Supabase:
-```
-python setup_supabase.py
-```
-
-3. Execute o scraper:
-```
-python app.py
+**Exibir informações do sistema:**
+```bash
+python run.py --info
 ```
 
-## Solução de Problemas
+**Modo debug com mais logs:**
+```bash
+python run.py --debug
+```
 
-### Erro com o ChromeDriver
-Se você encontrar erros relacionados ao ChromeDriver, verifique:
-1. Se o Chrome está instalado no sistema
-2. Se a versão do ChromeDriver é compatível com a versão do Chrome
-3. Tente usar o método direto de inicialização do driver (já implementado como fallback)
+## Endpoints da API
 
-### Erro de Conexão com o Supabase
-1. Verifique se as credenciais estão corretas no arquivo `.env`
-2. Confirme se a tabela `roletas` existe no Supabase
-3. Verifique se a versão do cliente Supabase é compatível (recomendado: 2.3.0)
+A API oferece os seguintes endpoints principais:
 
-## Manutenção
+- `GET /events` - Stream SSE para eventos em tempo real
+- `GET /health` - Verificação de saúde do sistema
+- `GET /api/roletas` - Lista todas as roletas ativas
+- `GET /api/roleta/<roleta_id>/numeros` - Obtém os últimos números de uma roleta
+- `GET /api/roleta/<roleta_id>/estatisticas` - Obtém estatísticas para uma roleta
+- `GET /api/roleta/<roleta_id>/sequencias` - Obtém sequências detectadas
+- `GET /api/status` - Status do sistema e estatísticas
+- `GET /api/start-simulator` - Inicia o simulador (para testes)
+- `GET /api/force-event` - Força um evento aleatório (para testes)
 
-O scraper foi projetado para ser resiliente, mas é recomendado:
-1. Monitorar os logs do Heroku regularmente
-2. Verificar se os dados estão sendo atualizados no Supabase
-3. Atualizar as dependências periodicamente para evitar problemas de segurança
+## Licença
+
+Este projeto é proprietário e confidencial. Todos os direitos reservados.
+
+## Contato
+
+Para mais informações ou suporte, entre em contato com a equipe de desenvolvimento.
