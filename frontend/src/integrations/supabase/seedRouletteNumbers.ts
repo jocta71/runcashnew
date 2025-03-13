@@ -1,117 +1,104 @@
-// Script para inserir números de exemplo para as roletas existentes no Supabase
-// Este script deve ser executado para popular a tabela roleta_numeros
+/**
+ * Mock da função de seeding para inserir números de teste nas roletas
+ * Esta versão não depende do Supabase e apenas simula a inserção de dados
+ */
 
-const SUPABASE_URL = "https://evzqzghxuttctbxgohpx.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2enF6Z2h4dXR0Y3RieGdvaHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDExNzc5OTEsImV4cCI6MjA1Njc1Mzk5MX0.CmoM_y0i36nbBx2iN0DlOIob3yAgVRM1xY_XiOFBZLQ";
+import { toast } from '@/components/ui/use-toast';
 
-interface Roleta {
-  id: string;
-  nome: string;
+interface SeedRoulettesOptions {
+  count?: number;
+  roletaNome?: string;
+  batchSize?: number;
+  onProgress?: (progress: number) => void;
 }
 
-// Função para gerar um número aleatório entre 0 e 36 (números da roleta)
-const generateRandomRouletteNumber = () => {
-  return Math.floor(Math.random() * 37); // 0-36
+/**
+ * Gera uma cor para um número da roleta
+ */
+const getRouletteColor = (number: number): 'verde' | 'vermelho' | 'preto' => {
+  if (number === 0) return 'verde';
+  const redNumbers = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+  return redNumbers.includes(number) ? 'vermelho' : 'preto';
 };
 
-// Função para buscar todas as roletas existentes
-const fetchRoletas = async (): Promise<Roleta[]> => {
+/**
+ * Versão mock para inserir números de teste nas roletas
+ * Não realiza operações reais de banco de dados
+ */
+const seedRouletteNumbers = async ({
+  count = 100,
+  roletaNome = 'Auto-Roulette',
+  batchSize = 10,
+  onProgress = () => {}
+}: SeedRoulettesOptions = {}) => {
   try {
-    console.log('Buscando todas as roletas do Supabase...');
+    console.log(`[MOCK] Iniciando seed de ${count} números para ${roletaNome}`);
     
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/roletas?select=id,nome`, {
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Content-Type': 'application/json',
+    // Lista de roletas pré-definidas
+    const roletas = [
+      { id: '23d683ae-7b17-89e3-eccb-30a3083338f0', nome: 'Lightning Roulette' },
+      { id: '48f8b26b-4dfa-5c87-a372-6f69e2902c57', nome: 'Auto-Roulette' },
+      { id: '1a3ae55f-534e-5d99-8ef8-16d20466fc36', nome: 'Speed Auto Roulette' },
+      { id: '72a4217f-a3c4-5f81-a0ad-41c307110c99', nome: 'Immersive Roulette' },
+      { id: '3a90c765-f34d-547f-81c0-f99b9f11a61f', nome: 'Roulette Live' },
+      { id: 'b5c26323-67ab-5576-aa17-88da4ced1a86', nome: 'Brazilian Mega Roulette' }
+    ];
+    
+    // Encontrar a roleta especificada ou usar a primeira
+    const roleta = roletas.find(r => r.nome === roletaNome) || roletas[0];
+    
+    // Simular processamento em lotes
+    const batches = Math.ceil(count / batchSize);
+    
+    for (let batch = 0; batch < batches; batch++) {
+      const batchCount = Math.min(batchSize, count - batch * batchSize);
+      const batchNumbers = [];
+      
+      for (let i = 0; i < batchCount; i++) {
+        // Gerar número aleatório entre 0 e 36
+        const numero = Math.floor(Math.random() * 37);
+        const cor = getRouletteColor(numero);
+        
+        batchNumbers.push({
+          roleta_id: roleta.id,
+          roleta_nome: roleta.nome,
+          numero,
+          cor,
+          timestamp: new Date().toISOString()
+        });
       }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Erro ao buscar roletas: ${response.statusText}`);
+      
+      console.log(`[MOCK] Lote ${batch + 1}/${batches}: ${batchNumbers.length} números gerados`);
+      
+      // Simular um delay para dar feedback visual
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Atualizar progresso
+      const progress = Math.min(((batch + 1) * batchSize) / count, 1);
+      onProgress(progress);
     }
     
-    const data = await response.json();
-    console.log(`Encontradas ${data.length} roletas.`);
-    return data;
-  } catch (error) {
-    console.error('Erro ao buscar roletas:', error);
-    return [];
-  }
-};
-
-// Função para adicionar um número para uma roleta
-const addNumberToRoleta = async (roletaId: string, roletaNome: string, numero: number) => {
-  try {
-    const now = new Date().toISOString();
-    
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/roleta_numeros`, {
-      method: 'POST',
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=minimal'
-      },
-      body: JSON.stringify({
-        roleta_id: roletaId,
-        roleta_nome: roletaNome,
-        numero: numero,
-        created_at: now
-      })
+    // Mostrar notificação de sucesso
+    toast({
+      title: "Números inseridos com sucesso",
+      description: `Foram gerados ${count} números para a roleta ${roleta.nome}`,
+      variant: "default"
     });
     
-    if (!response.ok) {
-      throw new Error(`Erro ao adicionar número ${numero} para roleta ${roletaNome}: ${response.statusText}`);
-    }
-    
-    console.log(`Número ${numero} adicionado com sucesso para a roleta ${roletaNome}`);
+    console.log(`[MOCK] Seed concluído para ${roleta.nome}`);
     return true;
+    
   } catch (error) {
-    console.error(`Erro ao adicionar número para roleta ${roletaNome}:`, error);
+    console.error('Erro ao inserir números:', error);
+    
+    toast({
+      title: "Erro ao inserir números",
+      description: "Ocorreu um erro ao tentar inserir os números. Tente novamente.",
+      variant: "destructive"
+    });
+    
     return false;
   }
 };
-
-// Função principal para adicionar números para todas as roletas
-export const seedRouletteNumbers = async (numbersPerRoulette = 20) => {
-  try {
-    console.log(`Iniciando população da tabela roleta_numeros com ${numbersPerRoulette} números por roleta...`);
-    
-    // 1. Buscar todas as roletas
-    const roletas = await fetchRoletas();
-    
-    if (roletas.length === 0) {
-      console.log('Nenhuma roleta encontrada. Verifique se a tabela roletas possui registros.');
-      return;
-    }
-    
-    // 2. Para cada roleta, adicionar números aleatórios
-    for (const roleta of roletas) {
-      console.log(`Adicionando ${numbersPerRoulette} números para a roleta ${roleta.nome} (${roleta.id})...`);
-      
-      // Adicionar com um atraso entre os números para manter a ordem cronológica
-      for (let i = 0; i < numbersPerRoulette; i++) {
-        const numero = generateRandomRouletteNumber();
-        await addNumberToRoleta(roleta.id, roleta.nome, numero);
-        
-        // Pequeno atraso para garantir ordem cronológica nos timestamps
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-      
-      console.log(`Concluída a adição de números para roleta ${roleta.nome}`);
-    }
-    
-    console.log('População da tabela roleta_numeros concluída com sucesso!');
-  } catch (error) {
-    console.error('Erro durante a população da tabela roleta_numeros:', error);
-  }
-};
-
-// Execute a função se este arquivo for executado diretamente
-if (typeof window !== 'undefined' && window.location.pathname.includes('seed-numbers')) {
-  console.log('Executando script de população de números...');
-  seedRouletteNumbers().then(() => {
-    console.log('Script concluído.');
-  });
-}
 
 export default seedRouletteNumbers; 

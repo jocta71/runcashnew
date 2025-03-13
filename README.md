@@ -1,157 +1,85 @@
-# RunCash
+# RunCash - Sistema de Análise de Roletas
 
-Um sistema completo para rastreamento de roletas e análise de estratégias.
+## Sistema de Dados Reais
 
-## Estrutura do Projeto
+O sistema RunCash foi atualizado para utilizar apenas dados reais do MongoDB:
 
-O projeto foi reorganizado para uma estrutura mais clara e organizada:
+- Exibe apenas dados reais do MongoDB na página principal
+- Mostra mensagem "Sem Dados Disponíveis" quando não há números no banco
+- Conecta-se via WebSocket para atualizações em tempo real
 
-- **frontend/** - Interface de usuário React
-- **backend/** - API e lógica do servidor
-- **api/** - Endpoints da API
-- **docs/** - Toda a documentação do projeto
-- **scripts/** - Scripts de utilidades, banco de dados e manutenção
-
-Para detalhes completos sobre a reorganização, consulte [docs/reorganizacao-projeto.md](docs/reorganizacao-projeto.md).
-
-## Principais Recursos
-
-- Rastreamento em tempo real de números de roletas
-- Análise estatística e sugestões de estratégias
-- Dashboard de dados históricos
-- Autenticação e gerenciamento de usuários
-- Sistema de pagamento para recursos premium
-
-## Início Rápido
+## Configuração e Uso
 
 ### Pré-requisitos
 
-- Node.js 16+
-- Python 3.9+
-- Um banco de dados Supabase
+- Node.js (v16 ou superior)
+- MongoDB instalado e em execução (na porta padrão 27017)
+- Git (opcional, para clonar o repositório)
 
-### Instalação
+### Passos para Execução
 
-1. Clone o repositório:
+1. **Iniciar o Servidor WebSocket** (conecta ao MongoDB):
    ```
-   git clone https://github.com/jocta71/runcashnew.git
-   cd runcashnew
+   cd backend
+   .\start_websocket.ps1
    ```
+   Isso iniciará o servidor WebSocket na porta 5000, que conectará ao MongoDB e servirá os dados em tempo real.
 
-2. Instale as dependências do frontend:
+2. **Iniciar o Frontend**:
    ```
    cd frontend
    npm install
+   npm run dev
+   ```
+   Isso iniciará o servidor de desenvolvimento do frontend.
+
+3. **Acessar o Sistema**:
+   ```
+   http://localhost:5173/
    ```
 
-3. Instale as dependências do backend:
+### Populando o Banco de Dados
+
+Se não houver dados no MongoDB, você precisará inserir alguns números:
+
+1. **Usar o Script de Exemplo**:
    ```
-   cd ../backend/api
-   npm install
-   cd ../scraper
-   pip install -r requirements.txt
+   cd backend
+   .\insert_data.ps1
    ```
+   Isso insere dados de exemplo para todas as roletas disponíveis.
 
-4. Configure as variáveis de ambiente:
-   - Copie `.env.example` para `.env` nas pastas frontend e backend
-   - Preencha com suas próprias credenciais
-
-### Executando o Projeto
-
-1. Para executar apenas o frontend:
+2. **Inserir Números Manualmente**:
    ```
-   npm run frontend:dev
+   cd backend
+   node test_insert_number.js "Lightning Roulette" 17
    ```
-
-2. Para executar apenas a API do backend:
-   ```
-   npm run backend:api
-   ```
-
-3. Para executar o scraper do backend:
-   ```
-   npm run backend:scraper
-   ```
-
-4. Para executar tudo ao mesmo tempo:
-   ```
-   npm start
-   ```
-
-## Estrutura de Diretórios
-
-```
-/
-├── frontend/               # Interface do usuário
-│   ├── api/                # APIs serverless do frontend
-│   ├── src/                # Código fonte
-│   └── ...
-├── backend/                # Componentes do servidor
-│   ├── api/                # API REST principal
-│   │   ├── payment/        # APIs de processamento de pagamento
-│   │   └── ...
-│   ├── scraper/            # Scraper para coleta de dados
-│   └── ...
-├── docs/                   # Documentação
-├── scripts/                # Scripts utilitários
-└── ...
-```
-
-## Documentação
-
-Consulte o diretório `docs/` para documentação detalhada:
-
-- [Instruções de Deployment](docs/deploy-instructions.md)
-- [Configuração do Stripe](docs/STRIPE_SETUP.md)
-- [API Keys](docs/API_KEYS.md)
-
-## Desenvolvimento
-
-Para contribuir com o projeto, confira as informações em [docs/github-upload-instructions.md](docs/github-upload-instructions.md).
-
-## Licença
-
-Este projeto está licenciado sob a Licença MIT.
+   Isso insere o número 17 para a roleta "Lightning Roulette".
 
 ## Solução de Problemas
 
-### Números Não Aparecem em Tempo Real
+Se você não estiver vendo nenhum número na página, verifique os seguintes itens:
 
-Se os números das roletas não estiverem aparecendo em tempo real, verifique as seguintes configurações:
+1. Verifique se o servidor WebSocket está em execução (deve mostrar "Conectado em tempo real" no topo da página)
+2. Execute o script `.\insert_data.ps1` para inserir dados de exemplo
+3. Recarregue a página para ver os novos dados
 
-1. **Ative a Replicação no Supabase**:
-   - Acesse o dashboard do Supabase
-   - Navegue até Database > Replication
-   - Clique na aba "Tables" e ative a replicação para a tabela `roleta_numeros`
-   - Certifique-se de que os eventos INSERT estão habilitados
+## Desenvolvimento
 
-2. **Verifique a Conexão com o Supabase**:
-   - Confirme se as variáveis de ambiente estão configuradas corretamente:
-     ```
-     VITE_SUPABASE_URL=sua_url_do_supabase
-     VITE_SUPABASE_API_KEY=sua_chave_anon_do_supabase
-     ```
-   - Essas variáveis devem estar no arquivo `.env` na pasta `frontend/`
+### Estrutura de Arquivos
 
-3. **Depuração de Conexões em Tempo Real**:
-   - Abra o console do navegador (F12) para ver os logs
-   - Procure por mensagens com o prefixo [REALTIME]
-   - Verifique se há erros relacionados às inscrições do Supabase
+- `frontend/`: Aplicação React 
+  - `src/pages/Index.tsx`: Página principal (dados reais do MongoDB)
+  
+- `backend/`: Servidor WebSocket e API
+  - `websocket_server.js`: Servidor que conecta ao MongoDB
+  - `insert_sample_data.js`: Script para inserir dados de exemplo
+  - `test_insert_number.js`: Script para inserir um número específico
 
-4. **Verifique o Scraper**:
-   - Certifique-se de que o backend/scraper está coletando dados e inserindo-os no Supabase
-   - Confirme que os dados estão sendo inseridos na tabela `roleta_numeros` com a coluna `roleta_nome` preenchida corretamente
+### Criando Novas Roletas
 
-5. **Teste Manualmente a Replicação**:
-   - Em modo de desenvolvimento, cada cartão de roleta possui um botão "Testar Realtime"
-   - Este botão insere um número aleatório na tabela `roleta_numeros` e permite verificar se a replicação está funcionando
-   - Verifique o console para logs detalhados do processo
+Para adicionar uma nova roleta, insira um número para ela no MongoDB e ela aparecerá automaticamente na página principal.
 
-6. **Verificação pelo Supabase Dashboard**:
-   - Vá para Database > API no dashboard do Supabase
-   - Execute uma inserção manual:
-     ```sql
-     INSERT INTO roleta_numeros (roleta_nome, roleta_id, numero, cor, timestamp)
-     VALUES ('Auto-Roulette', 'test-manual', 7, 'red', NOW());
-     ```
-   - Observe o console do navegador para ver se o evento foi recebido 
+## Licença
+
+Este projeto está licenciado sob a licença MIT. 

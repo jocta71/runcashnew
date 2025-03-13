@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 
 export interface ColorDistribution {
   cor: string;
@@ -35,6 +34,10 @@ export interface RoletaAnalytics {
   error: string | null;
 }
 
+/**
+ * Versão mock do hook useRoletaAnalytics que não depende do Supabase
+ * Fornece dados simulados para análises de roleta
+ */
 export function useRoletaAnalytics(roletaNome: string, refreshInterval: number = 15000) {
   const [analytics, setAnalytics] = useState<RoletaAnalytics>({
     colorDistribution: [],
@@ -45,205 +48,118 @@ export function useRoletaAnalytics(roletaNome: string, refreshInterval: number =
     error: null
   });
   
-  // Função para buscar a distribuição de cores
-  const fetchColorDistribution = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('roleta_numeros')
-        .select('cor')
-        .eq('roleta_nome', roletaNome)
-        .order('timestamp', { ascending: false })
-        .limit(100);
-        
-      if (error) throw error;
-      
-      // Calcular distribuição
-      const distribution: Record<string, number> = {};
-      data.forEach(item => {
-        distribution[item.cor] = (distribution[item.cor] || 0) + 1;
-      });
-      
-      const result = Object.entries(distribution).map(([cor, total]) => ({
-        cor,
-        total,
-        porcentagem: Number(((total / data.length) * 100).toFixed(1))
-      }));
-      
-      return result;
-    } catch (error: any) {
-      console.error('Erro ao buscar distribuição de cores:', error);
-      throw error;
-    }
+  // Função para gerar dados de distribuição de cores mock
+  const generateMockColorDistribution = (): ColorDistribution[] => {
+    return [
+      { cor: 'vermelho', total: 48, porcentagem: 48.0 },
+      { cor: 'preto', total: 46, porcentagem: 46.0 },
+      { cor: 'verde', total: 6, porcentagem: 6.0 }
+    ];
   };
   
-  // Função para buscar frequência de números
-  const fetchNumberFrequency = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('roleta_numeros')
-        .select('numero, cor')
-        .eq('roleta_nome', roletaNome)
-        .order('timestamp', { ascending: false })
-        .limit(100);
-        
-      if (error) throw error;
+  // Função para gerar dados de frequência de números mock
+  const generateMockNumberFrequency = (): NumberFrequency[] => {
+    const result: NumberFrequency[] = [];
+    
+    // Gerar dados para todos os números de 0 a 36
+    for (let i = 0; i <= 36; i++) {
+      // Determinar a cor do número
+      let cor = 'verde';
+      if (i > 0) {
+        const redNumbers = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+        cor = redNumbers.includes(i) ? 'vermelho' : 'preto';
+      }
       
-      // Calcular frequência
-      const frequency: Record<number, { total: number, cor: string }> = {};
-      data.forEach(item => {
-        if (!frequency[item.numero]) {
-          frequency[item.numero] = { total: 0, cor: item.cor };
-        }
-        frequency[item.numero].total++;
-      });
+      // Gerar um valor aleatório para a frequência
+      const total = Math.floor(Math.random() * 6) + 1; // 1-6
       
-      const result = Object.entries(frequency).map(([numero, { total, cor }]) => ({
-        numero: Number(numero),
+      result.push({
+        numero: i,
         total,
-        porcentagem: Number(((total / data.length) * 100).toFixed(1)),
+        porcentagem: Number(((total / 100) * 100).toFixed(1)),
         cor
-      }));
-      
-      return result.sort((a, b) => b.total - a.total);
-    } catch (error: any) {
-      console.error('Erro ao buscar frequência de números:', error);
-      throw error;
+      });
     }
+    
+    // Ordenar por frequência (total) decrescente
+    return result.sort((a, b) => b.total - a.total);
   };
   
-  // Função para detectar sequências atuais
-  const detectCurrentStreak = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('roleta_numeros')
-        .select('numero, cor, paridade')
-        .eq('roleta_nome', roletaNome)
-        .order('timestamp', { ascending: false })
-        .limit(20);
-        
-      if (error) throw error;
-      if (!data.length) return { type: null, value: null, count: 0 };
-      
-      // Verificar sequência de cor
-      let colorStreak = 1;
-      const firstColor = data[0].cor;
-      for (let i = 1; i < data.length; i++) {
-        if (data[i].cor === firstColor) {
-          colorStreak++;
-        } else {
-          break;
-        }
-      }
-      
-      // Verificar sequência de paridade
-      let parityStreak = 1;
-      const firstParity = data[0].paridade;
-      for (let i = 1; i < data.length; i++) {
-        if (data[i].paridade === firstParity) {
-          parityStreak++;
-        } else {
-          break;
-        }
-      }
-      
-      // Retornar a sequência mais longa
-      if (colorStreak >= parityStreak) {
-        return { type: 'cor', value: firstColor, count: colorStreak };
-      } else {
-        return { type: 'paridade', value: firstParity, count: parityStreak };
-      }
-    } catch (error: any) {
-      console.error('Erro ao detectar sequência atual:', error);
-      throw error;
+  // Função para gerar dados de sequência atual mock
+  const generateMockCurrentStreak = (): CurrentStreak => {
+    const types = ['cor', 'paridade'];
+    const values = ['vermelho', 'preto', 'par', 'ímpar'];
+    
+    const randomType = types[Math.floor(Math.random() * types.length)];
+    let randomValue;
+    
+    if (randomType === 'cor') {
+      randomValue = values[Math.floor(Math.random() * 2)]; // vermelho ou preto
+    } else {
+      randomValue = values[2 + Math.floor(Math.random() * 2)]; // par ou ímpar
     }
+    
+    return {
+      type: randomType,
+      value: randomValue,
+      count: Math.floor(Math.random() * 5) + 1 // 1-5
+    };
   };
   
-  // Função para verificar dúzias ausentes
-  const checkMissingDozens = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('roleta_numeros')
-        .select('numero, dezena')
-        .eq('roleta_nome', roletaNome)
-        .order('timestamp', { ascending: false })
-        .limit(100);
-        
-      if (error) throw error;
+  // Função para gerar dados de dúzias ausentes mock
+  const generateMockMissingDozens = (): MissingDozen[] => {
+    const dozens = ['primeira', 'segunda', 'terceira'];
+    const result: MissingDozen[] = [];
+    
+    for (const dozen of dozens) {
+      const ausencia = Math.floor(Math.random() * 20) + 1; // 1-20
       
-      const dozens = ['primeira', 'segunda', 'terceira'];
-      const result: MissingDozen[] = [];
-      
-      for (const dozen of dozens) {
-        const index = data.findIndex(item => item.dezena === dozen);
-        
-        result.push({
-          dezena: dozen,
-          ultima_aparicao: index >= 0 ? index + 1 : 0,
-          ausencia: index >= 0 ? index : 100
-        });
-      }
-      
-      return result.sort((a, b) => b.ausencia - a.ausencia);
-    } catch (error: any) {
-      console.error('Erro ao verificar dúzias ausentes:', error);
-      throw error;
+      result.push({
+        dezena: dozen,
+        ultima_aparicao: ausencia,
+        ausencia
+      });
     }
+    
+    return result.sort((a, b) => b.ausencia - a.ausencia);
   };
   
-  // Função principal para buscar todas as análises
-  const fetchAnalytics = async () => {
+  // Função principal para gerar todas as análises mock
+  const generateMockAnalytics = () => {
     try {
-      const [colors, numbers, streak, dozens] = await Promise.all([
-        fetchColorDistribution(),
-        fetchNumberFrequency(),
-        detectCurrentStreak(),
-        checkMissingDozens()
-      ]);
+      console.log(`[MOCK] Gerando dados de análise para roleta: ${roletaNome}`);
       
       setAnalytics({
-        colorDistribution: colors,
-        numberFrequency: numbers,
-        currentStreak: streak,
-        missingDozens: dozens,
+        colorDistribution: generateMockColorDistribution(),
+        numberFrequency: generateMockNumberFrequency(),
+        currentStreak: generateMockCurrentStreak(),
+        missingDozens: generateMockMissingDozens(),
         loading: false,
         error: null
       });
+      
+      console.log(`[MOCK] Dados de análise gerados com sucesso para: ${roletaNome}`);
     } catch (error: any) {
-      console.error('Erro ao buscar análises:', error);
+      console.error('[MOCK] Erro ao gerar análises:', error);
       setAnalytics(prev => ({ 
         ...prev, 
-        error: error.message || 'Erro ao buscar análises', 
+        error: error.message || 'Erro ao gerar análises', 
         loading: false 
       }));
     }
   };
   
-  // Efeito para buscar dados iniciais e configurar subscription
+  // Efeito para gerar dados iniciais e configurar interval para atualizações
   useEffect(() => {
-    // Buscar dados iniciais
-    fetchAnalytics();
+    // Gerar dados iniciais
+    generateMockAnalytics();
     
-    // Intervalo de refresh como fallback
-    const interval = setInterval(fetchAnalytics, refreshInterval);
-    
-    // Configurar subscription do Supabase
-    const subscription = supabase
-      .channel('roleta_analytics_changes')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'roleta_numeros',
-        filter: 'roleta_nome=eq.' + roletaNome
-      }, () => {
-        // Atualizar análises quando novos números forem inseridos
-        fetchAnalytics();
-      })
-      .subscribe();
+    // Intervalo de refresh para simular atualizações
+    const interval = setInterval(generateMockAnalytics, refreshInterval);
     
     // Limpeza
     return () => {
       clearInterval(interval);
-      supabase.removeChannel(subscription);
     };
   }, [roletaNome, refreshInterval]);
   

@@ -537,11 +537,21 @@ def inserir_numero_direto_api(roleta_id, roleta_nome, numero, timestamp):
             logger.error(f"Não foi possível garantir a existência da roleta {roleta_nome} (ID: {roleta_id})")
             return False
         
+        # Determinar a cor do número
+        cor = 'verde' if numero_int == 0 else 'vermelho' if numero_int % 2 == 1 else 'preto'
+        
+        # Exceções específicas para a roleta europeia - verificar se estão corretas
+        # Números vermelhos: 1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36
+        numeros_vermelhos = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
+        if numero_int > 0:  # 0 é verde
+            cor = 'vermelho' if numero_int in numeros_vermelhos else 'preto'
+        
         # Preparar dados para inserção
         data = {
             "roleta_id": roleta_uuid,
             "roleta_nome": roleta_nome,
             "numero": numero_int,
+            "cor": cor,
             "timestamp": timestamp
         }
         
@@ -579,6 +589,23 @@ def inserir_numero_direto_api(roleta_id, roleta_nome, numero, timestamp):
             return True
         else:
             logger.error(f"Erro HTTP {response.status_code} ao inserir número {numero_int}: {response.text}")
+            
+            # Mensagem de instruções para resolver o problema
+            if "Could not find the 'created_at' column" in response.text:
+                error_message = """
+                Erro: Coluna 'created_at' não encontrada na tabela roleta_numeros.
+                
+                Para corrigir, execute o seguinte SQL no painel do Supabase:
+                
+                -- Adicionar a coluna created_at que está faltando
+                ALTER TABLE roleta_numeros
+                ADD COLUMN created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+                
+                -- Atualizar valores existentes (copiar de timestamp)
+                UPDATE roleta_numeros SET created_at = timestamp WHERE created_at IS NULL;
+                """
+                logger.error(error_message)
+            
             return False
             
     except Exception as e:

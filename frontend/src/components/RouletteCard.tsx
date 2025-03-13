@@ -8,11 +8,12 @@ import WinRateDisplay from './roulette/WinRateDisplay';
 import RouletteTrendChart from './roulette/RouletteTrendChart';
 import SuggestionDisplay from './roulette/SuggestionDisplay';
 import RouletteActionButtons from './roulette/RouletteActionButtons';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import RouletteStatsModal from './roulette/RouletteStatsModal';
 import { fetchRouletteLatestNumbersByName } from '@/integrations/api/rouletteService';
 import { useRoletaAnalytics } from '@/hooks/useRoletaAnalytics';
+import EventService from '@/services/EventService';
+import type { RouletteNumberEvent } from '@/services/EventService';
 
 interface RouletteCardProps {
   name?: string;
@@ -29,6 +30,40 @@ const persistentState: Record<string, {
   lastUpdated: number,
   hasLoaded: boolean
 }> = {};
+
+// Sistema de eventos mock para simular o Supabase Realtime
+interface MockEventSystem {
+  callbacks: Record<string, ((data: any) => void)[]>;
+  subscribe: (channel: string, callback: (data: any) => void) => { unsubscribe: () => void };
+  publish: (channel: string, data: any) => void;
+}
+
+// Criar sistema de eventos global
+const mockEventSystem: MockEventSystem = {
+  callbacks: {},
+  subscribe: (channel: string, callback: (data: any) => void) => {
+    if (!mockEventSystem.callbacks[channel]) {
+      mockEventSystem.callbacks[channel] = [];
+    }
+    mockEventSystem.callbacks[channel].push(callback);
+    
+    // Retornar objeto com método para cancelar a inscrição
+    return {
+      unsubscribe: () => {
+        mockEventSystem.callbacks[channel] = mockEventSystem.callbacks[channel]
+          .filter(cb => cb !== callback);
+      }
+    };
+  },
+  publish: (channel: string, data: any) => {
+    if (mockEventSystem.callbacks[channel]) {
+      mockEventSystem.callbacks[channel].forEach(callback => callback(data));
+    }
+  }
+};
+
+// Anexar ao objeto window para debugging
+(window as any).__mockEventSystem = mockEventSystem;
 
 const RouletteCard = ({ name, roleta_nome, lastNumbers: initialLastNumbers, wins, losses, trend }: RouletteCardProps) => {
   const navigate = useNavigate();
@@ -71,17 +106,17 @@ const RouletteCard = ({ name, roleta_nome, lastNumbers: initialLastNumbers, wins
   const [statsOpen, setStatsOpen] = useState(false);
   const [usingSupabaseData, setUsingSupabaseData] = useState(false);
   
-  // Referência para o intervalo de polling (desativado por padrão)
+  // Referência para o intervalo de polling
   const pollingIntervalRef = useRef<number | null>(null);
   
-  // Referência para a assinatura do Supabase Realtime
-  const supabaseSubscriptionRef = useRef<any>(null);
+  // Referência para a assinatura de eventos mock
+  const eventSubscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
   
   // Registra o componente como montado
   const isMounted = useRef(true);
   
   // Controle para ativar/desativar o polling
-  const ENABLE_POLLING = false; // Desativado por padrão
+  const ENABLE_POLLING = true; // Ativado por padrão para a versão mock
   const POLLING_INTERVAL = 15000; // 15 segundos
 
   // Função para verificar se a página está visível
@@ -249,8 +284,8 @@ const RouletteCard = ({ name, roleta_nome, lastNumbers: initialLastNumbers, wins
     };
     
     if (needsUpdate()) {
-      // Buscar dados iniciais do Supabase
-      console.log(`[CICLO][${roletaNome}] Buscando dados iniciais no Supabase...`);
+      // Buscar dados iniciais
+      console.log(`[CICLO][${roletaNome}] Buscando dados iniciais...`);
       
       fetchRouletteLatestNumbersByName(roletaNome, 20)
         .then(numbers => {
@@ -260,7 +295,6 @@ const RouletteCard = ({ name, roleta_nome, lastNumbers: initialLastNumbers, wins
             console.log(`[CICLO][${roletaNome}] Recebidos ${numbers.length} números`);
             const processedNumbers = numbers.map(n => Number(n));
             setLastNumbers(processedNumbers);
-            setUsingSupabaseData(true);
             
             // Atualizar estado persistente
             persistentState[roletaNome] = {
@@ -269,7 +303,7 @@ const RouletteCard = ({ name, roleta_nome, lastNumbers: initialLastNumbers, wins
               hasLoaded: true
             };
           } else if (initialLastNumbers && initialLastNumbers.length > 0) {
-            console.log(`[CICLO][${roletaNome}] Sem dados do Supabase, usando iniciais`);
+            console.log(`[CICLO][${roletaNome}] Sem dados da API, usando iniciais`);
             setLastNumbers(initialLastNumbers);
           }
           
@@ -292,172 +326,45 @@ const RouletteCard = ({ name, roleta_nome, lastNumbers: initialLastNumbers, wins
       setDataSeeded(true);
     }
     
-    // Configurar assinatura do Supabase Realtime para a tabela roleta_numeros
-    let subscription: any = null;
-    
+    // Configurar assinatura para receber novas atualizações em tempo real
     if (isDocumentVisible()) {
       try {
-        console.log(`[REALTIME][${roletaNome}] Configurando canal Realtime...`);
+        console.log(`[REALTIME][${roletaNome}] Configurando sistema de eventos...`);
         
-        // Verificar se as variáveis de ambiente estão disponíveis
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const supabaseKey = import.meta.env.VITE_SUPABASE_API_KEY;
+        // Obter a instância do serviço de eventos
+        const eventService = EventService.getInstance();
         
-        if (!supabaseUrl || !supabaseKey) {
-          console.error(`[REALTIME][${roletaNome}] Erro: Variáveis de ambiente do Supabase não configuradas corretamente.`);
-          console.error('VITE_SUPABASE_URL e VITE_SUPABASE_API_KEY são necessárias no arquivo .env');
-        } else {
-          console.log(`[REALTIME][${roletaNome}] Conectando ao Supabase em: ${supabaseUrl.substring(0, 20)}...`);
-        }
-        
-        // Canal com um nome único baseado na roleta e timestamp
-        const channelName = `roleta_numeros_changes_${roletaNome}_${Date.now()}`;
-        console.log(`[REALTIME][${roletaNome}] Nome do canal: ${channelName}`);
-        
-        subscription = supabase
-          .channel(channelName)
-          .on('postgres_changes', { 
-            event: 'INSERT', 
-            schema: 'public', 
-            table: 'roleta_numeros',
-            filter: 'roleta_nome=eq.' + roletaNome
-          }, (payload) => {
-            if (!isMounted.current) return;
-            
-            console.log(`[REALTIME][${roletaNome}] Recebido payload:`, payload);
-            
-            if (payload.new && payload.new.roleta_nome === roletaNome) {
-              const novoNumero = Number(payload.new.numero);
-              console.log(`[REALTIME][${roletaNome}] Novo número: ${novoNumero} (${typeof novoNumero})`);
-              
-              // Validar número antes de atualizar
-              if (!isNaN(novoNumero) && novoNumero >= 0 && novoNumero <= 36) {
-                // Usar a função updateLastNumber para atualizar apenas o último número
-                updateLastNumber(novoNumero);
-                
-                // Notificação visual para o usuário
-                toast({
-                  title: "Novo número!",
-                  description: `${roletaNome}: ${novoNumero}`,
-                  duration: 3000
-                });
-              } else {
-                console.error(`[REALTIME][${roletaNome}] Número inválido recebido: ${novoNumero}`);
-              }
-            } else {
-              console.log(`[REALTIME][${roletaNome}] Payload recebido mas não corresponde ao filtro atual:`, payload);
-            }
-          })
-          .subscribe((status: string) => {
-            console.log(`[REALTIME][${roletaNome}] Status da assinatura: ${status}`);
-            if (status === 'SUBSCRIBED') {
-              console.log(`[REALTIME][${roletaNome}] Inscrição bem-sucedida! Aguardando eventos.`);
-              // Indicar visualmente que a assinatura está ativa
-              toast({
-                title: "Conectado!",
-                description: `Monitorando ${roletaNome} em tempo real`,
-                duration: 2000
-              });
-            } else if (status === 'CHANNEL_ERROR') {
-              console.error(`[REALTIME][${roletaNome}] Erro no canal. Verifique se a replicação está ativada no Supabase.`);
-              toast({
-                title: "Erro de conexão",
-                description: "Não foi possível conectar ao serviço em tempo real",
-                variant: "destructive",
-                duration: 5000
-              });
-            } else if (status === 'TIMED_OUT') {
-              console.error(`[REALTIME][${roletaNome}] Tempo esgotado ao conectar ao Supabase Realtime.`);
-              toast({
-                title: "Timeout",
-                description: "Conexão com o serviço em tempo real expirou",
-                variant: "destructive",
-                duration: 5000
-              });
-            }
-          });
+        // Define o callback que será chamado quando um novo número for recebido
+        const handleNewNumber = (event: RouletteNumberEvent) => {
+          if (!isMounted.current) return;
           
-        supabaseSubscriptionRef.current = subscription;
+          console.log(`[REALTIME][${roletaNome}] Recebido evento:`, event);
+          
+          if (event.roleta_nome === roletaNome) {
+            const novoNumero = Number(event.numero);
+            console.log(`[REALTIME][${roletaNome}] Novo número: ${novoNumero}`);
+            
+            // Validar número antes de atualizar
+            if (!isNaN(novoNumero) && novoNumero >= 0 && novoNumero <= 36) {
+              // Usar a função updateLastNumber para atualizar apenas o último número
+              updateLastNumber(novoNumero);
+            }
+          }
+        };
         
-        // Verificar após 5 segundos se houve alguma atividade
-        setTimeout(() => {
-          console.log(`[REALTIME][${roletaNome}] Verificação de atividade após 5s: Canal ativo e aguardando eventos.`);
-          console.log(`[REALTIME][${roletaNome}] Dica: Verifique se a replicação está ativada no dashboard do Supabase.`);
-        }, 5000);
+        // Assinar o evento para esta roleta específica
+        eventService.subscribe(roletaNome, handleNewNumber);
+        
+        // Limpar a assinatura quando o componente for desmontado
+        return () => {
+          console.log(`[REALTIME][${roletaNome}] Limpando assinaturas de eventos`);
+          eventService.unsubscribe(roletaNome, handleNewNumber);
+        };
       } catch (error) {
-        console.error(`[REALTIME][${roletaNome}] Erro ao configurar Realtime:`, error);
+        console.error(`[ERRO][${roletaNome}] Erro ao configurar eventos em tempo real:`, error);
       }
     }
-    
-    // Registrar evento de visibilidade
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        console.log(`[VISIBILIDADE][${roletaNome}] Documento visível, verificando estado`);
-        
-        // Verificar se precisamos atualizar dados
-        const lastUpdated = persistentState[roletaNome]?.lastUpdated || 0;
-        const now = Date.now();
-        
-        // Aumentar o intervalo para 30 minutos em vez de 10 minutos para reduzir recargas
-        const thirtyMinutes = 30 * 60 * 1000;
-        
-        // Verificar se o sistema está congelado (bloqueio anti-recarga)
-        if (areComponentsFrozen()) {
-          console.log(`[VISIBILIDADE][${roletaNome}] Componentes congelados, mantendo estado atual`);
-          return;
-        }
-        
-        // Só atualizar se os dados forem muito antigos
-        if (now - lastUpdated > thirtyMinutes) {
-          console.log(`[VISIBILIDADE][${roletaNome}] Dados antigos, atualizando...`);
-          
-          fetchRouletteLatestNumbersByName(roletaNome, 1)
-            .then(numbers => {
-              if (!isMounted.current) return;
-              
-              if (numbers && numbers.length > 0) {
-                const novoNumero = Number(numbers[0]);
-                
-                // Comparar com o número atual antes de atualizar
-                if (lastNumbers.length === 0 || lastNumbers[0] !== novoNumero) {
-                  // Atualizar apenas o último número
-                  updateLastNumber(novoNumero);
-                } else {
-                  console.log(`[VISIBILIDADE][${roletaNome}] Mesmo número, não atualizando UI`);
-                  // Apenas atualizar o timestamp sem recarregar a UI
-                  persistentState[roletaNome] = {
-                    ...(persistentState[roletaNome] || {}),
-                    lastNumbers: lastNumbers,  // Garantir que lastNumbers está presente
-                    lastUpdated: now,
-                    hasLoaded: true
-                  };
-                }
-              }
-            })
-            .catch(error => {
-              console.error(`[ERRO][${roletaNome}] Erro ao atualizar dados:`, error);
-            });
-        } else {
-          console.log(`[VISIBILIDADE][${roletaNome}] Dados recentes (${Math.round((now - lastUpdated)/1000)}s), mantendo estado`);
-        }
-      }
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    // Limpeza
-    return () => {
-      console.log(`[CICLO][${roletaNome}] Componente desmontado`);
-      isMounted.current = false;
-      
-      if (subscription) {
-        console.log(`[REALTIME][${roletaNome}] Removendo assinatura`);
-        supabase.removeChannel(subscription);
-      }
-      
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [roletaNome]); // Dependência apenas do nome da roleta
+  }, [roletaNome, updateLastNumber]);
 
   const verificarEstrategia = (numero: number) => {
     // Placeholder para verificação de estratégia

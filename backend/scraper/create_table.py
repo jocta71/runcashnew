@@ -9,6 +9,7 @@ import os
 import logging
 from dotenv import load_dotenv
 from supabase import create_client
+import sys
 
 # Configuração de logging
 logging.basicConfig(
@@ -32,12 +33,15 @@ CREATE TABLE IF NOT EXISTS roleta_numeros (
   roleta_id TEXT NOT NULL,
   roleta_nome TEXT NOT NULL,
   numero INTEGER NOT NULL CHECK (numero >= 0 AND numero <= 36),
+  cor TEXT,
+  timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Índices para melhorar a performance das consultas
 CREATE INDEX IF NOT EXISTS idx_roleta_numeros_roleta_id ON roleta_numeros(roleta_id);
 CREATE INDEX IF NOT EXISTS idx_roleta_numeros_numero ON roleta_numeros(numero);
+CREATE INDEX IF NOT EXISTS idx_roleta_numeros_timestamp ON roleta_numeros(timestamp);
 CREATE INDEX IF NOT EXISTS idx_roleta_numeros_created_at ON roleta_numeros(created_at);
 
 -- Comentários para documentar a tabela
@@ -45,46 +49,92 @@ COMMENT ON TABLE roleta_numeros IS 'Armazena os números extraídos de cada role
 COMMENT ON COLUMN roleta_numeros.roleta_id IS 'ID da roleta';
 COMMENT ON COLUMN roleta_numeros.roleta_nome IS 'Nome da roleta para facilitar consultas';
 COMMENT ON COLUMN roleta_numeros.numero IS 'Número extraído da roleta (0-36)';
+COMMENT ON COLUMN roleta_numeros.cor IS 'Cor do número (vermelho, preto, verde)';
+COMMENT ON COLUMN roleta_numeros.timestamp IS 'Data e hora em que o número foi extraído (para compatibilidade)';
 COMMENT ON COLUMN roleta_numeros.created_at IS 'Data e hora em que o número foi extraído';
 """
 
 # Função para criar a tabela
 def criar_tabela_roleta_numeros():
-    """
-    Cria a tabela roleta_numeros no Supabase
-    """
-    # Garantir que a URL do Supabase esteja corretamente formatada
-    supabase_url = SUPABASE_URL
-    if supabase_url.startswith('@'):
-        supabase_url = supabase_url[1:]
-    if not supabase_url.startswith('http'):
-        supabase_url = f"https://{supabase_url}"
-    
+    """Cria a tabela roleta_numeros no Supabase"""
     try:
-        # Inicializar cliente Supabase
-        supabase = create_client(supabase_url, SUPABASE_KEY)
-        logger.info(f"Cliente Supabase inicializado com sucesso: {supabase_url}")
+        logger.info("Conectando ao Supabase...")
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
         
-        # Executar SQL
-        logger.info("Executando SQL para criar a tabela roleta_numeros...")
-        response = supabase.postgrest.rpc('sql', {'command': CREATE_TABLE_SQL}).execute()
+        # Verificar se a tabela já existe
+        try:
+            logger.info("Verificando se a tabela roleta_numeros já existe...")
+            # Tentar fazer uma consulta simples
+            supabase.table("roleta_numeros").select("id").limit(1).execute()
+            logger.info("Tabela roleta_numeros já existe. Verificando se precisa de atualização...")
+            
+            # Se a tabela já existe, verificar se os novos campos existem
+            atualizar_tabela_existente(supabase)
+        except Exception as e:
+            # Se não existir, criar a tabela
+            logger.info(f"Tabela roleta_numeros não existe ou erro ao consultar: {str(e)}")
+            logger.info("Criando tabela roleta_numeros...")
+            
+            # Executar o SQL de criação da tabela
+            response = supabase.postgrest.rpc('sql', {'command': CREATE_TABLE_SQL}).execute()
+            logger.info(f"Resposta da criação da tabela: {response}")
+            
+            # Criar trigger para limitar registros
+            criar_trigger(supabase)
         
-        logger.info("Tabela roleta_numeros criada com sucesso!")
+        logger.info("Operação concluída.")
+        return True
         
-        # Criar o trigger para limitar o número de registros
-        criar_trigger(supabase)
+    except Exception as e:
+        logger.error(f"Erro ao criar/verificar tabela: {str(e)}")
+        return False
+
+def atualizar_tabela_existente(supabase):
+    """Atualiza a tabela roleta_numeros caso ela já exista"""
+    try:
+        logger.info("Verificando e atualizando campos na tabela existente...")
+        
+        # SQL para adicionar campos que podem estar faltando
+        update_sql = """
+        -- Adicionar campo cor se não existir
+        DO $$
+        BEGIN
+            IF NOT EXISTS(SELECT 1 FROM information_schema.columns 
+                          WHERE table_name='roleta_numeros' AND column_name='cor') THEN
+                ALTER TABLE roleta_numeros ADD COLUMN cor TEXT;
+            END IF;
+        END $$;
+        
+        -- Adicionar campo timestamp se não existir
+        DO $$
+        BEGIN
+            IF NOT EXISTS(SELECT 1 FROM information_schema.columns 
+                          WHERE table_name='roleta_numeros' AND column_name='timestamp') THEN
+                ALTER TABLE roleta_numeros ADD COLUMN timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+                -- Copiar created_at para timestamp para registros existentes
+                UPDATE roleta_numeros SET timestamp = created_at WHERE timestamp IS NULL;
+            END IF;
+        END $$;
+        
+        -- Criar índices se não existirem
+        CREATE INDEX IF NOT EXISTS idx_roleta_numeros_timestamp ON roleta_numeros(timestamp);
+        """
+        
+        # Executar o SQL de atualização
+        response = supabase.postgrest.rpc('sql', {'command': update_sql}).execute()
+        logger.info(f"Resposta da atualização da tabela: {response}")
         
         return True
     except Exception as e:
-        logger.error(f"Erro ao criar tabela: {str(e)}")
+        logger.error(f"Erro ao atualizar a tabela existente: {str(e)}")
         return False
 
 def criar_trigger(supabase):
-    """
-    Cria a função e trigger para limitar o número de registros
-    """
+    """Cria um trigger para limitar o número de registros por roleta"""
     try:
-        # SQL para criar a função e o trigger
+        logger.info("Criando trigger para limitar registros por roleta...")
+        
+        # SQL para criar a função e trigger
         trigger_sql = """
         -- Função para limitar o número de registros por roleta
         CREATE OR REPLACE FUNCTION limit_roleta_numeros() RETURNS TRIGGER AS $$
@@ -103,7 +153,7 @@ def criar_trigger(supabase):
             FOR oldest_records IN (
               SELECT id FROM roleta_numeros 
               WHERE roleta_id = NEW.roleta_id 
-              ORDER BY created_at ASC 
+              ORDER BY timestamp ASC 
               LIMIT (current_count - max_records_per_roleta + 1)
             ) LOOP
               DELETE FROM roleta_numeros WHERE id = oldest_records.id;
@@ -113,23 +163,42 @@ def criar_trigger(supabase):
           RETURN NEW;
         END;
         $$ LANGUAGE plpgsql;
-
-        -- Trigger para limitar o número de registros
+        
+        -- Remover o trigger se já existir
         DROP TRIGGER IF EXISTS trigger_limit_roleta_numeros ON roleta_numeros;
+        
+        -- Criar o trigger
         CREATE TRIGGER trigger_limit_roleta_numeros
         AFTER INSERT ON roleta_numeros
         FOR EACH ROW
         EXECUTE FUNCTION limit_roleta_numeros();
         """
         
-        logger.info("Criando função e trigger para limitar registros...")
+        # Executar o SQL para criar a função e o trigger
         response = supabase.postgrest.rpc('sql', {'command': trigger_sql}).execute()
+        logger.info(f"Resposta da criação do trigger: {response}")
         
-        logger.info("Função e trigger criados com sucesso!")
         return True
     except Exception as e:
-        logger.error(f"Erro ao criar função e trigger: {str(e)}")
+        logger.error(f"Erro ao criar trigger: {str(e)}")
         return False
 
 if __name__ == "__main__":
-    criar_tabela_roleta_numeros() 
+    # Configurar logging
+    logging.basicConfig(level=logging.INFO, 
+                        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger('create_table')
+    
+    # Verificar configuração
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        logger.error("As variáveis de ambiente SUPABASE_URL e SUPABASE_KEY devem estar definidas.")
+        sys.exit(1)
+    
+    logger.info("Iniciando criação/atualização da tabela roleta_numeros...")
+    
+    # Criar ou atualizar a tabela
+    if criar_tabela_roleta_numeros():
+        logger.info("Operação concluída com sucesso!")
+    else:
+        logger.error("Falha na operação.")
+        sys.exit(1) 

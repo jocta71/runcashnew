@@ -1,146 +1,190 @@
+/**
+ * Tipos mock para substituir os tipos gerados pelo Supabase
+ * Esta implementação não depende da API do Supabase
+ */
+
 export type Json =
   | string
   | number
   | boolean
   | null
   | { [key: string]: Json | undefined }
-  | Json[]
+  | Json[];
 
 export interface Database {
   public: {
     Tables: {
-      recent_numbers: {
-        Row: {
-          color: string
-          id: string
-          number: number
-          roulette_name: string
-          timestamp: string
-        }
-        Insert: {
-          color: string
-          id?: string
-          number: number
-          roulette_name: string
-          timestamp?: string
-        }
-        Update: {
-          color?: string
-          id?: string
-          number?: number
-          roulette_name?: string
-          timestamp?: string
-        }
-        Relationships: []
-      }
       roletas: {
         Row: {
-          id: string
-          nome: string
-          numeros: number[]
-          updated_at: string
-          estado_estrategia: string
-          numero_gatilho: number
-          numero_gatilho_anterior: number
-          terminais_gatilho: number[]
-          terminais_gatilho_anterior: number[]
-          vitorias: number
-          derrotas: number
-          sugestao_display: string
-        }
+          id: string;
+          created_at: string;
+          nome: string;
+          provider: string;
+          status: string;
+          ultima_atualizacao: string | null;
+        };
         Insert: {
-          id: string
-          nome: string
-          numeros: number[]
-          updated_at?: string
-          estado_estrategia?: string
-          numero_gatilho?: number
-          numero_gatilho_anterior?: number
-          terminais_gatilho?: number[]
-          terminais_gatilho_anterior?: number[]
-          vitorias?: number
-          derrotas?: number
-          sugestao_display?: string
-        }
+          id?: string;
+          created_at?: string;
+          nome: string;
+          provider: string;
+          status?: string;
+          ultima_atualizacao?: string | null;
+        };
         Update: {
-          id?: string
-          nome?: string
-          numeros?: number[]
-          updated_at?: string
-          estado_estrategia?: string
-          numero_gatilho?: number
-          numero_gatilho_anterior?: number
-          terminais_gatilho?: number[]
-          terminais_gatilho_anterior?: number[]
-          vitorias?: number
-          derrotas?: number
-          sugestao_display?: string
-        }
-        Relationships: []
-      }
-      subscriptions: {
+          id?: string;
+          created_at?: string;
+          nome?: string;
+          provider?: string;
+          status?: string;
+          ultima_atualizacao?: string | null;
+        };
+      };
+      roleta_numeros: {
         Row: {
-          id: string
-          user_id: string
-          plan_id: string
-          plan_type: string
-          start_date: string
-          end_date: string | null
-          status: 'active' | 'canceled' | 'expired' | 'trial'
-          payment_method?: string
-          next_billing_date?: string
-          created_at: string
-          updated_at: string
-        }
+          id: string;
+          created_at: string;
+          roleta_id: string;
+          roleta_nome: string;
+          numero: number;
+          cor: 'vermelho' | 'preto' | 'verde';
+          timestamp: string;
+        };
         Insert: {
-          id?: string
-          user_id: string
-          plan_id: string
-          plan_type: string
-          start_date: string
-          end_date?: string | null
-          status: 'active' | 'canceled' | 'expired' | 'trial'
-          payment_method?: string
-          next_billing_date?: string
-          created_at?: string
-          updated_at?: string
-        }
+          id?: string;
+          created_at?: string;
+          roleta_id: string;
+          roleta_nome: string;
+          numero: number;
+          cor: 'vermelho' | 'preto' | 'verde';
+          timestamp?: string;
+        };
         Update: {
-          id?: string
-          user_id?: string
-          plan_id?: string
-          plan_type?: string
-          start_date?: string
-          end_date?: string | null
-          status?: 'active' | 'canceled' | 'expired' | 'trial'
-          payment_method?: string
-          next_billing_date?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "subscriptions_user_id_fkey"
-            columns: ["user_id"]
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-    }
+          id?: string;
+          created_at?: string;
+          roleta_id?: string;
+          roleta_nome?: string;
+          numero?: number;
+          cor?: 'vermelho' | 'preto' | 'verde';
+          timestamp?: string;
+        };
+      };
+      planos: {
+        Row: {
+          id: string;
+          created_at: string;
+          nome: string;
+          descricao: string;
+          preco: number;
+          intervalo: string;
+          features: string[] | null;
+          stripe_price_id: string | null;
+          is_custom: boolean;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          nome: string;
+          descricao: string;
+          preco: number;
+          intervalo: string;
+          features?: string[] | null;
+          stripe_price_id?: string | null;
+          is_custom?: boolean;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          nome?: string;
+          descricao?: string;
+          preco?: number;
+          intervalo?: string;
+          features?: string[] | null;
+          stripe_price_id?: string | null;
+          is_custom?: boolean;
+        };
+      };
+      perfis: {
+        Row: {
+          id: string;
+          created_at: string;
+          user_id: string;
+          nome: string | null;
+          avatar_url: string | null;
+          email: string | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          user_id: string;
+          nome?: string | null;
+          avatar_url?: string | null;
+          email?: string | null;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          user_id?: string;
+          nome?: string | null;
+          avatar_url?: string | null;
+          email?: string | null;
+        };
+      };
+      assinaturas: {
+        Row: {
+          id: string;
+          created_at: string;
+          user_id: string;
+          plano_id: string;
+          status: string;
+          inicio: string;
+          fim: string | null;
+          metodo_pagamento: string | null;
+          provedor_pagamento: string | null;
+          payment_id: string | null;
+          proxima_cobranca: string | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          user_id: string;
+          plano_id: string;
+          status?: string;
+          inicio?: string;
+          fim?: string | null;
+          metodo_pagamento?: string | null;
+          provedor_pagamento?: string | null;
+          payment_id?: string | null;
+          proxima_cobranca?: string | null;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          user_id?: string;
+          plano_id?: string;
+          status?: string;
+          inicio?: string;
+          fim?: string | null;
+          metodo_pagamento?: string | null;
+          provedor_pagamento?: string | null;
+          payment_id?: string | null;
+          proxima_cobranca?: string | null;
+        };
+      };
+    };
     Views: {
-      [_ in never]: never
-    }
+      [_ in never]: never;
+    };
     Functions: {
-      [_ in never]: never
-    }
+      [_ in never]: never;
+    };
     Enums: {
-      [_ in never]: never
-    }
+      [_ in never]: never;
+    };
     CompositeTypes: {
-      [_ in never]: never
-    }
-  }
+      [_ in never]: never;
+    };
+  };
 }
 
 type PublicSchema = Database[Extract<keyof Database, "public">]
